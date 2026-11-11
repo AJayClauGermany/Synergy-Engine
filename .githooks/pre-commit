@@ -1,0 +1,5 @@
+#!/bin/sh
+# Runs every check before a commit is made, so a broken change is caught here and not in
+# CI. Off by default; `bun run hooks` turns it on for this clone (see docs/checks.md).
+# To commit work in progress anyway: git commit --no-verify
+exec bun run --silent check

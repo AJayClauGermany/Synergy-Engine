@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { isRecipient, type RpcAudience, SendTo } from '../src';
-import { CratePrefab, type Machine, TestNetwork, Unit } from './harness';
+import { CratePrefab, type Machine, TestNetwork, Unit, warningsFrom } from './harness';
 
 let net: TestNetwork;
 afterEach(() => net?.dispose());
@@ -61,7 +61,9 @@ describe('server RPCs', () => {
     expect(() => bob.unit(id).hitRpc(1)).toThrow(/Only the owner can call "hitRpc"/);
     // Bypass the client-side check the way a modified client would.
     bob.transport.send('host', { t: 'rpc', o: id, b: 0, n: 'hitRpc', a: [99] });
-    net.pump();
+    expect(warningsFrom(() => net.pump())).toEqual([
+      'Client 2 called "hitRpc" on "Crate" without owning it; the call was ignored.',
+    ]);
     expect(calls(host, id)).toEqual([]);
     expect(host.unit(id).hp.value).toBe(100);
   });
@@ -108,7 +110,9 @@ describe('client RPCs', () => {
     const { host, alice, bob, id } = setup();
     expect(() => alice.unit(id).shoutRpc('no')).toThrow(/clientRpc, so only the server can call it/);
     alice.transport.send('host', { t: 'rpc', o: id, b: 0, n: 'shoutRpc', a: ['forged'] });
-    net.pump();
+    expect(warningsFrom(() => net.pump())).toEqual([
+      'Client 1 called the clientRpc "shoutRpc", which only the server may call.',
+    ]);
     for (const machine of [host, alice, bob]) expect(calls(machine, id)).toEqual([]);
   });
 

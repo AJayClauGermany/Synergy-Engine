@@ -1,3 +1,4 @@
+import { spyOn } from 'bun:test';
 import { type Engine, GameObject, Vector3 } from '@synergy/engine';
 import type { LoopbackTransport } from '@synergy/net';
 import {
@@ -150,5 +151,19 @@ export class TestNetwork extends BaseTestNetwork<Machine> {
 
   protected override wrap(id: string, engine: Engine, manager: NetworkManager, transport: LoopbackTransport): Machine {
     return new Machine(id, engine, manager, transport);
+  }
+}
+
+/**
+ * Runs `action` and returns what it warned about, keeping those warnings out of the test
+ * output: a warning the test expects should be asserted, not printed.
+ */
+export function warningsFrom(action: () => void): string[] {
+  const warn = spyOn(console, 'warn').mockImplementation(() => {});
+  try {
+    action();
+    return warn.mock.calls.map((call) => call.map(String).join(' '));
+  } finally {
+    warn.mockRestore();
   }
 }

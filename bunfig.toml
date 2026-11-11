@@ -14,3 +14,7 @@ env = "PUBLIC_*"
 printWidth = 120
 singleQuote = true
 ignorePatterns = ["**/*.md", "**/*.json", "**/*.jsonc", "**/*.yml", "**/*.toml", "convex/_generated/"]
+
+[test]
+# `bun run coverage` reports on the code under test, not on the tests.
+coverageSkipTestFiles = true
