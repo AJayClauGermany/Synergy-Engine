@@ -2,13 +2,15 @@ import * as pc from 'playcanvas';
 import { Behaviour } from '../core/Component';
 import { adopters } from '../core/hooks';
 import { Color } from '../math/Color';
+import { Quaternion } from '../math/Quaternion';
+import { Vector3 } from '../math/Vector3';
 
 export enum LightType {
-  /** Parallel light from infinitely far away, like the sun. Shines along the transform's forward. */
+  /** Parallel light from infinitely far away, like the sun. */
   Directional = 'directional',
   /** Shines in all directions from a point. */
   Point = 'omni',
-  /** A cone along the transform's forward. */
+  /** A cone of light. */
   Spot = 'spot',
 }
 
@@ -18,12 +20,19 @@ export enum LightShadows {
   Soft = 'soft',
 }
 
-/** Lights the scene. */
+/**
+ * Lights the scene.
+ *
+ * Directional and spot lights shine along the transform's DOWN direction (-Y), which is
+ * PlayCanvas's convention; in Unity it is the transform's forward. An unrotated light
+ * therefore points straight down. The simplest way to aim one is `light.direction`.
+ */
 export class Light extends Behaviour {
   static readonly disallowMultiple = true;
 
   private component!: pc.LightComponent;
   private shadowMode = LightShadows.None;
+  private shadowsConfigured = false;
 
   /** The PlayCanvas light component, for settings not wrapped here (cookies, cascades, ...). */
   get pcLight(): pc.LightComponent {
@@ -35,6 +44,7 @@ export class Light extends Behaviour {
     if (entity.light) {
       this.component = entity.light;
       this.shadowMode = this.component.castShadows ? LightShadows.Soft : LightShadows.None;
+      this.shadowsConfigured = true;
       return;
     }
     // Unity's default for a new Light component is a point light.
@@ -53,6 +63,15 @@ export class Light extends Behaviour {
 
   override _destroy(): void {
     this.gameObject.entity.removeComponent('light');
+  }
+
+  /** The world-space direction a directional or spot light shines in. Setting it rotates the transform. */
+  get direction(): Vector3 {
+    return this.transform.up.neg();
+  }
+
+  set direction(value: Vector3) {
+    this.transform.rotation = Quaternion.fromToRotation(Vector3.down, value);
   }
 
   get type(): LightType {
@@ -116,6 +135,33 @@ export class Light extends Behaviour {
     this.component.castShadows = value !== LightShadows.None;
     if (value === LightShadows.Hard) this.component.shadowType = pc.SHADOW_PCF1_32F;
     if (value === LightShadows.Soft) this.component.shadowType = pc.SHADOW_PCF3_32F;
+    if (value !== LightShadows.None && !this.shadowsConfigured) {
+      // Defaults that avoid "shadow acne" (striped self-shadowing) on curved surfaces.
+      this.shadowsConfigured = true;
+      this.component.shadowResolution = 2048;
+      this.component.shadowBias = 0.2;
+      this.component.normalOffsetBias = 0.05;
+    }
+  }
+
+  /** Pushes shadows away from the light to hide self-shadowing artefacts. */
+  get shadowBias(): number {
+    return this.component.shadowBias;
+  }
+
+  set shadowBias(value: number) {
+    this.shadowsConfigured = true;
+    this.component.shadowBias = value;
+  }
+
+  /** Like `shadowBias`, but along the surface normal. Helps on surfaces at grazing angles. */
+  get shadowNormalBias(): number {
+    return this.component.normalOffsetBias;
+  }
+
+  set shadowNormalBias(value: number) {
+    this.shadowsConfigured = true;
+    this.component.normalOffsetBias = value;
   }
 
   /** How far from the camera shadows are drawn (directional lights). */
@@ -130,6 +176,7 @@ export class Light extends Behaviour {
   override _copyFrom(source: this): void {
     super._copyFrom(source, (value) => value);
     this.shadowMode = source.shadowMode;
+    this.shadowsConfigured = source.shadowsConfigured;
   }
 }
 

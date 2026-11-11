@@ -25,6 +25,7 @@ export {
 export { Time } from './core/Time';
 export { Input, KeyCode, Screen } from './core/Input';
 export { Debug } from './core/Debug';
+export { RenderSettings } from './core/RenderSettings';
 export { UnityEvent, Observable } from './core/events';
 export { Scene, SceneManager, LoadSceneMode, type SceneBuilder } from './core/SceneManager';
 export {

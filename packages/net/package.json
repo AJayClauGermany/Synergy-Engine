@@ -16,5 +16,9 @@
   "peerDependenciesMeta": {
     "convex": { "optional": true },
     "peerjs": { "optional": true }
+  },
+  "devDependencies": {
+    "convex": "^1.49.0",
+    "peerjs": "^1.5.5"
   }
 }

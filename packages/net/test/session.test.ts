@@ -1,0 +1,120 @@
+import { describe, expect, test } from 'bun:test';
+import { type CommandEntry, CommandSession, LoopbackHub } from '../src';
+
+type Command = { type: 'move'; to: number } | { type: 'endTurn' };
+
+function record(session: CommandSession<Command>): CommandEntry<Command>[] {
+  const seen: CommandEntry<Command>[] = [];
+  session.onCommand.add((entry) => seen.push(entry));
+  return seen;
+}
+
+describe('CommandSession', () => {
+  test('every player sees the same commands in the same order', () => {
+    const hub = new LoopbackHub({ manual: true });
+    const host = CommandSession.host<Command>(hub.connect('host'));
+    const alice = CommandSession.join<Command>(hub.connect('alice'), 'host');
+    const bob = CommandSession.join<Command>(hub.connect('bob'), 'host');
+    const logs = [record(host), record(alice), record(bob)];
+    hub.flush();
+    expect(host.players).toEqual(['host', 'alice', 'bob']);
+    expect(bob.players).toEqual(['host', 'alice', 'bob']);
+    expect(alice.isHost).toBe(false);
+
+    // Submitted "at the same time" from three machines.
+    bob.submit({ type: 'move', to: 3 });
+    host.submit({ type: 'endTurn' });
+    alice.submit({ type: 'move', to: 7 });
+    hub.flush();
+
+    expect(logs[0]?.length).toBe(3);
+    expect(logs[0]?.map((entry) => entry.seq)).toEqual([0, 1, 2]);
+    expect(logs[1]).toEqual(logs[0] as CommandEntry<Command>[]);
+    expect(logs[2]).toEqual(logs[0] as CommandEntry<Command>[]);
+    expect(new Set(logs[0]?.map((entry) => entry.playerId))).toEqual(new Set(['host', 'alice', 'bob']));
+  });
+
+  test('a late joiner is caught up with everything that happened before', () => {
+    const hub = new LoopbackHub({ manual: true });
+    const host = CommandSession.host<Command>(hub.connect('host'));
+    host.submit({ type: 'move', to: 1 });
+    host.submit({ type: 'endTurn' });
+    const late = CommandSession.join<Command>(hub.connect('late'), 'host');
+    const seen = record(late);
+    hub.flush();
+    expect(seen.map((entry) => entry.command)).toEqual([{ type: 'move', to: 1 }, { type: 'endTurn' }]);
+    host.submit({ type: 'move', to: 2 });
+    hub.flush();
+    expect(seen.length).toBe(3);
+    expect(late.log).toEqual(host.log);
+  });
+
+  test('the host validates commands and tells the sender why one was refused', () => {
+    const hub = new LoopbackHub({ manual: true });
+    const host = CommandSession.host<Command>(hub.connect('host'), {
+      validate: ({ playerId }, log) => {
+        const turnOf = log.filter((entry) => entry.command.type === 'endTurn').length % 2 === 0 ? 'host' : 'guest';
+        return playerId === turnOf ? undefined : 'Not your turn.';
+      },
+    });
+    const guest = CommandSession.join<Command>(hub.connect('guest'), 'host');
+    const rejected: string[] = [];
+    guest.onRejected.add((_command, reason) => rejected.push(reason));
+    hub.flush();
+
+    guest.submit({ type: 'move', to: 5 });
+    hub.flush();
+    expect(rejected).toEqual(['Not your turn.']);
+    expect(host.log.length).toBe(0);
+
+    host.submit({ type: 'endTurn' });
+    guest.submit({ type: 'move', to: 5 });
+    hub.flush();
+    expect(host.log.map((entry) => entry.playerId)).toEqual(['host', 'guest']);
+  });
+
+  test('players leaving, a full session and the host leaving', () => {
+    const hub = new LoopbackHub({ manual: true });
+    const host = CommandSession.host<Command>(hub.connect('host'), { maxPlayers: 2 });
+    const guest = CommandSession.join<Command>(hub.connect('guest'), 'host');
+    const extra = CommandSession.join<Command>(hub.connect('extra'), 'host');
+    const closed: string[] = [];
+    extra.onClosed.add((reason) => closed.push(`extra: ${reason}`));
+    guest.onClosed.add((reason) => closed.push(`guest: ${reason}`));
+    hub.flush();
+    expect(host.players).toEqual(['host', 'guest']);
+    expect(closed).toEqual(['extra: The session is full.']);
+
+    // Messages from someone who is not in the session are ignored.
+    hub.connect('stranger').send('host', { t: 'submit', command: { type: 'endTurn' } });
+    hub.flush();
+    expect(host.log.length).toBe(0);
+
+    host.close();
+    hub.flush();
+    expect(closed).toContain('guest: The host left the session.');
+    expect(() => guest.submit({ type: 'endTurn' })).toThrow(/closed/);
+  });
+
+  test('a local session works with no network at all', async () => {
+    const session = CommandSession.local<Command>();
+    const seen = record(session);
+    session.submit({ type: 'endTurn' });
+    expect(seen).toEqual([{ seq: 0, playerId: 'local', command: { type: 'endTurn' } }]);
+  });
+
+  test('loopback delivers on a microtask by default and copies messages', async () => {
+    const hub = new LoopbackHub();
+    const a = hub.connect('a');
+    const b = hub.connect('b');
+    const received: unknown[] = [];
+    b.onMessage.add((_from, message) => received.push(message));
+    const payload = { nested: { value: 1 } };
+    a.send('b', payload);
+    payload.nested.value = 2;
+    expect(received).toEqual([]);
+    await Promise.resolve();
+    expect(received).toEqual([{ nested: { value: 1 } }]);
+    expect(a.peers).toEqual(['b']);
+  });
+});
