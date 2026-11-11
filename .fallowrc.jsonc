@@ -1,0 +1,81 @@
+// Project-level checks (`bun run lint:project`): what only shows when files are read
+// together. The per-file linter is `.oxlintrc.json`. `docs/checks.md` explains both.
+{
+  "$schema": "./node_modules/fallow/schema.json",
+
+  // desktop/ has no type-check either (see docs/desktop.md); the Convex files are generated.
+  "ignorePatterns": ["desktop/**", "convex/_generated/**"],
+  // Loaded by oxlint from .oxlintrc.json, which no import shows.
+  "supportEntry": ["tools/lint/synergy.ts"],
+  // The engine packages are libraries: their exports are the API a game uses, whether or
+  // not the sample game happens to. Only game code is checked for unused exports.
+  "publicPackages": ["@synergy/engine", "@synergy/net", "@synergy/netcode", "@synergy/ui"],
+  // An export its own file uses is not dead; one nothing uses at all still is.
+  "ignoreExportsUsedInFile": true,
+  // scripts/screenshot.ts drives the browser a cloud session already has (AGENTS.md), and
+  // electrobun is run by path from desktop/, which is not analysed.
+  "ignoreDependencies": ["playwright", "electrobun"],
+
+  "rules": {
+    // Things a port leaves behind or forgets to wire up.
+    "unused-files": "error",
+    "unused-exports": "error",
+    "unused-types": "error",
+    "unused-dependencies": "error",
+    "unused-dev-dependencies": "error",
+    "unlisted-dependencies": "error",
+    "unresolved-imports": "error",
+    // C# has no import order, so Unity projects are full of classes that refer to each
+    // other. Here a cycle can leave a class undefined while its module is still loading.
+    "circular-dependencies": "error",
+    "boundary-violation": "error",
+    // A suppression says why: `// fallow-ignore-next-line <rule> -- <reason>`. One that no
+    // longer suppresses anything is reported, so they do not outlive their cause.
+    "require-suppression-reason": "error",
+    "stale-suppressions": "error",
+
+    // A script's fields are set from outside (`addComponent(Unit).speed = 5`) and its
+    // messages are called by name, so "never referenced" says nothing about them.
+    "unused-class-members": "off",
+    "unused-enum-members": "off",
+    // Advice rather than faults; the gate reports only what must be fixed.
+    "type-only-dependencies": "off",
+    "test-only-dependencies": "off",
+    "unlisted-binaries": "off"
+  },
+
+  // Which folders may import which. This is the layering AGENTS.md describes
+  // ("Conventions"), enforced. A file belongs to the first zone that matches it.
+  "boundaries": {
+    "zones": [
+      { "name": "engine-math", "patterns": ["packages/engine/src/math/**"] },
+      { "name": "engine-grid", "patterns": ["packages/engine/src/grid/**"] },
+      { "name": "engine-data", "patterns": ["packages/engine/src/data/**"] },
+      { "name": "engine", "patterns": ["packages/engine/src/**"] },
+      { "name": "net", "patterns": ["packages/net/src/**"] },
+      { "name": "netcode", "patterns": ["packages/netcode/src/**"] },
+      { "name": "ui", "patterns": ["packages/ui/src/**"] },
+      {
+        "name": "game-rules",
+        "patterns": ["game/src/rules/**", "game/src/**/rules.ts", "game/src/**/rules/**"]
+      },
+      { "name": "game", "patterns": ["game/src/**"] }
+    ],
+    "rules": [
+      // Pure maths: imports nothing. Grid and data build on it and on nothing else, so
+      // game rules and servers can use all three without PlayCanvas.
+      { "from": "engine-math", "allow": [] },
+      { "from": "engine-grid", "allow": ["engine-math"] },
+      { "from": "engine-data", "allow": ["engine-math"] },
+      { "from": "engine", "allow": ["engine-math", "engine-grid", "engine-data"] },
+      // The transport layer knows nothing about the engine.
+      { "from": "net", "allow": [] },
+      { "from": "netcode", "allow": ["engine", "engine-math", "engine-grid", "engine-data", "net"] },
+      { "from": "ui", "allow": ["engine", "engine-math", "engine-grid", "engine-data"] },
+      // Rules are pure and run without a scene: maths, grids, data and other rules only.
+      { "from": "game-rules", "allow": ["engine-math", "engine-grid", "engine-data"] }
+      // "game" has no entry: game code may import anything. No package imports the game,
+      // because every package above lists what it may import and "game" is on no list.
+    ]
+  }
+}

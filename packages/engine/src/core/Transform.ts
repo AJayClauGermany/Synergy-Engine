@@ -3,6 +3,7 @@ import { nameType } from './typeNames';
 import { Quaternion } from '../math/Quaternion';
 import { Vector3 } from '../math/Vector3';
 import { Component } from './Component';
+// fallow-ignore-next-line circular-dependency -- a GameObject owns its Transform and a Transform finds its GameObject; both are used in methods, never while the modules load
 import { gameObjectOf, isSceneRoot } from './GameObject';
 import { currentEngine } from './runtime';
 

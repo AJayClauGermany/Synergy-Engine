@@ -1,6 +1,8 @@
 import { Engine, MonoBehaviour, nameType } from '@synergy/engine';
 import { Signal } from '@synergy/net';
+// fallow-ignore-next-line circular-dependency -- an object collects its behaviours and a behaviour finds its object; both happen in methods, never while the modules load
 import { NetworkBehaviour } from './NetworkBehaviour';
+// fallow-ignore-next-line circular-dependency -- the manager spawns objects and an object looks up its manager; both happen in methods, never while the modules load
 import { NetworkManager } from './NetworkManager';
 
 /**
