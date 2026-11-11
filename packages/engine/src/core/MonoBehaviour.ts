@@ -5,6 +5,7 @@ import {
   WaitForSeconds,
   type Yieldable,
 } from './Coroutine';
+import { Observable, UnityEvent } from './events';
 import { currentEngine } from './runtime';
 
 /**
@@ -185,6 +186,10 @@ export abstract class MonoBehaviour extends Behaviour {
    * Cloning (`instantiate`) copies every own field except those starting with `_`,
    * which play the role of Unity's non-serialized private fields. References to objects
    * inside the cloned hierarchy are re-pointed at their clones.
+   *
+   * Not copied, so the clone keeps what its own field initialisers created: functions
+   * (an arrow-function field would stay bound to the original), and per-instance
+   * containers (`UnityEvent`, `Observable`, `Map`, `Set`) that must not be shared.
    */
   override _copyFrom(source: this, remap: <V>(value: V) => V): void {
     super._copyFrom(source, remap);
@@ -192,6 +197,15 @@ export abstract class MonoBehaviour extends Behaviour {
     for (const key of Object.keys(source)) {
       if (key.startsWith('_') || key === 'gameObject') continue;
       const value = (source as Record<string, unknown>)[key];
+      if (
+        typeof value === 'function' ||
+        value instanceof UnityEvent ||
+        value instanceof Observable ||
+        value instanceof Map ||
+        value instanceof Set
+      ) {
+        continue;
+      }
       if (Array.isArray(value)) {
         target[key] = value.map((item) => remap(item));
       } else if (value !== null && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype) {

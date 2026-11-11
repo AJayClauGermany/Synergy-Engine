@@ -40,7 +40,7 @@ It is aimed at strategy games (turn-based and real-time), but the engine is gene
 
 ## Quick start
 
-Requires [Bun](https://bun.sh) 1.4 or newer.
+Requires [Bun](https://bun.sh) (developed and tested with 1.4).
 
 ```bash
 bun install

@@ -49,7 +49,7 @@ export class Spinner extends MonoBehaviour {
 | 13 | Rigidbody physics, collisions, triggers | **Not available yet.** Colliders exist for raycasts and overlap queries only | Kept out of the core to stay small. |
 | 14 | UI: uGUI / UI Toolkit | React, via `@synergy/ui` | See below. |
 | 15 | `Invoke("Method", 2f)` | `this.invoke(this.method, 2)` | Pass the function, not its name. |
-| 16 | `[SerializeField] private` vs `private` | Fields starting with `_` are not copied by `instantiate`; all others are | There is no serializer; this is the stand-in. |
+| 16 | `[SerializeField] private` vs `private` | `instantiate` copies a script's fields except those starting with `_`, functions, and `UnityEvent`/`Observable`/`Map`/`Set` instances | There is no serializer; this is the stand-in. |
 
 ### Operators
 

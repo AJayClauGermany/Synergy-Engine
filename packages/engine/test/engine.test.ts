@@ -32,6 +32,7 @@ import {
   SceneManager,
   Space,
   Time,
+  UnityEvent,
   Vector3,
   WaitForEndOfFrame,
   WaitForFixedUpdate,
@@ -498,6 +499,28 @@ describe('instantiate and prefabs', () => {
     // The reference to the child now points at the clone's child.
     expect(copyStats.target).toBe(copy.transform.getChild(0).gameObject);
     expect(copyStats.target).not.toBe(child);
+  });
+
+  test('clones get their own events, containers and bound functions', () => {
+    class Emitter extends MonoBehaviour {
+      label = 'original';
+      readonly fired = new UnityEvent<[string]>();
+      readonly seen = new Set<string>();
+      describe = () => this.label;
+    }
+    const original = new GameObject('E').addComponent(Emitter);
+    const heard: string[] = [];
+    original.fired.addListener((who) => heard.push(who));
+    original.seen.add('x');
+
+    const copy = instantiate(original);
+    copy.label = 'copy';
+    expect(copy.fired).not.toBe(original.fired);
+    expect(copy.seen.size).toBe(0);
+    // The arrow function belongs to the clone, not to the object it was cloned from.
+    expect(copy.describe()).toBe('copy');
+    copy.fired.invoke('copy');
+    expect(heard).toEqual([]);
   });
 
   test('instantiating a component returns the matching component', () => {

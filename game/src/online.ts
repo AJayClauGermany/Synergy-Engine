@@ -54,10 +54,14 @@ export function joinPeerGame(code: string): Promise<void> {
   });
 }
 
-async function lobby() {
-  if (!convexUrl) throw new Error('No Convex backend is configured (PUBLIC_CONVEX_URL is not set).');
-  const { ConvexLobby } = await import('@synergy/net/convex');
-  return new ConvexLobby(convexUrl);
+let sharedLobby: Promise<import('@synergy/net/convex').ConvexLobby> | null = null;
+
+/** One Convex connection for the whole page, created the first time it is needed. */
+function lobby() {
+  const url = convexUrl;
+  if (!url) return Promise.reject(new Error('No Convex backend is configured (PUBLIC_CONVEX_URL is not set).'));
+  sharedLobby ??= import('@synergy/net/convex').then(({ ConvexLobby }) => new ConvexLobby(url));
+  return sharedLobby;
 }
 
 export function hostConvexGame(): Promise<void> {
