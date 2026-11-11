@@ -20,7 +20,9 @@ export enum LoadSceneMode {
  * It may be `async`, with one caveat for ADDITIVE loads: objects created after an `await`
  * go to the active scene, because by then the engine can no longer tell the builder apart
  * from other code. To load assets first, register a `SceneDefinition` (`preload` + `build`)
- * instead, which has no such caveat. Single loads are unaffected either way.
+ * instead, which has no such caveat. Single loads are unaffected either way. The same
+ * goes for tests that run several engines: code after an `await` runs against whichever
+ * engine is current then, while a `SceneDefinition`'s `build` always runs in its own.
  */
 export type SceneBuilder = (scene: Scene) => void | Promise<void>;
 
@@ -135,7 +137,14 @@ export class SceneState {
    * a `loadScene` called from `awake`, `onDestroy` or a double-clicked button is safe.
    */
   pump(): void {
-    while (this.busy === 0 && !this.engine.inFrame) {
+    // A load that finishes after an `await` resumes here from a promise, when some other
+    // engine may be the current one (tests run several). The next job's builder creates
+    // objects through the static API, so this engine must be current while it runs.
+    this.engine.run(() => this.pumpJobs());
+  }
+
+  private pumpJobs(): void {
+    while (this.busy === 0 && !this.engine.inFrame && !this.engine.isDisposed) {
       const job = this.jobs.shift();
       if (!job) return;
       this.busy++;
@@ -189,12 +198,16 @@ export class SceneState {
     const finish = (): Scene => {
       const waiting = scene._pending ?? [];
       scene._pending = null;
-      // It may have been unloaded while its (async) builder was still running.
-      if (!this.loaded.includes(scene)) return scene;
-      this.engine.lifecycle.wake(waiting);
-      scene.isLoaded = true;
-      SceneManager.sceneLoaded.invoke(scene, mode);
-      return scene;
+      // It may have been unloaded (or the engine disposed) while it was still loading.
+      if (!this.loaded.includes(scene) || this.engine.isDisposed) return scene;
+      // After an `await` another engine may be current; the scripts waking up here, and
+      // the `sceneLoaded` listeners, must see this one.
+      return this.engine.run(() => {
+        this.engine.lifecycle.wake(waiting);
+        scene.isLoaded = true;
+        SceneManager.sceneLoaded.invoke(scene, mode);
+        return scene;
+      });
     };
     const fail = (error: unknown): never => {
       scene._pending = null;
@@ -222,8 +235,11 @@ export class SceneState {
       }
       const assets = definition.preload();
       const construct = (loaded: unknown): Scene => {
-        // The scene may have been unloaded while its assets were loading.
-        if (this.loaded.includes(scene)) inScene(() => definition.build(scene, loaded));
+        // The scene may have been unloaded, or the engine disposed, while its assets were
+        // loading. Otherwise build it in this engine, whichever one is current by now.
+        if (this.loaded.includes(scene) && !this.engine.isDisposed) {
+          this.engine.run(() => inScene(() => definition.build(scene, loaded)));
+        }
         return finish();
       };
       if (assets instanceof Promise) return assets.then(construct).catch(fail);

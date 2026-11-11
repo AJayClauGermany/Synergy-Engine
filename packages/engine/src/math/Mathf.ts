@@ -1,4 +1,16 @@
 /**
+ * Rounds to the nearest whole number, and a value exactly halfway between two goes to
+ * the EVEN one: 0.5 -> 0, 1.5 -> 2, 2.5 -> 2, -2.5 -> -2. That is what Unity's
+ * `Mathf.Round` and C#'s `Math.Round` do; JavaScript's `Math.round` goes up instead
+ * (2.5 -> 3), which would make a ported damage or cost formula differ by one.
+ */
+function roundHalfToEven(value: number): number {
+  const floor = Math.floor(value);
+  if (value - floor !== 0.5) return Math.round(value);
+  return floor % 2 === 0 ? floor : floor + 1;
+}
+
+/**
  * Unity's `Mathf`, with camelCase members. Angles are in degrees unless a name says otherwise.
  */
 export const Mathf = {
@@ -16,7 +28,8 @@ export const Mathf = {
   max: Math.max,
   floor: Math.floor,
   ceil: Math.ceil,
-  round: Math.round,
+  /** Halfway values go to the even number, as in Unity. Use `Math.round` for round-half-up. */
+  round: roundHalfToEven,
   sqrt: Math.sqrt,
   pow: Math.pow,
   sin: Math.sin,
@@ -27,7 +40,8 @@ export const Mathf = {
 
   floorToInt: (value: number): number => Math.floor(value),
   ceilToInt: (value: number): number => Math.ceil(value),
-  roundToInt: (value: number): number => Math.round(value),
+  /** Halfway values go to the even number, as in Unity: `roundToInt(2.5)` is 2. */
+  roundToInt: roundHalfToEven,
 
   clamp(value: number, min: number, max: number): number {
     return value < min ? min : value > max ? max : value;
