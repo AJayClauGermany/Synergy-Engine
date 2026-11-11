@@ -200,7 +200,7 @@ try {
   errors.push(String(error));
 } finally {
   await browser.close();
-  server?.stop(true);
+  await server?.stop(true);
 }
 
 if (errors.length > 0) {

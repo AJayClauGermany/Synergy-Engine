@@ -135,6 +135,7 @@ function sameValue(a: unknown, b: unknown, serializer: Serializer<never>): boole
 function printable(value: unknown): string {
   if (value === null || typeof value !== 'object') return String(value);
   if (Array.isArray(value) || Object.getPrototypeOf(value) === Object.prototype) return JSON.stringify(value);
+  // oxlint-disable-next-line typescript/no-base-to-string -- a class instance: Vector3 and the like print themselves
   return String(value);
 }
 
@@ -165,7 +166,7 @@ export class NetworkVariable<T> extends NetworkVariableBase {
   constructor(initial: T, options: NetworkVariableOptions<T> = {}) {
     super(options);
     this.current = initial;
-    this.serializer = options.serializer ?? (jsonSerializer as Serializer<T>);
+    this.serializer = options.serializer ?? jsonSerializer;
   }
 
   get value(): T {
@@ -256,7 +257,7 @@ export class NetworkList<T> extends NetworkVariableBase implements Iterable<T> {
   constructor(initial: readonly T[] = [], options: NetworkVariableOptions<T> = {}) {
     super(options);
     this.items = [...initial];
-    this.serializer = options.serializer ?? (jsonSerializer as Serializer<T>);
+    this.serializer = options.serializer ?? jsonSerializer;
   }
 
   /** Number of items. Unity: `Count`. */

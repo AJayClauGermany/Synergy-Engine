@@ -253,7 +253,7 @@ describe('Random', () => {
       expect([0, 1, 2]).toContain(n);
     }
     const items = [1, 2, 3, 4, 5];
-    expect(random.shuffle(items).sort()).toEqual(items);
+    expect(random.shuffle(items).toSorted((a, b) => a - b)).toEqual(items);
     expect(items).toEqual([1, 2, 3, 4, 5]);
     expect(items).toContain(random.pick(items));
     expect(() => random.pick([])).toThrow();

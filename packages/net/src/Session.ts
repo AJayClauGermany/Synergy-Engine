@@ -218,6 +218,8 @@ export class CommandSession<C> implements Session<C> {
       case 'refused':
         this.shutDown(message.reason);
         break;
+      default:
+        break; // 'hello' and 'submit' are what clients send; a client that receives one ignores it
     }
   }
 

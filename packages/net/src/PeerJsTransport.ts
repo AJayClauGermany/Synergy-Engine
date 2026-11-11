@@ -103,7 +103,7 @@ export class PeerJsTransport implements Transport {
 
   send(peerId: string, message: unknown): void {
     const connection = this.connections.get(peerId);
-    if (connection?.open) connection.send(message);
+    if (connection?.open) void connection.send(message); // delivery is reported through the connection, not here
   }
 
   close(): void {

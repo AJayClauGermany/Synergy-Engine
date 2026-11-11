@@ -139,7 +139,7 @@ describe('spawning', () => {
     net.pump();
     const late = net.client('late');
     net.pump();
-    expect([...late.manager.spawnManager.spawnedObjects.keys()].sort()).toEqual([1, 2, 3, 4]);
+    expect([...late.manager.spawnManager.spawnedObjects.keys()].toSorted((a, b) => a - b)).toEqual([1, 2, 3, 4]);
     expect(late.unit(crates[1]?.networkObjectId as number).tags.toArray()).toEqual(['t1']);
     expect(late.player(1).isLocalPlayer).toBe(true);
   });

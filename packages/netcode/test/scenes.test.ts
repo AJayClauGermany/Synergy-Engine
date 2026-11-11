@@ -73,7 +73,7 @@ describe('loading a scene for everyone', () => {
       // The manager itself was carried over.
       expect(machine.manager.isListening).toBe(true);
     }
-    expect(completed.sort()).toEqual([0, 1, 2]);
+    expect(completed.toSorted((a, b) => a - b)).toEqual([0, 1, 2]);
     expect(finished).toEqual([['Match', [0, 1, 2], []]]);
     expect(host.manager.sceneManager.clientsLoading).toEqual([]);
     expect(heardByAlice).toEqual(['loaded Match as 1', 'Match ready for 0,1,2']);
@@ -396,7 +396,7 @@ describe('scene loads that are interrupted', () => {
     host.manager.sceneManager.onSynchronizeComplete.add((id) => synchronized.push(id));
     await host.run(() => host.manager.sceneManager.loadScene('Match'));
     await net.settle();
-    expect(completed.sort()).toEqual([0, 1, 2]);
+    expect(completed.toSorted((a, b) => a - b)).toEqual([0, 1, 2]);
 
     for (let i = 0; i < 3; i++) alice.transport.send('host', { t: 'sceneLoaded', e: 1 });
     net.pump();

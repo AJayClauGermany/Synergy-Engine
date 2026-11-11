@@ -14,9 +14,11 @@ function load<T>(url: string, type: string, data: Record<string, unknown> = {}):
     const name = url.startsWith('data:') ? type : (url.split(/[?#]/)[0]?.split('/').pop() ?? type);
     const asset = new pc.Asset(name, type, { url }, data);
     asset.once('load', () => resolve(asset as pc.Asset & { resource: T }));
-    asset.once('error', (error: unknown) =>
-      reject(new Error(`Failed to load ${type} "${url}": ${error ?? 'unknown error'}`)),
-    );
+    asset.once('error', (error: unknown) => {
+      // PlayCanvas reports a message; anything else has no text worth printing.
+      const reason = typeof error === 'string' ? error : error instanceof Error ? error.message : 'unknown error';
+      reject(new Error(`Failed to load ${type} "${url}": ${reason}`));
+    });
     engine.app.assets.add(asset);
     engine.app.assets.load(asset);
   });

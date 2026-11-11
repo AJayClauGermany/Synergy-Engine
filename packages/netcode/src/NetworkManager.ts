@@ -711,6 +711,8 @@ export class NetworkManager extends MonoBehaviour {
       case 'sceneDone':
         this.sceneManager.onLoadEventCompleted.emit(message.n, message.ok, message.late);
         break;
+      default:
+        break; // 'approved' only means something before the connection is up (handled above)
     }
   }
 

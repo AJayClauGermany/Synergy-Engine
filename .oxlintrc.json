@@ -1,0 +1,98 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "import", "react", "promise"],
+  "jsPlugins": ["./tools/lint/synergy.ts"],
+  "categories": {
+    "correctness": "error"
+  },
+  "options": {
+    "typeAware": true,
+    "reportUnusedDisableDirectives": "error"
+  },
+  "rules": {
+    "eslint/eqeqeq": ["error", "always", { "null": "ignore" }],
+    "eslint/no-var": "error",
+    "eslint/prefer-const": "error",
+    "eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_", "caughtErrors": "none" }],
+    "typescript/no-explicit-any": "error",
+    "typescript/no-non-null-assertion": "error",
+    "typescript/no-floating-promises": "error",
+    "typescript/no-misused-promises": ["error", { "checksVoidReturn": { "attributes": false } }],
+    "typescript/switch-exhaustiveness-check": ["error", { "considerDefaultExhaustiveForUnions": true }],
+    "typescript/only-throw-error": "error",
+    "typescript/require-array-sort-compare": "error",
+    "react/rules-of-hooks": "error",
+    "react/exhaustive-deps": "error",
+
+    "synergy/no-detached-method": "error",
+    "synergy/no-identity-compare": "error",
+    "synergy/no-value-keys": "error",
+    "synergy/no-unsent-message": "error",
+    "synergy/no-z-axis-literal": "error",
+    "synergy/no-skipped-test": "error",
+    "synergy/test-needs-expect": "error",
+
+    "typescript/unbound-method": "off",
+    "typescript/await-thenable": "off",
+    "typescript/restrict-template-expressions": "off",
+    "typescript/no-this-alias": "off",
+    "unicorn/no-useless-spread": "off"
+  },
+  "overrides": [
+    {
+      "files": ["game/src/**"],
+      "rules": {
+        "synergy/behaviour-file-name": "error"
+      }
+    },
+    {
+      "files": ["game/src/rules/**", "game/src/**/rules.ts", "game/src/**/rules/**"],
+      "rules": {
+        "eslint/no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@synergy/engine",
+                "message": "Game rules are pure. Import from @synergy/engine/math, /grid or /data: the main entry brings the scene and PlayCanvas with it."
+              },
+              {
+                "name": "@synergy/netcode",
+                "message": "Game rules are pure: no networking in them. Rules decide; a NetworkBehaviour or a command session carries the result."
+              },
+              { "name": "playcanvas", "message": "Game rules are pure: no rendering in them." },
+              { "name": "react", "message": "Game rules are pure: no UI in them." }
+            ]
+          }
+        ],
+        "eslint/no-restricted-properties": [
+          "error",
+          {
+            "object": "Math",
+            "property": "random",
+            "message": "Game rules are deterministic, so every machine gets the same result. Use new Random(state.seed) from @synergy/engine/math and store random.state back."
+          },
+          {
+            "object": "performance",
+            "property": "now",
+            "message": "Game rules are deterministic: the clock differs between machines. Pass time in as part of the command or the state."
+          }
+        ],
+        "eslint/no-restricted-globals": [
+          "error",
+          {
+            "name": "Date",
+            "message": "Game rules are deterministic: the clock differs between machines. Pass time in as part of the command or the state."
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/engine/**"],
+      "rules": {
+        "synergy/no-z-axis-literal": "off"
+      }
+    }
+  ],
+  "ignorePatterns": ["convex/_generated/**", "dist/**", "desktop/**"]
+}

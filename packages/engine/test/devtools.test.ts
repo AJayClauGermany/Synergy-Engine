@@ -74,7 +74,9 @@ describe('message names', () => {
     try {
       class Door extends MonoBehaviour {
         opened = false;
+        // oxlint-disable-next-line synergy/no-unsent-message -- the mistake this test is about
         onStart() {}
+        // oxlint-disable-next-line synergy/no-unsent-message -- the mistake this test is about
         onTriggerEnter() {}
         open() {
           this.opened = true;

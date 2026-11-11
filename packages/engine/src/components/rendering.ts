@@ -169,7 +169,7 @@ export class Material {
   readonly pcMaterial: pc.StandardMaterial;
 
   constructor(source?: Material) {
-    this.pcMaterial = source ? (source.pcMaterial.clone() as pc.StandardMaterial) : new pc.StandardMaterial();
+    this.pcMaterial = source ? source.pcMaterial.clone() : new pc.StandardMaterial();
     if (!source) {
       this.pcMaterial.useMetalness = true;
       this.pcMaterial.metalness = 0;

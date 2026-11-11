@@ -154,7 +154,7 @@ export function encodeLayer(
   layer.origin = [minX, minY];
   layer.width = maxX - minX + 1;
   layer.height = maxY - minY + 1;
-  layer.cells = new Array<number>(layer.width * layer.height).fill(-1);
+  layer.cells = Array.from({ length: layer.width * layer.height }, () => -1);
   const indexOf = new Map<string, number>();
   for (const cell of list) {
     let index = indexOf.get(cell.tile);

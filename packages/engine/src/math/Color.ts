@@ -38,7 +38,7 @@ export class Color implements ColorLike {
   static fromHex(hex: string): Color {
     let digits = hex.trim().replace(/^#/, '');
     if (digits.length === 3 || digits.length === 4) {
-      digits = [...digits].map((d) => d + d).join('');
+      digits = digits.replace(/./g, '$&$&'); // "f80" -> "ff8800"
     }
     if (!/^[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/.test(digits)) {
       throw new Error(`Color.fromHex: "${hex}" is not a valid hex colour`);

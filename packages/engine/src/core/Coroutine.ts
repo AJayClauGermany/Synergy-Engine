@@ -252,6 +252,7 @@ export class CoroutineScheduler {
       );
       return (phase) => phase === 'update' && settled;
     }
+    // oxlint-disable-next-line typescript/no-base-to-string -- whatever the script yielded; its own text is all there is
     throw new TypeError(`A coroutine yielded something it cannot wait on: ${String(value)}`);
   }
 }

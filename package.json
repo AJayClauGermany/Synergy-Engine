@@ -15,6 +15,7 @@
     "start": "varlock run -- bun run scripts/serve.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p convex/tsconfig.json && tsc --noEmit -p cloudflare/tsconfig.json",
+    "lint": "bun --bun oxlint",
     "check": "bun run typecheck && bun test",
     "screenshot": "varlock run -- bun run scripts/screenshot.ts",
     "backend": "convex dev",
@@ -32,6 +33,8 @@
     "@cloudflare/workers-types": "^5.20261110.1",
     "@types/bun": "^1.4.4",
     "electrobun": "2.0.6",
+    "oxlint": "^1.93.0",
+    "oxlint-tsgolint": "^7.0.2006",
     "typescript": "^7.0.2",
     "varlock": "^1.24.0",
     "wrangler": "^4.160.0"
