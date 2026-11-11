@@ -74,3 +74,20 @@ export {
 export { Grid, type GridHit } from './tilemap/Grid';
 export { Tilemap, TileBase, Tile, type TileData } from './tilemap/Tilemap';
 export { TilemapRenderer } from './tilemap/TilemapRenderer';
+export { TilePalette, createTilemaps, tilemapsToData, type TilePaletteLoadOptions, type BuiltTilemaps } from './tilemap/TilePalette';
+
+export {
+  Catalog,
+  type SpriteData,
+  type SpriteSheetData,
+  type TileDefinition,
+  type TilePaletteData,
+  type TilemapLayerData,
+  type TilemapData,
+  type LayerCell,
+  layerTileAt,
+  layerCells,
+  encodeLayer,
+  checkTilemapData,
+  checkTilePaletteData,
+} from './data';

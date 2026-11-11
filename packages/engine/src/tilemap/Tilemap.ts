@@ -2,6 +2,7 @@ import { Behaviour } from '../core/Component';
 import { isAlive } from '../core/EngineObject';
 import { GameObject } from '../core/GameObject';
 import { destroy, instantiate, type Prefab } from '../core/Object';
+import { encodeLayer, type TilemapLayerData } from '../data/tiles';
 import { Hex, Square } from '../grid/hex';
 import {
   CellLayout,
@@ -44,24 +45,32 @@ export abstract class TileBase {
  * A simple tile: a colour, optional artwork, optional spawned object. Unity: `Tile`.
  * It plays the role of a ScriptableObject asset: create each kind once and reuse it.
  *
- * Subclass it to attach game data to terrain:
+ * Game data rides along in `data`, which stands in for the fields of a custom Tile class
+ * in Unity (climate, elevation, movement cost):
  *
- *   class TerrainTile extends Tile { moveCost = 1; }
- *   const forest = new TerrainTile({ name: 'Forest', color: Color.fromHex('#3c6e47') });
- *   forest.moveCost = 2;
- *   terrain.getTile<TerrainTile>(cell)?.moveCost
+ *   interface Terrain { moveCost: number; elevation: number }
+ *   const forest = new Tile<Terrain>({ name: 'forest', color: Color.fromHex('#3c6e47'), data: { moveCost: 2, elevation: 1 } });
+ *   terrain.getTile<Tile<Terrain>>(cell)?.data.moveCost
+ *
+ * A `TilePalette` makes these from a data file. Subclassing works too, when a tile needs
+ * behaviour (see `getTileData`).
  */
-export class Tile extends TileBase {
+export class Tile<Data = unknown> extends TileBase {
   sprite: Sprite | null = null;
   color: Color = Color.white;
   gameObject: Prefab | GameObject | null = null;
+  /** Whatever the game attaches to this kind of tile. */
+  data: Data;
 
-  constructor(init: { name?: string; sprite?: Sprite | null; color?: Color; gameObject?: Prefab | GameObject | null } = {}) {
+  constructor(
+    init: { name?: string; sprite?: Sprite | null; color?: Color; gameObject?: Prefab | GameObject | null; data?: Data } = {},
+  ) {
     super();
     if (init.name !== undefined) this.name = init.name;
     if (init.sprite !== undefined) this.sprite = init.sprite;
     if (init.color !== undefined) this.color = init.color;
     if (init.gameObject !== undefined) this.gameObject = init.gameObject;
+    this.data = init.data as Data;
   }
 
   /** Override to vary the look per cell; call `super.getTileData(cell, tilemap)` for the defaults. */
@@ -269,6 +278,43 @@ export class Tilemap extends Behaviour {
     this._entries.clear();
     this._chunks.clear();
     this.touchAll();
+  }
+
+  // ---- Data in and out ------------------------------------------------------------------
+
+  /**
+   * Paints a layer from data (a JSON file, a Unity export, a saved game). `tiles` turns
+   * each tile id into a tile: usually a `TilePalette`. Cells already painted outside the
+   * layer's rectangle are left alone; call `clearAllTiles()` first to replace the lot.
+   * The layer's tint, when it has one, becomes this tilemap's `color`.
+   */
+  loadLayer(layer: TilemapLayerData, tiles: { get(id: string): TileBase }): void {
+    const resolved = layer.tiles.map((id) => tiles.get(id));
+    const z = layer.z ?? 0;
+    const [originX, originY] = layer.origin;
+    for (let row = 0; row < layer.height; row++) {
+      for (let column = 0; column < layer.width; column++) {
+        const index = layer.cells[row * layer.width + column];
+        const tile = index === undefined || index < 0 ? null : (resolved[index] ?? null);
+        this.setTile({ x: originX + column, y: originY + row, z }, tile);
+      }
+    }
+    if (layer.color !== undefined) this.color = Color.fromHex(layer.color);
+  }
+
+  /**
+   * This layer as data, for saving or sending: the opposite of `loadLayer`. Tiles are
+   * written by `name`, so each kind of tile needs a name of its own (a `TilePalette`
+   * gives its tiles their ids). One z at a time: a tilemap painted on several z levels
+   * is saved with one call per level.
+   */
+  toLayerData(name: string = this.name, z = 0): TilemapLayerData {
+    const cells = [...this._entries.values()]
+      .filter((entry) => entry.cell.z === z)
+      .map((entry) => ({ x: entry.cell.x, y: entry.cell.y, z, tile: entry.tile.name }));
+    const layer = encodeLayer(name, cells);
+    if (!this.tint.equals(Color.white)) layer.color = this.tint.toHex();
+    return layer;
   }
 
   /** Number of painted cells. */

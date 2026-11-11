@@ -7,7 +7,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./math": "./src/math/index.ts",
-    "./grid": "./src/grid/index.ts"
+    "./grid": "./src/grid/index.ts",
+    "./data": "./src/data/index.ts"
   },
   "dependencies": {
     "playcanvas": "^2.24.0"
