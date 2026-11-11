@@ -190,7 +190,9 @@ describe('CommandSession', () => {
 
     expect(worlds[0]?.tick).toBeGreaterThanOrEqual(3);
     // The guest never sent ticks, yet both sides agree on the clock and on when the move happened.
-    expect(host.log.filter((entry) => entry.command.type === 'tick').every((entry) => entry.playerId === 'host')).toBe(true);
+    expect(host.log.filter((entry) => entry.command.type === 'tick').every((entry) => entry.playerId === 'host')).toBe(
+      true,
+    );
     expect(worlds[1]).toEqual(worlds[0] as (typeof worlds)[0]);
     expect(worlds[0]?.movedAtTick).toBeGreaterThan(0);
 

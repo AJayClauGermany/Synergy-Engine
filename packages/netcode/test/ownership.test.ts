@@ -23,7 +23,9 @@ describe('ownership', () => {
     const id = crate.networkObjectId;
     const changes: string[] = [];
     for (const machine of [host, alice, bob]) {
-      machine.object(id).onOwnershipChanged.add((previous, current) => changes.push(`${machine.id}: ${previous}->${current}`));
+      machine
+        .object(id)
+        .onOwnershipChanged.add((previous, current) => changes.push(`${machine.id}: ${previous}->${current}`));
     }
 
     crate.changeOwnership(2);

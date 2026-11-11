@@ -143,9 +143,11 @@ describe('NetworkList', () => {
   test('changes are sent as operations and arrive in order', () => {
     const { host, alice, id } = setup();
     const events: string[] = [];
-    alice.unit(id).tags.onListChanged.add((event: NetworkListEvent<string>) =>
-      events.push(`${event.type}@${event.index}:${event.value ?? event.previousValue ?? ''}`),
-    );
+    alice
+      .unit(id)
+      .tags.onListChanged.add((event: NetworkListEvent<string>) =>
+        events.push(`${event.type}@${event.index}:${event.value ?? event.previousValue ?? ''}`),
+      );
     const tags = host.unit(id).tags;
     tags.add('a');
     tags.add('b');

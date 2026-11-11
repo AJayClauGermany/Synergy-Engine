@@ -23,13 +23,9 @@ describe('Vector3', () => {
     close(Vector3.distance(Vector3.zero, new Vector3(3, 4, 0)), 5);
     close(Vector3.angle(Vector3.right, Vector3.up), 90);
     close(Vector3.signedAngle(Vector3.right, Vector3.up, Vector3.back), 90);
-    expect(
-      Vector3.moveTowards(Vector3.zero, new Vector3(10, 0, 0), 4).equals(new Vector3(4, 0, 0)),
-    ).toBe(true);
+    expect(Vector3.moveTowards(Vector3.zero, new Vector3(10, 0, 0), 4).equals(new Vector3(4, 0, 0))).toBe(true);
     expect(Vector3.moveTowards(Vector3.zero, Vector3.one, 100)).toBe(Vector3.one);
-    expect(Vector3.projectOnPlane(new Vector3(1, 5, 2), Vector3.up).equals(new Vector3(1, 0, 2))).toBe(
-      true,
-    );
+    expect(Vector3.projectOnPlane(new Vector3(1, 5, 2), Vector3.up).equals(new Vector3(1, 0, 2))).toBe(true);
     close(new Vector3(0, 3, 4).normalized.magnitude, 1);
     expect(Vector3.zero.normalized).toBe(Vector3.zero);
   });

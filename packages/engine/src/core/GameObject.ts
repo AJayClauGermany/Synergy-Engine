@@ -1,11 +1,6 @@
 import * as pc from 'playcanvas';
 import { nameType } from './typeNames';
-import {
-  type Component,
-  type ComponentClass,
-  type ConcreteComponentClass,
-  constructComponent,
-} from './Component';
+import { type Component, type ComponentClass, type ConcreteComponentClass, constructComponent } from './Component';
 import { EngineObject } from './EngineObject';
 import { adopters, factories, type PrimitiveType } from './hooks';
 import { currentEngine } from './runtime';
@@ -191,10 +186,7 @@ export class GameObject extends EngineObject {
   }
 
   /** Searches this object, then its descendants (depth first). Skips inactive objects by default. */
-  getComponentInChildren<T extends Component>(
-    type: ComponentClass<T>,
-    includeInactive = false,
-  ): T | null {
+  getComponentInChildren<T extends Component>(type: ComponentClass<T>, includeInactive = false): T | null {
     return this.getComponentsInChildren(type, includeInactive, 1)[0] ?? null;
   }
 

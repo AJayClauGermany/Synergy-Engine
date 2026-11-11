@@ -3,14 +3,7 @@ import { useObservable, WorldAnchor } from '@synergy/ui';
 import { useState } from 'react';
 import { GameController } from '../behaviours/GameController';
 import { hud, network, unitMarkers } from '../hud';
-import {
-  convexUrl,
-  hostConvexGame,
-  hostPeerGame,
-  joinConvexGame,
-  joinPeerGame,
-  leaveOnlineGame,
-} from '../online';
+import { convexUrl, hostConvexGame, hostPeerGame, joinConvexGame, joinPeerGame, leaveOnlineGame } from '../online';
 import { MAX_HP, TEAM_NAMES } from '../rules/skirmish';
 
 const HEAD_HEIGHT = new Vector3(0, 1.55, 0);

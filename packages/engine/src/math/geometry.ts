@@ -39,8 +39,7 @@ export class Plane {
   constructor(normal: Vector3, distance: number);
   constructor(normal: Vector3, pointOrDistance: Vector3 | number) {
     this.normal = normal.normalized;
-    this.distance =
-      typeof pointOrDistance === 'number' ? pointOrDistance : -this.normal.dot(pointOrDistance);
+    this.distance = typeof pointOrDistance === 'number' ? pointOrDistance : -this.normal.dot(pointOrDistance);
   }
 
   /**

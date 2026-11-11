@@ -43,7 +43,8 @@ export class FrontierPlayer extends MonoBehaviour {
     // ---- What this player sees. A watcher (team -1) sees the whole map. ----
     const viewers = match.viewersOf(team);
     const visible = team < 0 ? null : visibleCells(viewers);
-    const seen = team < 0 ? 'all' : viewers.map((viewer) => `${viewer.cell.x},${viewer.cell.y},${viewer.sight}`).join(' ');
+    const seen =
+      team < 0 ? 'all' : viewers.map((viewer) => `${viewer.cell.x},${viewer.cell.y},${viewer.sight}`).join(' ');
     if (seen !== this._seen) {
       this._seen = seen;
       this.board.showFog(visible);
@@ -111,7 +112,10 @@ export class FrontierPlayer extends MonoBehaviour {
     }
     const at = selected.cell.value;
     const ready = selected.isReady(now);
-    const occupied = [...match.units].map((unit) => cellKey(unit.cell.value)).sort().join(' ');
+    const occupied = [...match.units]
+      .map((unit) => cellKey(unit.cell.value))
+      .sort()
+      .join(' ');
     const orders = `${selected.networkObjectId}:${at.x},${at.y}:${ready}:${occupied}`;
     if (orders === this._orders) return;
     this._orders = orders;

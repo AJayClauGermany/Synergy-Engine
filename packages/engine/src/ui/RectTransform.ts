@@ -178,7 +178,11 @@ export class RectTransform extends Component {
 }
 
 /** Unity's relation between anchoredPosition/sizeDelta and the corner offsets. */
-function offsets(anchoredPosition: Vector2, sizeDelta: Vector2, pivot: Vector2): Pick<Layout, 'offsetMin' | 'offsetMax'> {
+function offsets(
+  anchoredPosition: Vector2,
+  sizeDelta: Vector2,
+  pivot: Vector2,
+): Pick<Layout, 'offsetMin' | 'offsetMax'> {
   const offsetMin = anchoredPosition.sub(sizeDelta.scale(pivot));
   return { offsetMin, offsetMax: offsetMin.add(sizeDelta) };
 }

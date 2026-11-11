@@ -220,7 +220,10 @@ export class TilemapRenderer extends MonoBehaviour {
       normal,
       tint: tilemap.color,
       corners: outline.map((corner) => corner.sub(anchor).add(lift)),
-      fractions: flat.map(([u, v]) => [maxU > minU ? (u - minU) / (maxU - minU) : 0, maxV > minV ? (v - minV) / (maxV - minV) : 0]),
+      fractions: flat.map(([u, v]) => [
+        maxU > minU ? (u - minU) / (maxU - minU) : 0,
+        maxV > minV ? (v - minV) / (maxV - minV) : 0,
+      ]),
     };
   }
 

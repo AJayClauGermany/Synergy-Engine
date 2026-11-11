@@ -127,8 +127,7 @@ export class Engine {
   private constructor(options: EngineOptions, device: pc.GraphicsDevice | null) {
     this.isHeadless = device === null;
     this.throwOnError = options.throwOnError ?? this.isHeadless;
-    this.canvas =
-      options.canvas ?? createHeadlessCanvas(options.width ?? 1280, options.height ?? 720);
+    this.canvas = options.canvas ?? createHeadlessCanvas(options.width ?? 1280, options.height ?? 720);
 
     const appOptions = new pc.AppOptions();
     appOptions.graphicsDevice = device ?? new pc.NullGraphicsDevice(this.canvas);
@@ -140,20 +139,14 @@ export class Engine {
       pc.ElementComponentSystem,
       ...(options.componentSystems ?? []),
     ];
-    appOptions.resourceHandlers = [
-      pc.TextureHandler,
-      pc.ContainerHandler,
-      ...(options.resourceHandlers ?? []),
-    ];
+    appOptions.resourceHandlers = [pc.TextureHandler, pc.ContainerHandler, ...(options.resourceHandlers ?? [])];
     options.configure?.(appOptions);
 
     this.app = new pc.AppBase(this.canvas);
     this.app.init(appOptions);
     this.app.autoRender = !this.isHeadless;
 
-    this.coroutines = new CoroutineScheduler(this.time, (error, context) =>
-      this.reportError(error, context),
-    );
+    this.coroutines = new CoroutineScheduler(this.time, (error, context) => this.reportError(error, context));
     // The static APIs must resolve to this engine before any scene object is created.
     setCurrentEngine(this);
     this.scenes = new SceneState(this);

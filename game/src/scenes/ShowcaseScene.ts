@@ -68,19 +68,28 @@ export const buildShowcaseScene: SceneBuilder = async () => {
   if (ballRenderer) ballRenderer.material.color = Color.fromHex('#5b8bd6');
 
   // ---- 2D sprites in the world ----
-  const tree = await drawSprite(128, 192, (g) => {
-    g.fillStyle = '#6b4a2b';
-    g.fillRect(54, 140, 20, 52);
-    g.fillStyle = '#2f8f4e';
-    for (const [top, half, base] of [[0, 60, 90], [40, 64, 140], [80, 64, 160]] as const) {
-      g.beginPath();
-      g.moveTo(64, top);
-      g.lineTo(64 + half, base);
-      g.lineTo(64 - half, base);
-      g.closePath();
-      g.fill();
-    }
-  }, new Vector2(0.5, 0)); // pivot at the trunk's base, so trees stand on the ground
+  const tree = await drawSprite(
+    128,
+    192,
+    (g) => {
+      g.fillStyle = '#6b4a2b';
+      g.fillRect(54, 140, 20, 52);
+      g.fillStyle = '#2f8f4e';
+      for (const [top, half, base] of [
+        [0, 60, 90],
+        [40, 64, 140],
+        [80, 64, 160],
+      ] as const) {
+        g.beginPath();
+        g.moveTo(64, top);
+        g.lineTo(64 + half, base);
+        g.lineTo(64 - half, base);
+        g.closePath();
+        g.fill();
+      }
+    },
+    new Vector2(0.5, 0),
+  ); // pivot at the trunk's base, so trees stand on the ground
 
   const coin = await drawSprite(96, 96, (g) => {
     g.fillStyle = '#f2c230';
@@ -98,12 +107,19 @@ export const buildShowcaseScene: SceneBuilder = async () => {
   });
 
   // The left tree is behind the crate: the crate hides part of it through the depth buffer.
-  for (const [x, z] of [[-1.1, -0.6], [-2.6, -1.5], [2.9, -1.2]] as const) {
+  for (const [x, z] of [
+    [-1.1, -0.6],
+    [-2.6, -1.5],
+    [2.9, -1.2],
+  ] as const) {
     const go = new GameObject('Tree');
     go.addComponent(SpriteRenderer).sprite = tree;
     go.transform.position = new Vector3(x, 0, z);
   }
-  for (const [x, y, z] of [[0.6, 1.1, 1.6], [1.3, 0.9, 1.9]] as const) {
+  for (const [x, y, z] of [
+    [0.6, 1.1, 1.6],
+    [1.3, 0.9, 1.9],
+  ] as const) {
     const go = new GameObject('Coin');
     const renderer = go.addComponent(SpriteRenderer);
     renderer.sprite = coin;

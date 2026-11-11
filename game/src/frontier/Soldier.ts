@@ -147,7 +147,8 @@ export class Soldier extends NetworkBehaviour implements Combatant {
     // Another object is named by its NetworkObjectId, and looked up here: it may be gone.
     const target = this.networkManager.spawnManager.spawnedObjects.get(targetId)?.getComponent(Soldier) ?? null;
     if (!target || target.team.value === this.team.value) return this.refuse('There is no enemy there.');
-    if (Hex.distance(this.cell.value, target.cell.value) !== 1) return this.refuse('That enemy is not next to this unit.');
+    if (Hex.distance(this.cell.value, target.cell.value) !== 1)
+      return this.refuse('That enemy is not next to this unit.');
 
     this.readyAt.value = this.networkManager.serverTime.time + this.unitType.cooldown;
     target.hp.value -= damageTo(this.unitType, target.cell.value);

@@ -52,7 +52,11 @@ export class SpriteRenderer extends Behaviour {
     const entity = this.gameObject.entity;
     this.component =
       entity.render ??
-      (entity.addComponent('render', { type: 'asset', castShadows: false, receiveShadows: false }) as pc.RenderComponent);
+      (entity.addComponent('render', {
+        type: 'asset',
+        castShadows: false,
+        receiveShadows: false,
+      }) as pc.RenderComponent);
     this.component.castShadows = false;
     this.component.receiveShadows = false;
     const material = this.materialInstance;

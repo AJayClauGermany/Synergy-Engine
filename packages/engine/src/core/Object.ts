@@ -174,10 +174,7 @@ export function findObjectOfType<T extends Component>(type: ComponentClass<T>): 
 }
 
 /** Every component of `type` on active GameObjects. Unity: `Object.FindObjectsByType`. */
-export function findObjectsOfType<T extends Component>(
-  type: ComponentClass<T>,
-  limit = Number.POSITIVE_INFINITY,
-): T[] {
+export function findObjectsOfType<T extends Component>(type: ComponentClass<T>, limit = Number.POSITIVE_INFINITY): T[] {
   const found: T[] = [];
   walkScenes((node) => {
     const gameObject = existingGameObjectOf(node);

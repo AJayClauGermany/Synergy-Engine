@@ -152,7 +152,9 @@ describe('spawning', () => {
     expect(() => crate.spawn()).toThrow(/already spawned/);
     expect(() => host.make(CratePrefab).spawnWithOwnership(99)).toThrow(/not connected/);
 
-    const unregistered = host.run(() => instantiate(new NetworkPrefab('Ghost')).getComponent(NetworkObject) as NetworkObject);
+    const unregistered = host.run(
+      () => instantiate(new NetworkPrefab('Ghost')).getComponent(NetworkObject) as NetworkObject,
+    );
     expect(() => unregistered.spawn()).toThrow(/not registered/);
 
     const plain = host.run(() => new GameObject('Plain').addComponent(NetworkObject));

@@ -35,9 +35,13 @@ export class Unit extends NetworkBehaviour {
     this.seen.push(`hit ${amount} from ${this.rpcSenderClientId}`);
     this.hp.value -= amount;
   });
-  readonly openRpc = this.rpc(SendTo.Server, (text: string) => this.seen.push(`open ${text} from ${this.rpcSenderClientId}`), {
-    requireOwnership: false,
-  });
+  readonly openRpc = this.rpc(
+    SendTo.Server,
+    (text: string) => this.seen.push(`open ${text} from ${this.rpcSenderClientId}`),
+    {
+      requireOwnership: false,
+    },
+  );
   readonly shoutRpc = this.clientRpc((text: string) => this.seen.push(`shout ${text}`));
   readonly everyoneRpc = this.rpc(SendTo.Everyone, (text: string) => this.seen.push(`everyone ${text}`));
   readonly notMeRpc = this.rpc(SendTo.NotMe, (text: string) => this.seen.push(`notMe ${text}`));
@@ -134,7 +138,13 @@ export class TestNetwork extends BaseTestNetwork<Machine> {
   constructor() {
     super((manager) => {
       manager.networkConfig.playerPrefab = PlayerPrefab;
-      manager.networkPrefabs.add(CratePrefab).add(AnnouncerPrefab).add(CarPrefab).add(NestedPrefab).add(MoverPrefab).add(OwnerMoverPrefab);
+      manager.networkPrefabs
+        .add(CratePrefab)
+        .add(AnnouncerPrefab)
+        .add(CarPrefab)
+        .add(NestedPrefab)
+        .add(MoverPrefab)
+        .add(OwnerMoverPrefab);
     });
   }
 

@@ -254,7 +254,8 @@ describe('TilemapRenderer', () => {
     const instances = () => renderer.pcMeshInstances;
     const before = instances();
     expect(before.length).toBe((SIZE / 16) ** 2); // 64 blocks of 16 x 16 cells
-    const vertices = (list: typeof before) => list.reduce((total, instance) => total + (instance.mesh?.vertexBuffer.numVertices ?? 0), 0);
+    const vertices = (list: typeof before) =>
+      list.reduce((total, instance) => total + (instance.mesh?.vertexBuffer.numVertices ?? 0), 0);
     expect(vertices(before)).toBe(16_384 * 6);
     // Every block shares one material, so the map sorts and draws as one batch per texture.
     expect(new Set(before.map((instance) => instance.material)).size).toBe(1);
@@ -297,7 +298,12 @@ describe('TilemapRenderer', () => {
           g.cellGap = new Vector3(0.1, 0.2, 0);
         });
         // Odd and even rows, negative cells, a second z layer, and a block boundary.
-        const cells = [new Vector3Int(-17, -3, 0), new Vector3Int(15, 16, 0), new Vector3Int(16, 15, 0), new Vector3Int(2, 5, 1)];
+        const cells = [
+          new Vector3Int(-17, -3, 0),
+          new Vector3Int(15, 16, 0),
+          new Vector3Int(16, 15, 0),
+          new Vector3Int(2, 5, 1),
+        ];
         for (const cell of cells) terrain.setTile(cell, grass);
         renderer.rebuild();
 
@@ -394,13 +400,17 @@ describe('Tween', () => {
 
   test('transform shortcuts, delay, yoyo loops and kill', () => {
     const t = new GameObject('Mover').transform;
-    Tween.move(t, new Vector3(4, 0, 0), 1).setEase(Ease.Linear).setDelay(0.5);
+    Tween.move(t, new Vector3(4, 0, 0), 1)
+      .setEase(Ease.Linear)
+      .setDelay(0.5);
     engine.stepSeconds(0.5, 0.1);
     expect(t.position.x).toBeCloseTo(0, 5);
     engine.stepSeconds(0.5, 0.1);
     expect(t.position.x).toBeCloseTo(2, 4);
 
-    const pulse = Tween.scale(t, new Vector3(2, 2, 2), 0.2).setEase(Ease.Linear).setLoops(2, LoopType.Yoyo);
+    const pulse = Tween.scale(t, new Vector3(2, 2, 2), 0.2)
+      .setEase(Ease.Linear)
+      .setLoops(2, LoopType.Yoyo);
     engine.stepSeconds(0.2, 0.05);
     expect(t.localScale.x).toBeGreaterThan(1.5);
     engine.stepSeconds(0.3, 0.05);
@@ -431,7 +441,9 @@ describe('Tween', () => {
     let scaled = 0;
     let unscaled = 0;
     Tween.to(0, 1, 1, (v) => (scaled = v)).setEase(Ease.Linear);
-    Tween.to(0, 1, 1, (v) => (unscaled = v)).setEase(Ease.Linear).setUpdate(true);
+    Tween.to(0, 1, 1, (v) => (unscaled = v))
+      .setEase(Ease.Linear)
+      .setUpdate(true);
     engine.step(0.05);
     engine.step(0.05);
     expect(scaled).toBe(0);

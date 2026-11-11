@@ -144,7 +144,8 @@ export function encodeLayer(
   let minY = first.y;
   let maxY = first.y;
   for (const cell of list) {
-    if ((cell.z ?? 0) !== z) throw new Error(`Layer "${name}" mixes cells with z ${z} and z ${cell.z ?? 0}. Save each z as its own layer.`);
+    if ((cell.z ?? 0) !== z)
+      throw new Error(`Layer "${name}" mixes cells with z ${z} and z ${cell.z ?? 0}. Save each z as its own layer.`);
     minX = Math.min(minX, cell.x);
     maxX = Math.max(maxX, cell.x);
     minY = Math.min(minY, cell.y);
@@ -167,7 +168,9 @@ export function encodeLayer(
 }
 
 const isNumbers = (value: unknown, length: number): boolean =>
-  Array.isArray(value) && value.length === length && value.every((item) => typeof item === 'number' && Number.isFinite(item));
+  Array.isArray(value) &&
+  value.length === length &&
+  value.every((item) => typeof item === 'number' && Number.isFinite(item));
 
 /**
  * Looks for mistakes in map data and returns one sentence per problem (an empty list
@@ -179,13 +182,18 @@ export function checkTilemapData(data: TilemapData, knownTiles?: Iterable<string
   const grid = data?.grid;
   if (!grid || typeof grid !== 'object') return ['The map has no "grid".'];
   if (grid.cellLayout !== 'rectangle' && grid.cellLayout !== 'hexagon') {
-    problems.push(`grid.cellLayout is ${JSON.stringify(grid.cellLayout)}; only "rectangle" and "hexagon" are supported.`);
+    problems.push(
+      `grid.cellLayout is ${JSON.stringify(grid.cellLayout)}; only "rectangle" and "hexagon" are supported.`,
+    );
   }
   if (grid.cellSwizzle !== undefined && !['xyz', 'xzy', 'yxz', 'yzx', 'zxy', 'zyx'].includes(grid.cellSwizzle)) {
-    problems.push(`grid.cellSwizzle is ${JSON.stringify(grid.cellSwizzle)}; expected one of xyz, xzy, yxz, yzx, zxy, zyx.`);
+    problems.push(
+      `grid.cellSwizzle is ${JSON.stringify(grid.cellSwizzle)}; expected one of xyz, xzy, yxz, yzx, zxy, zyx.`,
+    );
   }
   if (!isNumbers(grid.cellSize, 3)) problems.push('grid.cellSize must be three numbers: [x, y, z].');
-  if (grid.cellGap !== undefined && !isNumbers(grid.cellGap, 3)) problems.push('grid.cellGap must be three numbers: [x, y, z].');
+  if (grid.cellGap !== undefined && !isNumbers(grid.cellGap, 3))
+    problems.push('grid.cellGap must be three numbers: [x, y, z].');
   if (!Array.isArray(data.layers)) return [...problems, 'The map has no "layers" list.'];
 
   const known = knownTiles ? new Set(knownTiles) : null;
@@ -205,7 +213,9 @@ export function checkTilemapData(data: TilemapData, knownTiles?: Iterable<string
     }
     if (!Array.isArray(layer.cells) || layer.cells.length !== layer.width * layer.height) {
       const length = Array.isArray(layer.cells) ? layer.cells.length : 'no';
-      problems.push(`${label}: has ${length} cells, but ${layer.width} x ${layer.height} needs ${layer.width * layer.height}.`);
+      problems.push(
+        `${label}: has ${length} cells, but ${layer.width} x ${layer.height} needs ${layer.width * layer.height}.`,
+      );
       continue;
     }
     if (!Array.isArray(layer.tiles)) {
@@ -214,7 +224,9 @@ export function checkTilemapData(data: TilemapData, knownTiles?: Iterable<string
     }
     const bad = layer.cells.find((index) => !Number.isInteger(index) || index < -1 || index >= layer.tiles.length);
     if (bad !== undefined) {
-      problems.push(`${label}: a cell holds ${bad}, which is not -1 (empty) or an index into its ${layer.tiles.length} tiles.`);
+      problems.push(
+        `${label}: a cell holds ${bad}, which is not -1 (empty) or an index into its ${layer.tiles.length} tiles.`,
+      );
     }
     if (known) {
       const missing = layer.tiles.filter((id) => !known.has(id));
@@ -257,10 +269,13 @@ export function checkTilePaletteData(data: TilePaletteData<unknown>): string[] {
     const { sheet: sheetName, sprite } = splitSpritePath(tile.sprite);
     const sheet = sheets[sheetName];
     if (!sheet) {
-      problems.push(`Tile "${tile.id}": sprite "${tile.sprite}" names the sheet "${sheetName}", which the palette does not have.`);
+      problems.push(
+        `Tile "${tile.id}": sprite "${tile.sprite}" names the sheet "${sheetName}", which the palette does not have.`,
+      );
     } else if (sprite !== null) {
       const count = sheet.columns !== undefined && sheet.rows !== undefined ? sheet.columns * sheet.rows : null;
-      const exists = count !== null ? /^\d+$/.test(sprite) && Number(sprite) < count : sheet.sprites?.[sprite] !== undefined;
+      const exists =
+        count !== null ? /^\d+$/.test(sprite) && Number(sprite) < count : sheet.sprites?.[sprite] !== undefined;
       if (!exists) problems.push(`Tile "${tile.id}": sheet "${sheetName}" has no sprite "${sprite}".`);
     }
   }

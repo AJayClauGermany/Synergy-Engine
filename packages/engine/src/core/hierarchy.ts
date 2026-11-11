@@ -61,7 +61,9 @@ function show(value: unknown, depth = 0): string | null {
   // (materials, PlayCanvas objects) would only be noise.
   // (An object made with Object.create(null) has no toString at all.)
   const describe = (value as { toString?: () => string }).toString;
-  return typeof describe !== 'function' || describe === Object.prototype.toString ? null : clip(describe.call(value), 60);
+  return typeof describe !== 'function' || describe === Object.prototype.toString
+    ? null
+    : clip(describe.call(value), 60);
 }
 
 function fieldsOf(component: Component): string {
@@ -79,7 +81,13 @@ function fieldsOf(component: Component): string {
   return parts.join(', ');
 }
 
-function describe(gameObject: GameObject, indent: string, levels: number, options: Required<Omit<HierarchyOptions, 'root'>>, out: string[]): void {
+function describe(
+  gameObject: GameObject,
+  indent: string,
+  levels: number,
+  options: Required<Omit<HierarchyOptions, 'root'>>,
+  out: string[],
+): void {
   const transform = gameObject.transform;
   const components = gameObject._components.filter((component) => !(component instanceof Transform));
   let line = `${indent}${gameObject.name}`;
@@ -90,14 +98,16 @@ function describe(gameObject: GameObject, indent: string, levels: number, option
   const { position, eulerAngles, lossyScale } = transform;
   if (position.sqrMagnitude > 1e-10) line += ` at ${show(position)}`;
   if (eulerAngles.sqrMagnitude > 1e-6) line += ` rot ${show(eulerAngles)}`;
-  if (Math.abs(lossyScale.x - 1) + Math.abs(lossyScale.y - 1) + Math.abs(lossyScale.z - 1) > 1e-4) line += ` scale ${show(lossyScale)}`;
+  if (Math.abs(lossyScale.x - 1) + Math.abs(lossyScale.y - 1) + Math.abs(lossyScale.z - 1) > 1e-4)
+    line += ` scale ${show(lossyScale)}`;
   out.push(line);
 
   if (options.fields) {
     for (const component of components) {
       const fields = fieldsOf(component);
       const disabled = 'enabled' in component && component.enabled === false ? ' (disabled)' : '';
-      if (fields || disabled) out.push(`${indent}  | ${typeNameOf(component)}${disabled}${fields ? `: ${fields}` : ''}`);
+      if (fields || disabled)
+        out.push(`${indent}  | ${typeNameOf(component)}${disabled}${fields ? `: ${fields}` : ''}`);
     }
   }
 

@@ -6,7 +6,12 @@ import { ARMY, canEnter, map, START_CELLS, terrainAt, tiles, unitTypes } from '.
 // fails here, with a sentence saying what is wrong, instead of showing up as a blank tile.
 test('the shipped tile palette and map are sound', () => {
   expect(checkTilePaletteData(tiles)).toEqual([]);
-  expect(checkTilemapData(map, tiles.tiles.map((tile) => tile.id))).toEqual([]);
+  expect(
+    checkTilemapData(
+      map,
+      tiles.tiles.map((tile) => tile.id),
+    ),
+  ).toEqual([]);
 });
 
 test('every terrain tile carries the data the rules read', () => {

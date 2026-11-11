@@ -88,10 +88,7 @@ export class Lifecycle {
     }
     // Re-read everything: `awake` may have disabled, deactivated or destroyed things.
     const shouldBeLive =
-      !component._destroyed &&
-      component._awoken &&
-      component._wantsLive() &&
-      component.gameObject.activeInHierarchy;
+      !component._destroyed && component._awoken && component._wantsLive() && component.gameObject.activeInHierarchy;
     if (shouldBeLive && !component._live) {
       component._live = true;
       component._enable();
@@ -283,9 +280,7 @@ export class Lifecycle {
 
   private destroyComponent(component: Component): void {
     if (component instanceof Transform) {
-      throw new Error(
-        `Cannot destroy the Transform of "${component.name}". Destroy the GameObject instead.`,
-      );
+      throw new Error(`Cannot destroy the Transform of "${component.name}". Destroy the GameObject instead.`);
     }
     if (component._live) {
       component._live = false;

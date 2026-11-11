@@ -387,7 +387,8 @@ export class NetworkList<T> extends NetworkVariableBase implements Iterable<T> {
     for (const op of data as ListOp[]) {
       const index = op.i ?? -1;
       const ok =
-        Number.isInteger(op.n) && op.n === version + 1 &&
+        Number.isInteger(op.n) &&
+        op.n === version + 1 &&
         (op.k === 'clear' ||
           (op.k === 'add' && (length++, true)) ||
           (op.k === 'insert' && Number.isInteger(index) && index >= 0 && index <= length++) ||

@@ -1,12 +1,4 @@
-import {
-  Camera,
-  destroy,
-  Input,
-  instantiate,
-  KeyCode,
-  MonoBehaviour,
-  Physics,
-} from '@synergy/engine';
+import { Camera, destroy, Input, instantiate, KeyCode, MonoBehaviour, Physics } from '@synergy/engine';
 import { type CommandEntry, CommandSession, type Session } from '@synergy/net';
 import { hud, network, unitMarkers } from '../hud';
 import {

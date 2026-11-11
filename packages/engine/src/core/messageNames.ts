@@ -60,8 +60,7 @@ function inspect(type: MessageHost): Verdict {
       const lower = name.toLowerCase();
       const intended = byLowerCase.get(lower);
       if (intended) {
-        verdict.error ??=
-          `${type.name}.${name}() will never be called: message names are camelCase here. Rename it to ${intended}().`;
+        verdict.error ??= `${type.name}.${name}() will never be called: message names are camelCase here. Rename it to ${intended}().`;
         continue;
       }
       // "onStart", "onUpdate": a message with an "on" it does not have.
@@ -74,7 +73,9 @@ function inspect(type: MessageHost): Verdict {
       }
       const reason = NOT_SENT[lower];
       if (reason) {
-        verdict.warnings.push(`${type.name}.${name}() is a Unity message this engine does not send, so it will never be called: ${reason}.`);
+        verdict.warnings.push(
+          `${type.name}.${name}() is a Unity message this engine does not send, so it will never be called: ${reason}.`,
+        );
       }
     }
   }

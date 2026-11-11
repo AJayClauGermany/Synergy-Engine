@@ -7,3 +7,10 @@ env = false
 # Only variables starting with PUBLIC_ are exposed to browser code in `bun run dev`.
 # The production build applies the same rule (scripts/build.ts). Never put secrets in them.
 env = "PUBLIC_*"
+
+[fmt]
+# `bun run format` writes, `bun run check` verifies. Only source code is formatted:
+# Markdown keeps its hand-wrapped prose and tables, and JSON keeps the row layout of maps.
+printWidth = 120
+singleQuote = true
+ignorePatterns = ["**/*.md", "**/*.json", "**/*.jsonc", "**/*.yml", "**/*.toml", "convex/_generated/"]

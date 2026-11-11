@@ -83,9 +83,13 @@ describe('connecting', () => {
         };
       },
     });
-    const intruder = net.create('intruder', { configure: (m) => (m.networkConfig.connectionData = { password: 'nope' }) });
+    const intruder = net.create('intruder', {
+      configure: (m) => (m.networkConfig.connectionData = { password: 'nope' }),
+    });
     intruder.run(() => intruder.manager.startClient(intruder.transport, 'host'));
-    const friend = net.create('friend', { configure: (m) => (m.networkConfig.connectionData = { password: 'open sesame' }) });
+    const friend = net.create('friend', {
+      configure: (m) => (m.networkConfig.connectionData = { password: 'open sesame' }),
+    });
     friend.run(() => friend.manager.startClient(friend.transport, 'host'));
     const stopped: string[] = [];
     intruder.manager.onClientStopped.add(() => stopped.push('intruder stopped'));

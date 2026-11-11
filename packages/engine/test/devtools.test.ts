@@ -36,7 +36,9 @@ describe('message names', () => {
       Update() {}
     }
     const add = () => new GameObject('S').addComponent(Spinner);
-    expect(add).toThrow('Spinner.Update() will never be called: message names are camelCase here. Rename it to update().');
+    expect(add).toThrow(
+      'Spinner.Update() will never be called: message names are camelCase here. Rename it to update().',
+    );
     expect(add).toThrow('Rename it to update()');
   });
 
@@ -152,7 +154,8 @@ describe('Debug.hierarchy', () => {
         '  Squad',
         '    Scout <Follower> layer=8 scale (2, 2, 2)',
         '      | Follower (disabled): speed=2.5, label="scout", target=Main Camera (Transform), ' +
-          'waypoints=[(1, 0, 0), (2, 0, 0)], stats={hp: 10, armour: 0}, tint=' + String(Color.red),
+          'waypoints=[(1, 0, 0), (2, 0, 0)], stats={hp: 10, armour: 0}, tint=' +
+          String(Color.red),
         '    Asleep (inactive)',
       ].join('\n'),
     );
@@ -165,7 +168,11 @@ describe('Debug.hierarchy', () => {
     }
     new GameObject('Pack').addComponent(Inventory);
     expect(Debug.hierarchy()).toBe(
-      ['Scene "Untitled" (active)', '  Pack <Inventory>', '    | Inventory: counts={arrows: 12}, nested={lookup: {…}}'].join('\n'),
+      [
+        'Scene "Untitled" (active)',
+        '  Pack <Inventory>',
+        '    | Inventory: counts={arrows: 12}, nested={lookup: {…}}',
+      ].join('\n'),
     );
   });
 

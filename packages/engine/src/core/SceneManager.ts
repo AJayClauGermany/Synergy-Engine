@@ -121,9 +121,7 @@ export class SceneState {
     const definition = registry.get(name);
     if (!definition) {
       const known = [...registry.keys()].map((key) => `"${key}"`).join(', ') || '(none)';
-      return Promise.reject(
-        new Error(`Scene "${name}" is not registered. Registered scenes: ${known}.`),
-      );
+      return Promise.reject(new Error(`Scene "${name}" is not registered. Registered scenes: ${known}.`));
     }
     return new Promise<Scene>((resolve, reject) => {
       this.jobs.push({ run: () => this.build(name, definition, mode), resolve, reject });
@@ -176,11 +174,7 @@ export class SceneState {
     }
   }
 
-  private build(
-    name: string,
-    definition: SceneBuilder | SceneDefinition,
-    mode: LoadSceneMode,
-  ): Scene | Promise<Scene> {
+  private build(name: string, definition: SceneBuilder | SceneDefinition, mode: LoadSceneMode): Scene | Promise<Scene> {
     const scene = new Scene(name, this.engine);
     this.loaded.push(scene);
     if (mode === LoadSceneMode.Single) {

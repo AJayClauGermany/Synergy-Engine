@@ -182,7 +182,11 @@ describe('pathfinding', () => {
   test('routes around walls, prefers cheap terrain, and gives up when sealed in', () => {
     // A wall across x = 2 with one gap at the top.
     const wall = (cell: Vector3Int) => cell.x === 2 && cell.y < 5;
-    const around = findPath({ x: 0, y: 0 }, { x: 4, y: 0 }, { neighbors, cost: (_from, to) => (wall(to) ? Infinity : 1) });
+    const around = findPath(
+      { x: 0, y: 0 },
+      { x: 4, y: 0 },
+      { neighbors, cost: (_from, to) => (wall(to) ? Infinity : 1) },
+    );
     expect(around?.cost).toBe(14);
     expect(around?.path.some((cell) => cell.equals({ x: 2, y: 5 }))).toBe(true);
 
@@ -192,7 +196,11 @@ describe('pathfinding', () => {
     expect(cheap?.cost).toBe(7);
     expect(cheap?.path.some((cell) => cell.y === 1)).toBe(true);
 
-    const sealed = findPath({ x: 0, y: 0 }, { x: 4, y: 0 }, { neighbors, cost: (_f, to) => (to.x === 2 ? Infinity : 1) });
+    const sealed = findPath(
+      { x: 0, y: 0 },
+      { x: 4, y: 0 },
+      { neighbors, cost: (_f, to) => (to.x === 2 ? Infinity : 1) },
+    );
     expect(sealed).toBeNull();
     expect(findPath({ x: 0, y: 0 }, { x: 5, y: 5 }, { neighbors, maxCost: 4 })).toBeNull();
     expect(findPath({ x: 1, y: 1 }, { x: 1, y: 1 }, { neighbors })?.path.length).toBe(1);

@@ -56,8 +56,24 @@ const MAP: TilemapData = {
   grid: { cellLayout: 'hexagon', cellSwizzle: 'xzy', cellSize: [1, 1.1547, 1], cellGap: [0.05, 0.05, 0] },
   layers: [
     // 3 x 2 starting at (-1, 4):   row 4: grass sand grass   row 5: (empty) ice sand
-    { name: 'Terrain', tiles: ['grass', 'sand', 'ice'], origin: [-1, 4], width: 3, height: 2, cells: [0, 1, 0, -1, 2, 1] },
-    { name: 'Fog', sortingOrder: 2, color: '#ffffff80', tiles: ['ice'], origin: [0, 4], width: 1, height: 1, cells: [0] },
+    {
+      name: 'Terrain',
+      tiles: ['grass', 'sand', 'ice'],
+      origin: [-1, 4],
+      width: 3,
+      height: 2,
+      cells: [0, 1, 0, -1, 2, 1],
+    },
+    {
+      name: 'Fog',
+      sortingOrder: 2,
+      color: '#ffffff80',
+      tiles: ['ice'],
+      origin: [0, 4],
+      width: 1,
+      height: 1,
+      cells: [0],
+    },
   ],
 };
 
@@ -81,7 +97,9 @@ describe('Catalog', () => {
   });
 
   test('a missing id says what exists and what was probably meant', () => {
-    expect(() => units.get('scuot')).toThrow('There is no unit type "scuot". Did you mean "scout"? Known unit types: footman, scout.');
+    expect(() => units.get('scuot')).toThrow(
+      'There is no unit type "scuot". Did you mean "scout"? Known unit types: footman, scout.',
+    );
     expect(() => units.get('dragon')).toThrow('There is no unit type "dragon". Known unit types: footman, scout.');
     expect(() => new Catalog('weapon').get('bow')).toThrow('Known weapons: (none).');
   });
@@ -155,13 +173,30 @@ describe('tile data', () => {
     });
     const back = layerCells(layer).map(({ x, y, tile }) => ({ x, y, tile }));
     expect(back).toEqual([cells[0], cells[2], cells[1]] as typeof cells);
-    expect(encodeLayer('Empty', [])).toEqual({ name: 'Empty', tiles: [], origin: [0, 0], width: 0, height: 0, cells: [] });
-    expect(() => encodeLayer('Mixed', [{ x: 0, y: 0, tile: 'a' }, { x: 0, y: 0, z: 1, tile: 'a' }])).toThrow('mixes cells');
+    expect(encodeLayer('Empty', [])).toEqual({
+      name: 'Empty',
+      tiles: [],
+      origin: [0, 0],
+      width: 0,
+      height: 0,
+      cells: [],
+    });
+    expect(() =>
+      encodeLayer('Mixed', [
+        { x: 0, y: 0, tile: 'a' },
+        { x: 0, y: 0, z: 1, tile: 'a' },
+      ]),
+    ).toThrow('mixes cells');
   });
 
   test('sound data passes the checks', () => {
     expect(checkTilePaletteData(PALETTE)).toEqual([]);
-    expect(checkTilemapData(MAP, PALETTE.tiles.map((tile) => tile.id))).toEqual([]);
+    expect(
+      checkTilemapData(
+        MAP,
+        PALETTE.tiles.map((tile) => tile.id),
+      ),
+    ).toEqual([]);
   });
 
   test('every mistake in a map is reported in one go', () => {
@@ -179,13 +214,21 @@ describe('tile data', () => {
       'Two layers are named "Terrain".',
       'Layer "Terrain": a cell holds 4, which is not -1 (empty) or an index into its 1 tiles.',
     ]);
-    const unknown: TilemapData = { ...MAP, layers: [{ ...(MAP.layers[0] as TilemapData['layers'][number]), tiles: ['grass', 'lava', 'ice'] }] };
-    expect(checkTilemapData(unknown, ['grass', 'ice'])).toEqual(['Layer "Terrain": uses tiles the palette does not define: lava.']);
+    const unknown: TilemapData = {
+      ...MAP,
+      layers: [{ ...(MAP.layers[0] as TilemapData['layers'][number]), tiles: ['grass', 'lava', 'ice'] }],
+    };
+    expect(checkTilemapData(unknown, ['grass', 'ice'])).toEqual([
+      'Layer "Terrain": uses tiles the palette does not define: lava.',
+    ]);
   });
 
   test('every mistake in a palette is reported in one go', () => {
     const broken: TilePaletteData = {
-      sheets: { terrain: { image: 'terrain.png', sprites: { grass_0: { x: 0, y: 0, width: 8, height: 8 } } }, grid: { image: 'g.png', columns: 2, rows: 2 } },
+      sheets: {
+        terrain: { image: 'terrain.png', sprites: { grass_0: { x: 0, y: 0, width: 8, height: 8 } } },
+        grid: { image: 'g.png', columns: 2, rows: 2 },
+      },
       tiles: [
         { id: 'grass', sprite: 'terrain/grass_0' },
         { id: 'grass', sprite: 'terrain/grass_9' },
@@ -291,7 +334,9 @@ describe('TilePalette and maps from data', () => {
       expect(b.getUsedTilesCount()).toBe(a.getUsedTilesCount());
       for (const cell of a.getUsedCells()) expect(b.getTile(cell)).toBe(a.getTile(cell) as never);
       expect(b.color.equals(a.color)).toBe(true);
-      expect(b.getComponent(TilemapRenderer)?.sortingOrder).toBe(a.getComponent(TilemapRenderer)?.sortingOrder as number);
+      expect(b.getComponent(TilemapRenderer)?.sortingOrder).toBe(
+        a.getComponent(TilemapRenderer)?.sortingOrder as number,
+      );
     }
     expect(second.grid.getComponentsInChildren(Tilemap).length).toBe(2);
     expect(second.grid.getComponent(Grid)?.cellGap.equals(first.grid.cellGap)).toBe(true);

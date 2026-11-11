@@ -71,11 +71,7 @@ export class PeerJsTransport implements Transport {
         resolve(transport);
       });
       peer.once('error', (error) =>
-        reject(
-          error.type === 'unavailable-id'
-            ? new Error(`Room code ${roomCode} is already in use.`)
-            : error,
-        ),
+        reject(error.type === 'unavailable-id' ? new Error(`Room code ${roomCode} is already in use.`) : error),
       );
     });
   }

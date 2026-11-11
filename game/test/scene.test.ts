@@ -1,5 +1,15 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { Camera, Engine, GameObject, Grid, Hex, KeyCode, SceneManager, Tilemap, TilemapRenderer } from '@synergy/engine';
+import {
+  Camera,
+  Engine,
+  GameObject,
+  Grid,
+  Hex,
+  KeyCode,
+  SceneManager,
+  Tilemap,
+  TilemapRenderer,
+} from '@synergy/engine';
 import { BoardView } from '../src/behaviours/BoardView';
 import { GameController } from '../src/behaviours/GameController';
 import { UnitView } from '../src/behaviours/UnitView';
@@ -61,7 +71,12 @@ describe('Skirmish scene', () => {
 
   test('the mouse picks hex cells through the grid, and misses outside the map', () => {
     const camera = Camera.main as Camera;
-    for (const cell of [{ x: 0, y: 0 }, { x: 4, y: 3 }, { x: 8, y: 7 }, { x: 2, y: 5 }]) {
+    for (const cell of [
+      { x: 0, y: 0 },
+      { x: 4, y: 3 },
+      { x: 8, y: 7 },
+      { x: 2, y: 5 },
+    ]) {
       const ray = camera.screenPointToRay(camera.worldToScreenPoint(board.cellToWorld(cell)));
       expect(board.rayToCell(ray)).toEqual(cell);
     }

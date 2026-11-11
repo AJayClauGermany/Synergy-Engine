@@ -166,12 +166,7 @@ export class Quaternion implements QuaternionLike {
     const halfTheta = Math.acos(cosHalfTheta);
     const sinHalfTheta = Math.sqrt(1 - cosHalfTheta * cosHalfTheta);
     if (Math.abs(sinHalfTheta) < 1e-6) {
-      return new Quaternion(
-        (a.x + bx) * 0.5,
-        (a.y + by) * 0.5,
-        (a.z + bz) * 0.5,
-        (a.w + bw) * 0.5,
-      ).normalized;
+      return new Quaternion((a.x + bx) * 0.5, (a.y + by) * 0.5, (a.z + bz) * 0.5, (a.w + bw) * 0.5).normalized;
     }
     const ratioA = Math.sin((1 - t) * halfTheta) / sinHalfTheta;
     const ratioB = Math.sin(t * halfTheta) / sinHalfTheta;
@@ -234,12 +229,7 @@ export class Quaternion implements QuaternionLike {
   inverse(): Quaternion {
     const sqrLength = Quaternion.dot(this, this);
     if (sqrLength < Mathf.epsilon) return Quaternion.identity;
-    return new Quaternion(
-      -this.x / sqrLength,
-      -this.y / sqrLength,
-      -this.z / sqrLength,
-      this.w / sqrLength,
-    );
+    return new Quaternion(-this.x / sqrLength, -this.y / sqrLength, -this.z / sqrLength, this.w / sqrLength);
   }
 
   /** Combines rotations. Unity: `this * other` (`other` is applied first). */

@@ -144,7 +144,11 @@ describe('rpc(SendTo.X)', () => {
     alice.unit(id).everyoneRpc('hi');
     expect(calls(alice, id)).toEqual(['everyone hi']); // before any message has travelled
     net.pump();
-    expect([calls(host, id), calls(alice, id), calls(bob, id)]).toEqual([['everyone hi'], ['everyone hi'], ['everyone hi']]);
+    expect([calls(host, id), calls(alice, id), calls(bob, id)]).toEqual([
+      ['everyone hi'],
+      ['everyone hi'],
+      ['everyone hi'],
+    ]);
   });
 
   test('NotMe skips the caller', () => {
@@ -157,7 +161,11 @@ describe('rpc(SendTo.X)', () => {
   });
 
   test('NotOwner reaches everyone but the owner, the server included', () => {
-    expect(run((unit) => unit.notOwnerRpc('x'), 'bob')).toEqual({ host: ['notOwner x'], alice: [], bob: ['notOwner x'] });
+    expect(run((unit) => unit.notOwnerRpc('x'), 'bob')).toEqual({
+      host: ['notOwner x'],
+      alice: [],
+      bob: ['notOwner x'],
+    });
   });
 
   test('NotServer reaches the clients and not the host', () => {

@@ -72,12 +72,7 @@ export class Color implements ColorLike {
 
   static lerp(a: Color, b: Color, t: number): Color {
     const k = Mathf.clamp01(t);
-    return new Color(
-      a.r + (b.r - a.r) * k,
-      a.g + (b.g - a.g) * k,
-      a.b + (b.b - a.b) * k,
-      a.a + (b.a - a.a) * k,
-    );
+    return new Color(a.r + (b.r - a.r) * k, a.g + (b.g - a.g) * k, a.b + (b.b - a.b) * k, a.a + (b.a - a.a) * k);
   }
 
   /** Multiplies RGB (not alpha) by `factor`. */

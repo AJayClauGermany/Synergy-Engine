@@ -15,7 +15,8 @@ function setup() {
   return { host, alice, bob };
 }
 
-const xOf = (machine: { object(id: number): { transform: { position: Vector3 } } }, id: number) => machine.object(id).transform.position.x;
+const xOf = (machine: { object(id: number): { transform: { position: Vector3 } } }, id: number) =>
+  machine.object(id).transform.position.x;
 
 describe('NetworkTransform', () => {
   test('when the server moves an object, clients follow it smoothly rather than jumping', () => {
@@ -74,7 +75,11 @@ describe('NetworkTransform', () => {
     const id = mover.networkObjectId;
     const aliceSync = alice.object(id).getComponent(NetworkTransform) as NetworkTransform;
     const bobSync = bob.object(id).getComponent(NetworkTransform) as NetworkTransform;
-    expect([aliceSync.hasAuthority, bobSync.hasAuthority, (mover.getComponent(NetworkTransform) as NetworkTransform).hasAuthority]).toEqual([true, false, false]);
+    expect([
+      aliceSync.hasAuthority,
+      bobSync.hasAuthority,
+      (mover.getComponent(NetworkTransform) as NetworkTransform).hasAuthority,
+    ]).toEqual([true, false, false]);
 
     alice.object(id).transform.position = new Vector3(4, 0, 2);
     net.pump(12);

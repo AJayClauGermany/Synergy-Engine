@@ -218,7 +218,10 @@ export class NetworkObject extends MonoBehaviour {
    */
   _layout(): string {
     return this._behaviours
-      .map((behaviour) => `${[...behaviour._variables.keys()].sort().join(',')}|${[...behaviour._rpcs.keys()].sort().join(',')}`)
+      .map(
+        (behaviour) =>
+          `${[...behaviour._variables.keys()].sort().join(',')}|${[...behaviour._rpcs.keys()].sort().join(',')}`,
+      )
       .join(';');
   }
 

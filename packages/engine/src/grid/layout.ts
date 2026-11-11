@@ -135,10 +135,7 @@ export function cellToLocal(shape: GridShape, cell: CellLike): Vector3 {
 export function cellCenterToLocal(shape: GridShape, cell: CellLike): Vector3 {
   const position = layoutPosition(shape, cell.x, cell.y, cell.z ?? 0);
   if (shape.cellLayout === CellLayout.Rectangle) {
-    return swizzle(
-      shape.cellSwizzle,
-      position.add(new Vector3(shape.cellSize.x / 2, shape.cellSize.y / 2, 0)),
-    );
+    return swizzle(shape.cellSwizzle, position.add(new Vector3(shape.cellSize.x / 2, shape.cellSize.y / 2, 0)));
   }
   return swizzle(shape.cellSwizzle, position);
 }
@@ -149,11 +146,7 @@ export function localToCell(shape: GridShape, local: Vector3): Vector3Int {
   const s = stride(shape);
   const layer = s.z !== 0 ? Math.round(p.z / s.z) : 0;
   if (shape.cellLayout === CellLayout.Rectangle) {
-    return new Vector3Int(
-      s.x !== 0 ? Math.floor(p.x / s.x) : 0,
-      s.y !== 0 ? Math.floor(p.y / s.y) : 0,
-      layer,
-    );
+    return new Vector3Int(s.x !== 0 ? Math.floor(p.x / s.x) : 0, s.y !== 0 ? Math.floor(p.y / s.y) : 0, layer);
   }
   // Fractional axial coordinates, rounded to the nearest hexagon via cube coordinates.
   const r = p.y / (s.y * 0.75);
@@ -186,9 +179,7 @@ export function cellCorners(shape: GridShape, cell: CellLike): Vector3[] {
       [0, h * 2],
     ];
   }
-  return offsets.map(([dx, dy]) =>
-    swizzle(shape.cellSwizzle, new Vector3(centre.x + dx, centre.y + dy, centre.z)),
-  );
+  return offsets.map(([dx, dy]) => swizzle(shape.cellSwizzle, new Vector3(centre.x + dx, centre.y + dy, centre.z)));
 }
 
 // ---- Hexagon coordinate conversions (shared with hex.ts) ---------------------------------

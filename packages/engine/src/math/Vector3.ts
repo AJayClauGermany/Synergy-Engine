@@ -49,9 +49,7 @@ export class Vector3 implements Vector3Like {
 
   get normalized(): Vector3 {
     const length = this.magnitude;
-    return length > Mathf.epsilon
-      ? new Vector3(this.x / length, this.y / length, this.z / length)
-      : Vector3.zero;
+    return length > Mathf.epsilon ? new Vector3(this.x / length, this.y / length, this.z / length) : Vector3.zero;
   }
 
   /** Unity: `a + b`. */

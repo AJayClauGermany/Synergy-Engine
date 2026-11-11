@@ -3,6 +3,7 @@ import { Vector2 } from '../math/Vector2';
 import { Vector3 } from '../math/Vector3';
 import { currentEngine } from './runtime';
 
+// prettier-ignore
 /**
  * Keyboard keys, named as in Unity. The values are DOM `KeyboardEvent.code` strings, so
  * they refer to physical key positions and WASD works on any keyboard layout.
@@ -292,11 +293,7 @@ export class InputState {
       },
       options,
     );
-    target.addEventListener(
-      'pointerup',
-      (event) => this.releaseMouseButton(unityMouseButton(event.button)),
-      options,
-    );
+    target.addEventListener('pointerup', (event) => this.releaseMouseButton(unityMouseButton(event.button)), options);
     target.addEventListener('pointercancel', () => this.releaseAll(), options);
     canvas.addEventListener(
       'wheel',

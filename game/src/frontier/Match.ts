@@ -1,4 +1,11 @@
-import { NetworkBehaviour, NetworkList, type NetworkManager, type NetworkObject, NetworkPrefab, NetworkVariable } from '@synergy/netcode';
+import {
+  NetworkBehaviour,
+  NetworkList,
+  type NetworkManager,
+  type NetworkObject,
+  NetworkPrefab,
+  NetworkVariable,
+} from '@synergy/netcode';
 import { canSee, type Cell, INCOME, type Viewer, WORLD_TICK_SECONDS } from './rules';
 
 export type Phase = 'waiting' | 'playing' | 'over';
@@ -103,7 +110,9 @@ export class Match extends NetworkBehaviour {
 
   /** The eyes of a team: where its units are and how far each sees. */
   viewersOf(team: number): Viewer[] {
-    return [...this.units].filter((unit) => unit.team.value === team).map((unit) => ({ cell: unit.cell.value, sight: unit.sight }));
+    return [...this.units]
+      .filter((unit) => unit.team.value === team)
+      .map((unit) => ({ cell: unit.cell.value, sight: unit.sight }));
   }
 
   // ---- Host only ----------------------------------------------------------------------------
