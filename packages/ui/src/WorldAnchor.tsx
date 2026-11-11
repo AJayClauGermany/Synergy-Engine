@@ -1,5 +1,6 @@
 import { Camera, type GameObject, isAlive, Vector3 } from '@synergy/engine';
-import { type CSSProperties, type ReactNode, useRef } from 'react';
+import type { ComponentChildren, CSSProperties } from 'preact';
+import { useRef } from 'preact/hooks';
 import { useFrame } from './hooks';
 
 export interface WorldAnchorProps {
@@ -11,7 +12,7 @@ export interface WorldAnchorProps {
   camera?: Camera;
   className?: string;
   style?: CSSProperties;
-  children?: ReactNode;
+  children?: ComponentChildren;
 }
 
 /**
@@ -53,7 +54,10 @@ export function WorldAnchor({ target, offset, camera, className, style, children
     <div
       ref={element}
       className={className}
-      style={{ position: 'absolute', left: 0, top: 0, visibility: 'hidden', willChange: 'transform', ...style }}
+      style={Object.assign(
+        { position: 'absolute', left: 0, top: 0, visibility: 'hidden', willChange: 'transform' },
+        style,
+      )}
     >
       {children}
     </div>

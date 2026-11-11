@@ -35,11 +35,11 @@ export class UnityEvent<Args extends unknown[] = []> {
 
 /**
  * A value that tells subscribers when it changes. This is the bridge between game code
- * and the React HUD (`useObservable` in `@synergy/ui`), and has no Unity equivalent.
+ * and the Preact HUD (`useObservable` in `@synergy/ui`), and has no Unity equivalent.
  *
  *   export const gold = new Observable(100);
  *   gold.value += 25;                       // game code
- *   const amount = useObservable(gold);     // React component re-renders
+ *   const amount = useObservable(gold);     // HUD component re-renders
  *
  * Setting a value that is `Object.is`-equal to the current one does nothing, so replace
  * objects and arrays instead of mutating them: `list.value = [...list.value, item]`.
@@ -75,6 +75,6 @@ export class Observable<T> {
     };
   };
 
-  /** Stable getter, convenient for React's `useSyncExternalStore`. */
+  /** Stable getter for the current value (what `useObservable` reads while rendering). */
   getSnapshot = (): T => this.current;
 }

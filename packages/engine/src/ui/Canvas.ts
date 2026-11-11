@@ -38,7 +38,7 @@ export enum ScaleMode {
  * component (`pcScreen`).
  *
  * Canvas images are not clickable yet. For interactive UI (buttons, text, forms), use the
- * React HUD (`@synergy/ui`), which sits over the same canvas.
+ * Preact HUD (`@synergy/ui`), which sits over the same canvas.
  */
 export class Canvas extends Behaviour {
   static readonly disallowMultiple = true;

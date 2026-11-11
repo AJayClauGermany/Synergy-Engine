@@ -11,11 +11,6 @@
     "@synergy/ui": "workspace:*",
     "convex": "^1.49.0",
     "peerjs": "^1.5.5",
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1"
-  },
-  "devDependencies": {
-    "@types/react": "^19.3.0",
-    "@types/react-dom": "^19.3.0"
+    "preact": "^11.2.0"
   }
 }

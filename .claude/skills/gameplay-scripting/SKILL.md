@@ -91,8 +91,8 @@ Outside those functions `addComponent` runs `awake` immediately, as in Unity.
 
 ## HUD
 
-Game code writes an `Observable` (`game/src/hud.ts`); React reads it with
-`useObservable`. HUD buttons call methods on a behaviour, usually through a singleton
+The HUD is **Preact, not React** (see "The HUD is Preact" in `AGENTS.md`). Game code
+writes an `Observable` (`game/src/hud.ts`); components read it with `useObservable`. HUD buttons call methods on a behaviour, usually through a singleton
 (`GameController.instance?.endTurn()`). Use `<WorldAnchor target={gameObject}>` for
 labels that follow objects.
 

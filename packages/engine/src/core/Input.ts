@@ -325,7 +325,7 @@ function unityMouseButton(domButton: number): number {
  * Unity's `Input` (the classic Input Manager API).
  *
  * Screen positions are CSS pixels with the origin at the TOP-left of the canvas and Y
- * pointing down, matching the DOM and the React HUD. (Unity's origin is bottom-left.)
+ * pointing down, matching the DOM and the Preact HUD. (Unity's origin is bottom-left.)
  */
 export class Input {
   /** True while `key` is held. */
