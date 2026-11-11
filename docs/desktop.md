@@ -5,9 +5,9 @@
 disk, so it runs offline; only online multiplayer needs a connection.
 
 > **Status:** the configuration follows Electrobun 2.0.6's official templates, but it
-> could not be built in the environment this template was authored in (its toolchain
-> download host was blocked there). Expect to adjust it on first use, and please update
-> this note once it is confirmed on your machine.
+> has not been built yet: in the cloud environment this template was authored in,
+> Electrobun's toolchain downloader could not get through the network proxy. Expect to
+> adjust it on first use, and please update this note once it is confirmed on your machine.
 
 ## Commands
 
