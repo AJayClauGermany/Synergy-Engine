@@ -14,14 +14,18 @@ SceneManager.register('Showcase', buildShowcaseScene);
 
 async function main() {
   const canvas = document.getElementById('game') as HTMLCanvasElement;
-  const engine = await Engine.create({ canvas });
+  const params = new URLSearchParams(location.search);
+  // WebGPU wherever the browser or webview has it, WebGL2 everywhere else (PlayCanvas
+  // falls back on its own). `?renderer=webgl2` forces WebGL2, e.g. to compare the two.
+  const deviceTypes = params.get('renderer') === 'webgl2' ? ['webgl2'] : ['webgpu', 'webgl2'];
+  const engine = await Engine.create({ canvas, deviceTypes });
 
   // For the browser console and automated tools (see scripts/screenshot.ts):
   //   synergy.GameObject.find('Board'), synergy.engine.stop(), synergy.engine.step(), ...
   Object.assign(globalThis, { synergy: { ...synergy, engine } });
 
   // `?scene=Name` opens a different registered scene, handy while building new ones.
-  const requested = new URLSearchParams(location.search).get('scene');
+  const requested = params.get('scene');
   if (requested === FRONTIER_SCENE) {
     // The netcode sample (game/src/frontier). Its scene is loaded through the network
     // manager, so that a second player who joins is taken to the same place.

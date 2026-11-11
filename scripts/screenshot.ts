@@ -7,6 +7,7 @@
  *   bun run screenshot --url http://localhost:3000      # capture an already running dev server
  *   bun run screenshot --scene MyScene --eval "synergy.GameObject.find('Board') !== null"
  *   bun run screenshot --hierarchy                      # also print the scene as text (Debug.hierarchy())
+ *   bun run screenshot --renderer webgl2                # force WebGL2 (the game prefers WebGPU)
  *
  * Size: --width, --height (CSS pixels) and --scale (device pixel ratio; use 2 for a sharp image to share).
  * The build keeps class names so messages are readable; --release tests the minified build that ships.
@@ -30,7 +31,7 @@ type Action =
   | { kind: 'hierarchy' };
 
 const root = path.resolve(import.meta.dir, '..');
-const options = { url: '', out: '.screenshots/game.png', width: 1280, height: 720, scale: 1, scene: '', settle: 600, build: true, release: false };
+const options = { url: '', out: '.screenshots/game.png', width: 1280, height: 720, scale: 1, scene: '', renderer: '', settle: 600, build: true, release: false };
 const actions: Action[] = [];
 
 const args = Bun.argv.slice(2);
@@ -48,6 +49,7 @@ for (let i = 0; i < args.length; i++) {
     case '--height': options.height = Number(value()); break;
     case '--scale': options.scale = Number(value()); break;
     case '--scene': options.scene = value(); break;
+    case '--renderer': options.renderer = value(); break;
     case '--settle': options.settle = Number(value()); break;
     case '--no-build': options.build = false; break;
     case '--release': options.release = true; break;
@@ -118,10 +120,15 @@ if (!url) {
   url = server.url.href;
 }
 if (options.scene) url += `${url.includes('?') ? '&' : '?'}scene=${encodeURIComponent(options.scene)}`;
+if (options.renderer) url += `${url.includes('?') ? '&' : '?'}renderer=${encodeURIComponent(options.renderer)}`;
 
 const browser = await playwright.chromium.launch({
-  // Software WebGL, so this works on machines and CI runners without a GPU.
-  args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
+  // Software WebGL and WebGPU (SwiftShader), so this works on machines and CI runners
+  // without a GPU, and checks the same renderer players get: the game prefers WebGPU.
+  args: [
+    '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist',
+    '--enable-unsafe-webgpu', '--enable-features=Vulkan', '--use-vulkan=swiftshader', '--use-webgpu-adapter=swiftshader',
+  ],
   // Set CHROMIUM_PATH to use a specific browser binary instead of Playwright's own.
   executablePath: process.env.CHROMIUM_PATH || undefined,
 });
@@ -137,6 +144,7 @@ try {
   await page.goto(url, { waitUntil: 'load' });
   await page.waitForFunction(() => document.documentElement.dataset.ready === 'true', undefined, { timeout: 30_000 });
   await page.waitForTimeout(options.settle);
+  const device = await page.evaluate('synergy.engine.app.graphicsDevice.deviceType');
 
   for (const action of actions) {
     if (action.kind === 'click') await page.mouse.click(action.x, action.y);
@@ -151,7 +159,7 @@ try {
   const out = path.resolve(root, options.out);
   await mkdir(path.dirname(out), { recursive: true });
   await page.screenshot({ path: out });
-  console.log(`Saved ${path.relative(process.cwd(), out)} (${options.width}x${options.height} at ${options.scale}x)`);
+  console.log(`Saved ${path.relative(process.cwd(), out)} (${options.width}x${options.height} at ${options.scale}x, ${String(device)})`);
 } catch (error) {
   errors.push(String(error));
 } finally {

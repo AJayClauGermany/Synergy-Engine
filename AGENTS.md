@@ -18,7 +18,7 @@ Cloudflare Workers (preview deploys) · Electrobun (desktop).
 | `bun test` | Tests only (headless, about a second). `bun test game` runs one folder |
 | `bun run typecheck` | Type-check only |
 | `bun run build` | Production build into `dist/` |
-| `bun run screenshot` | Build, open in headless Chromium, save `.screenshots/game.png`; fails on page errors. `--hierarchy` prints the scene as text |
+| `bun run screenshot` | Build, open in headless Chromium, save `.screenshots/game.png`; fails on page errors. `--hierarchy` prints the scene as text; `--renderer webgl2` forces WebGL2 (the game prefers WebGPU) |
 | `bun run backend` | Convex dev deployment (interactive login the first time); writes its URL to `.env.local` |
 | `bun run env` | Check environment variables against `.env.schema` (secrets masked) |
 | `bun run preview:local` / `preview:deploy` / `deploy` | Cloudflare: local gate, branch preview, main deployment |
