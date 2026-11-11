@@ -2,7 +2,9 @@
 
 `desktop/` wraps the same web build in a native window using
 [Electrobun](https://electrobun.dev) 2. The game files ship inside the app and load from
-disk, so it runs offline; only online multiplayer needs a connection.
+disk, so it runs offline; only online multiplayer needs a connection. That includes the
+images, models and sounds: the web deploy keeps those in R2, a desktop build keeps them in
+`views/game/assets/` (see [deploying.md](deploying.md), "Assets").
 
 > **Status:** the configuration follows Electrobun 2.0.6's official templates, but it
 > has not been built yet: in the cloud environment this template was authored in,

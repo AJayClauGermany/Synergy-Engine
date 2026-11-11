@@ -36,7 +36,7 @@ has the full map and the handful of deliberate differences.
 | **Multiplayer** (`packages/net`) | Transports (WebRTC via PeerJS, in-memory), plus ordered command sessions for turn-based and asynchronous games. |
 | **Backend** (`convex/`) | The lobby (rooms, join codes, open-games list) and a server-ordered command log. |
 | **Configuration** (`.env.schema`) | Every environment variable in one committed, secret-free file, managed by [varlock](https://varlock.dev). |
-| **Previews** (`cloudflare/`) | Deploy to Cloudflare Workers behind a password. |
+| **Previews** (`cloudflare/`) | A private preview per pull request on Cloudflare: sign-in by email, assets in R2. |
 | **Desktop** (`desktop/`) | Package with Electrobun; runs offline. |
 | **Sample games** (`game/`) | *Skirmish*: a turn-based hex game on command sessions. *Frontier* (`?scene=Frontier`): a real-time, host-authoritative match on netcode, with a map from data and fog of war. Start from the one that matches your game. |
 | **Agent support** | `AGENTS.md`, task skills, a headless test mode, a screenshot tool, and one `bun run check` whose lint rules know the mistakes a Unity port makes, so AI agents can build and verify changes on their own. |
@@ -109,7 +109,7 @@ Coming from an existing Unity project? Start at
 - [Netcode](docs/netcode.md): Netcode for GameObjects in TypeScript: spawning, variables, RPCs, scenes, lobby
 - [Multiplayer](docs/multiplayer.md): command sessions, PeerJS, Convex
 - [Environment](docs/environment.md): variables, secrets, setting up Convex
-- [Deploying](docs/deploying.md): password-protected Cloudflare previews
+- [Deploying](docs/deploying.md): private Cloudflare previews per pull request, assets in R2
 - [Desktop](docs/desktop.md): Electrobun packaging
 - [Agent skills](docs/agent-skills.md): what agents get, and optional vendor skills
 

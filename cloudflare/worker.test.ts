@@ -106,4 +106,99 @@ describe('preview gate', () => {
     expect(open.status).toBe(200);
     expect(await open.text()).toContain('the game');
   });
+
+  test('a request Cloudflare Access let through is served without a password', async () => {
+    const env: Env = { ASSETS: assets };
+    const response = await handleRequest(new Request(`${origin}/`), env, { access: { aud: 'abc' } });
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain('the game');
+    expect(response.headers.get('Cache-Control')).toContain('private');
+    // A header is not enough: only Cloudflare sets `context.access`.
+    const forged = await handleRequest(
+      new Request(`${origin}/`, { headers: { 'Cf-Access-Jwt-Assertion': 'anything' } }),
+      env,
+      {},
+    );
+    expect(forged.status).toBe(503);
+  });
+});
+
+describe('hashed assets', () => {
+  const png = new Uint8Array([137, 80, 78, 71, 1, 2, 3, 4]);
+  const requested: string[] = [];
+  const bucket: NonNullable<Env['ASSET_BUCKET']> = {
+    async get(key, options) {
+      requested.push(key);
+      if (key !== 'assets/terrain-abc123.png') return null;
+      const stored = {
+        httpEtag: '"v1"',
+        size: png.length,
+        writeHttpMetadata: (headers: Headers) => headers.set('Content-Type', 'image/png'),
+      };
+      if (options.onlyIf.get('If-None-Match') === '"v1"') return stored;
+      if (options.range.has('Range')) {
+        return { ...stored, body: new Blob([png.slice(2, 5)]).stream(), range: { offset: 2, length: 3 } };
+      }
+      return { ...stored, body: new Blob([png]).stream() };
+    },
+  };
+  // What the Worker's static files do: a real file, or index.html for anything unknown.
+  const files = {
+    fetch: async (request: Request) =>
+      new URL(request.url).pathname === '/assets/local-def456.glb'
+        ? new Response('model', { headers: { 'Content-Type': 'model/gltf-binary' } })
+        : new Response('<h1>the game</h1>', { headers: { 'Content-Type': 'text/html' } }),
+  };
+  const open: Env = { ASSETS: files, ASSET_BUCKET: bucket, PUBLIC_ACCESS: 'true' };
+
+  test('come from the bucket, cacheable for good', async () => {
+    const response = await handleRequest(new Request(`${origin}/assets/terrain-abc123.png`), open);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Type')).toBe('image/png');
+    expect(response.headers.get('Cache-Control')).toBe('public, max-age=31536000, immutable');
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(png);
+  });
+
+  test('answer revalidation and range requests', async () => {
+    const unchanged = await handleRequest(
+      new Request(`${origin}/assets/terrain-abc123.png`, { headers: { 'If-None-Match': '"v1"' } }),
+      open,
+    );
+    expect(unchanged.status).toBe(304);
+    const part = await handleRequest(
+      new Request(`${origin}/assets/terrain-abc123.png`, { headers: { Range: 'bytes=2-4' } }),
+      open,
+    );
+    expect(part.status).toBe(206);
+    expect(part.headers.get('Content-Range')).toBe('bytes 2-4/8');
+    expect(new Uint8Array(await part.arrayBuffer())).toEqual(png.slice(2, 5));
+  });
+
+  test('fall back to the files deployed with the Worker, and a missing one is a 404, not the page', async () => {
+    const local = await handleRequest(new Request(`${origin}/assets/local-def456.glb`), open);
+    expect(await local.text()).toBe('model');
+    const missing = await handleRequest(new Request(`${origin}/assets/gone-000000.png`), open);
+    expect(missing.status).toBe(404);
+    // With no bucket bound (R2 not in use) the Worker's own files answer.
+    const unbound = await handleRequest(new Request(`${origin}/assets/local-def456.glb`), {
+      ASSETS: files,
+      PUBLIC_ACCESS: 'true',
+    });
+    expect(await unbound.text()).toBe('model');
+  });
+
+  test('are behind the gate like everything else, and only /assets/ reaches the bucket', async () => {
+    requested.length = 0;
+    const gated: Env = { ASSETS: files, ASSET_BUCKET: bucket, PREVIEW_PASSWORD: 'correct horse battery staple' };
+    const refused = await handleRequest(new Request(`${origin}/assets/terrain-abc123.png`), gated);
+    expect(refused.status).toBe(401);
+    expect(requested).toEqual([]);
+
+    const allowed = await handleRequest(new Request(`${origin}/assets/terrain-abc123.png`), gated, { access: {} });
+    expect(allowed.status).toBe(200);
+    expect(allowed.headers.get('Cache-Control')).toBe('private, max-age=31536000, immutable');
+
+    await handleRequest(new Request(`${origin}/index.html`), open);
+    expect(requested).toEqual(['assets/terrain-abc123.png']);
+  });
 });

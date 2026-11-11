@@ -1,14 +1,139 @@
-# Deploying previews to Cloudflare
+# Deploying private previews to Cloudflare
 
 The game builds to a static folder (`dist/`). `wrangler.jsonc` deploys it as a Cloudflare
-Worker with static assets, and `cloudflare/worker.ts` runs in front of every request to
-ask for a password. That lets you share work-in-progress builds without making them
-public.
+Worker, and `cloudflare/worker.ts` runs in front of every request so that only the people
+you chose can open it. Three things are automatic:
 
-## First time
+- **A preview per pull request.** Opening a pull request (or marking a draft ready)
+  deploys it; each push updates it; closing it deletes it. Draft pull requests deploy nothing.
+- **Sign-in with Cloudflare Access.** A visitor proves their email address with a code
+  Cloudflare mails them, and gets in only when the address is on your list.
+- **Assets in R2.** Images, models and sounds are stored once, under a name that holds a
+  hash of their content. A deploy uploads only the ones the bucket does not hold yet, so
+  a change to code uploads no assets at all.
 
-1. Rename the Worker: change `"name"` in `wrangler.jsonc`.
-2. Log in: `bunx wrangler login`.
+## Set-up, once
+
+What cannot be automated, because it is an account or a secret:
+
+1. **Cloudflare account.** In the dashboard, open *R2 Object Storage* and switch it on
+   (it asks for a payment method; the free allowance is 10 GB), and open *Zero Trust*,
+   pick a team name and the free plan (50 people).
+2. **API token.** *My Profile > API Tokens > Create Token*, starting from the template
+   "Edit Cloudflare Workers", plus two account permissions: *Workers R2 Storage: Edit*
+   and *Access: Apps and Policies: Edit*.
+3. **GitHub**, under *Settings > Secrets and variables > Actions*:
+
+   | Kind | Name | Value |
+   |------|------|-------|
+   | secret | `CLOUDFLARE_API_TOKEN` | the token |
+   | secret | `CLOUDFLARE_ACCOUNT_ID` | the account id (dashboard, *Workers & Pages*, right-hand column) |
+   | variable | `PREVIEW_ALLOWED_EMAILS` | who may look, e.g. `ada@studio.com, bob@studio.com, @studio.com` |
+
+4. **Name the Worker.** Change `"name"` in `wrangler.jsonc`, and the two
+   `"bucket_name"`s to `<name>-assets`.
+
+Everything else is created by the first deploy: the Worker, the R2 bucket and the Access
+application. To let someone in or out later, edit `PREVIEW_ALLOWED_EMAILS`; the next deploy
+applies it. An entry starting with `@` admits a whole domain.
+
+## What a pull request does
+
+`.github/workflows/preview.yml`:
+
+| Event | Result |
+|-------|--------|
+| opened, reopened, marked ready for review, new commits | deploys the preview `pr-<number>`; the pull request shows a *View deployment* button |
+| the pull request is a draft | nothing |
+| closed or merged | deletes the preview |
+
+The address has the form `https://pr-<number>-<worker-name>.<subdomain>.workers.dev`.
+Until the two secrets exist the workflow passes without doing anything. Pull requests
+from forks are skipped, because they cannot read the secrets.
+
+## Deploying by hand
+
+```bash
+bun run preview:deploy
+```
+
+deploys a preview named after the current git branch (`--name demo` picks the name;
+`bunx wrangler preview delete --name demo` removes one).
+
+```bash
+bun run deploy
+```
+
+deploys the main address, `https://<worker-name>.<subdomain>.workers.dev`.
+
+Both run `scripts/deploy.ts`: build, move the assets to R2, run wrangler, update Access.
+The R2 and Access steps need `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in
+`.env.local`, and `PREVIEW_ALLOWED_EMAILS` for Access. With only `bunx wrangler login`
+the deploy still works, with the assets uploaded as part of the Worker and the gate
+left as it is; the last lines of the output say which happened.
+
+## Who gets in
+
+The Worker serves a request when one of these holds, and otherwise serves nothing (a
+deployment nobody configured is locked, not open):
+
+1. `"PUBLIC_ACCESS": "true"` in `wrangler.jsonc`: the gate is off. This applies to the
+   main deployment only; previews do not inherit it.
+2. **Cloudflare Access** let the request through. While `PUBLIC_ACCESS` is `"false"`, Access
+   covers the main deployment and every preview; once it is `"true"`, only the previews.
+3. The visitor knows the **password**, if you set one. This is the fallback for a
+   deployment without Access, and for scripts:
+
+   ```bash
+   bunx wrangler preview base-config secret put PREVIEW_PASSWORD
+   ```
+
+   ```bash
+   bunx wrangler secret put PREVIEW_PASSWORD
+   ```
+
+   (the first for all previews, the second for the main deployment). A correct password
+   sets a cookie for 7 days, derived from the password, so changing it signs everyone
+   out; `curl -u x:"$PASSWORD" https://...` works too. It is one shared password with
+   no rate limiting: use a long random one. Behind Access the password is never asked for.
+
+Gated responses are marked `noindex` and `Cache-Control: private`. Scripts and assets are
+gated as well as the page.
+
+Access here is "Worker-level": Cloudflare checks the visitor before the Worker runs, and
+the Worker trusts only the mark Cloudflare itself puts on the request, never a header.
+The game's own WebSockets are unaffected (they go to PeerJS and Convex, not to the Worker).
+
+## Assets
+
+Anything the game imports for its URL
+
+```ts
+import knightUrl from '../assets/knight.glb' with { type: 'file' };
+```
+
+is written by the build to `dist/assets/knight-<hash>.glb`, and the game asks for
+`./assets/knight-<hash>.glb`. Where that file comes from depends on the build:
+
+| Build | Where `assets/` lives |
+|-------|-----------------------|
+| `bun run preview:deploy`, `bun run deploy`, pull-request previews | the R2 bucket; the Worker reads it for requests to `/assets/` |
+| `bun run desktop:build` | inside the app, on disk: no network needed |
+| `bun run build`, `bun run start`, `bun run preview:local` | `dist/assets/`, next to the page |
+
+So the game's code is the same everywhere, and there is no asset URL to configure.
+
+- The bucket is **private**. Assets are reachable only through the Worker, behind the
+  same gate as the page.
+- A changed file gets a new name. The old one stays in the bucket, so older previews and
+  players with a cached page keep working. Nothing is deleted automatically; to tidy up,
+  empty the bucket and deploy again.
+- Previews and the main deployment share the bucket (`<worker-name>-assets`).
+- Browsers keep a hashed asset for a year (`immutable`), since its name changes when it does.
+- One file can be up to 300 MB. Without R2 the limit is Cloudflare's 25 MB per static file.
+- Files in `game/public/` are copied to `dist/` under their own names and stay with the
+  Worker. Use imports for anything large.
+- To deploy without R2, delete both `"r2_buckets"` entries in `wrangler.jsonc`.
 
 ## Try the gate locally
 
@@ -20,70 +145,19 @@ cp .dev.vars.example .dev.vars
 bun run preview:local
 ```
 
-Open http://localhost:8787 and enter the password from `.dev.vars`.
+Open http://localhost:8787 and enter the password from `.dev.vars`. Locally there is no
+Access, and the assets are read from `dist/assets/`.
 
-## Preview links per branch
+## What has and has not been run
 
-Set the password all previews share (once):
-
-```bash
-bunx wrangler preview base-config secret put PREVIEW_PASSWORD
-```
-
-Deploy the current branch:
-
-```bash
-bun run preview:deploy
-```
-
-Wrangler prints a URL of the form
-`https://<branch>-<worker-name>.<your-subdomain>.workers.dev`. Deploying the same branch
-again updates the same link. Use `bunx wrangler preview --name demo` to pick the name
-yourself, and `bunx wrangler preview delete --name demo` to remove one.
-
-Worker Previews are in open beta in Wrangler at the time of writing; `bunx wrangler
-preview --help` shows the current options.
-
-## The main deployment
-
-```bash
-bunx wrangler secret put PREVIEW_PASSWORD
-```
-
-```bash
-bun run deploy
-```
-
-It serves `https://<worker-name>.<your-subdomain>.workers.dev`, also behind the password.
-When the game should be open to everyone, set `"PUBLIC_ACCESS": "true"` in
-`wrangler.jsonc` and deploy again.
-
-## How the gate behaves
-
-- No valid session → a login page. Asset URLs are protected too, not only `index.html`.
-- Correct password → a cookie valid for 7 days. It holds a token derived from the
-  password, so changing the password signs everyone out.
-- Scripts and agents can send the password with HTTP Basic auth (any user name):
-  `curl -u x:"$PASSWORD" https://...`
-- **It fails closed.** A deployment with no `PREVIEW_PASSWORD` and no
-  `PUBLIC_ACCESS = "true"` serves nothing.
-- Gated responses are marked `noindex` and `Cache-Control: private`.
-
-This is one shared password, with no rate limiting. Use a long random one. To restrict by
-identity instead (company email domain, single sign-on), enable Cloudflare Access for the
-Worker in the Cloudflare dashboard; it works on preview URLs as well.
+The Worker, the asset upload and the Access set-up are tested against stand-ins
+(`cloudflare/worker.test.ts`, `scripts/deploy.test.ts`); they have not been run against a
+real Cloudflare account from this template. Worker Previews are in open beta in
+Wrangler; `bunx wrangler preview --help` shows the current options. If the first real
+deploy disagrees with this page, the error message says which step failed.
 
 Because every request runs the Worker, each one counts as a Worker invocation against
 your Cloudflare plan's limits.
-
-## From GitHub Actions
-
-`.github/workflows/preview.yml` deploys a preview named `pr-<number>` for each pull
-request. It is off until you:
-
-1. add repository secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`,
-2. add a repository variable `CLOUDFLARE_PREVIEWS` set to `true`,
-3. set the shared preview password as shown above.
 
 ## Build-time configuration
 

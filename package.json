@@ -27,8 +27,8 @@
     "screenshot": "varlock run -- bun run scripts/screenshot.ts",
     "backend": "convex dev",
     "preview:local": "bun run build && varlock run -- wrangler dev",
-    "preview:deploy": "bun run build && varlock run -- wrangler preview",
-    "deploy": "bun run build && varlock run -- wrangler deploy",
+    "preview:deploy": "varlock run -- bun scripts/deploy.ts preview",
+    "deploy": "varlock run -- bun scripts/deploy.ts production",
     "desktop:dev": "varlock run -- bun run scripts/build.ts --outdir desktop/dist && cd desktop && bun ../node_modules/electrobun/bin/electrobun.cjs dev",
     "desktop:build": "varlock run -- bun run scripts/build.ts --outdir desktop/dist && cd desktop && bun ../node_modules/electrobun/bin/electrobun.cjs build --env=stable",
     "env": "varlock load"

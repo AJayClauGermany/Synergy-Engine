@@ -1,16 +1,25 @@
 name: Preview
 
-# Deploys a password-protected preview of each pull request to Cloudflare Workers.
+# A private preview of each pull request, on Cloudflare (docs/deploying.md).
 #
-# Off by default. To turn it on (see docs/deploying.md):
-#   1. Add repository secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID.
-#   2. Add a repository variable CLOUDFLARE_PREVIEWS with the value "true".
-#   3. Set the shared preview password once:
-#        bunx wrangler preview base-config secret put PREVIEW_PASSWORD
+#   opened / marked ready / new commits   deploys the preview "pr-<number>" and links it
+#                                         from the pull request ("View deployment")
+#   draft pull requests                   nothing: work in a draft without deploying
+#   closed or merged                      deletes the preview
+#
+# Each deploy uploads only the assets that changed to R2 and makes Cloudflare Access admit
+# exactly the people in PREVIEW_ALLOWED_EMAILS.
+#
+# The one-time setup is three values, under Settings > Secrets and variables > Actions:
+#   secret    CLOUDFLARE_API_TOKEN     Workers Scripts: Edit, Workers R2 Storage: Edit,
+#                                      Access: Apps and Policies: Edit
+#   secret    CLOUDFLARE_ACCOUNT_ID
+#   variable  PREVIEW_ALLOWED_EMAILS   e.g. "ada@studio.com, bob@studio.com, @studio.com"
+# Until the two secrets exist this workflow does nothing and passes.
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, reopened, synchronize, ready_for_review, closed]
 
 permissions:
   contents: read
@@ -19,10 +28,53 @@ concurrency:
   group: preview-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
+env:
+  PREVIEW_NAME: pr-${{ github.event.pull_request.number }}
+
 jobs:
-  deploy:
+  configured:
     # Pull requests from forks cannot read the secrets, so they are skipped.
-    if: vars.CLOUDFLARE_PREVIEWS == 'true' && github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.secrets.outputs.ready }}
+    steps:
+      - id: secrets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Previews are off: add the secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID (docs/deploying.md)."
+          fi
+
+  deploy:
+    needs: configured
+    if: needs.configured.outputs.ready == 'true' && github.event.action != 'closed' && !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    # Shows the preview's address on the pull request.
+    environment:
+      name: preview
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile
+      - name: Build, upload changed assets, deploy, set up Access
+        id: deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PREVIEW_ALLOWED_EMAILS: ${{ vars.PREVIEW_ALLOWED_EMAILS }}
+        run: bun run preview:deploy --name "$PREVIEW_NAME"
+
+  cleanup:
+    needs: configured
+    if: needs.configured.outputs.ready == 'true' && github.event.action == 'closed'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,17 +82,11 @@ jobs:
         with:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
-      - run: bun run build
-      - name: Deploy preview
+      - name: Delete the preview
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          PREVIEW_NAME: pr-${{ github.event.pull_request.number }}
+        # A pull request that was only ever a draft has no preview; that is not a failure.
         run: |
-          bunx wrangler preview --name "$PREVIEW_NAME" | tee preview.log
-          {
-            echo "### Preview \`$PREVIEW_NAME\`"
-            echo '```'
-            cat preview.log
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          bunx wrangler preview delete --name "$PREVIEW_NAME" --skip-confirmation \
+            || echo "::notice::There was no preview $PREVIEW_NAME to delete."
