@@ -1,0 +1,185 @@
+# Unity to Synergy
+
+Synergy keeps Unity's concepts and names. If you know `GameObject`, `MonoBehaviour`,
+`Transform` and `Time.deltaTime`, you already know most of this API. This page lists what
+maps one to one, and (more importantly) the places where it deliberately differs.
+
+Everything is imported from `@synergy/engine`.
+
+## The same script in both
+
+```csharp
+// Unity
+public class Spinner : MonoBehaviour {
+    public float speed = 90f;
+    void Update() {
+        transform.Rotate(Vector3.up, speed * Time.deltaTime);
+        if (Input.GetKeyDown(KeyCode.Space)) Destroy(gameObject);
+    }
+}
+```
+
+```ts
+// Synergy
+export class Spinner extends MonoBehaviour {
+  speed = 90;
+  update() {
+    this.transform.rotate(Vector3.up, this.speed * Time.deltaTime);
+    if (Input.getKeyDown(KeyCode.Space)) destroy(this.gameObject);
+  }
+}
+```
+
+## The differences that matter
+
+| # | Unity | Synergy | Why |
+|---|-------|---------|-----|
+| 1 | `PascalCase` methods: `Update()`, `GetComponent<T>()` | `camelCase`: `update()`, `getComponent(T)` | TypeScript convention. Properties were already camelCase in Unity. |
+| 2 | Generics: `GetComponent<Health>()` | Pass the class: `getComponent(Health)` | Types do not exist at runtime in TypeScript. |
+| 3 | Operators: `a + b`, `v * 2`, `q * v` | Methods: `a.add(b)`, `v.mul(2)`, `q.rotate(v)` | No operator overloading. See the table below. |
+| 4 | `Vector3` is a mutable struct | `Vector3`, `Quaternion`, `Color` are **immutable**; every operation returns a new value | Gives struct-like value semantics. `transform.position.x = 5` is a compile error in both. |
+| 5 | Left-handed, forward is `+Z` | **Right-handed, forward is `-Z`** | Matches PlayCanvas and glTF. Use `Vector3.forward` / `transform.forward`, never literal axes, and code ports unchanged. |
+| 6 | Screen origin bottom-left, Y up | **Screen origin top-left, Y down**, in CSS pixels | Same space as the DOM and the React HUD. Affects `Input.mousePosition`, `Camera.worldToScreenPoint`. |
+| 7 | `Physics.Raycast(ray, out hit)` returns bool | `Physics.raycast(ray)` returns the hit or `null` | No `out` parameters. |
+| 8 | `if (target != null)` is false for destroyed objects | `if (isAlive(target))` | `==` cannot be overloaded. |
+| 9 | Scenes and prefabs are assets made in the editor | Scenes and prefabs are **functions** (`SceneManager.register`, `new Prefab`) | There is no editor. Code is easy to diff and generate. |
+| 10 | Lights shine along `transform.forward` | Directional and spot lights shine along `-transform.up` | PlayCanvas convention. Set `light.direction` and forget about it. |
+| 11 | Euler order Z, X, Y | Euler order X, Y, Z | PlayCanvas convention. Single-axis rotations are identical. |
+| 12 | Mesh triangles are clockwise | Counter-clockwise | Follows from the right-handed world. |
+| 13 | Rigidbody physics, collisions, triggers | **Not available yet.** Colliders exist for raycasts and overlap queries only | Kept out of the core to stay small. |
+| 14 | UI: uGUI / UI Toolkit | React, via `@synergy/ui` | See below. |
+| 15 | `Invoke("Method", 2f)` | `this.invoke(this.method, 2)` | Pass the function, not its name. |
+| 16 | `[SerializeField] private` vs `private` | Fields starting with `_` are not copied by `instantiate`; all others are | There is no serializer; this is the stand-in. |
+
+### Operators
+
+| C# | TypeScript |
+|----|------------|
+| `a + b` | `a.add(b)` |
+| `a - b` | `a.sub(b)` |
+| `v * 2f` / `v / 2f` | `v.mul(2)` / `v.div(2)` |
+| `-v` | `v.neg()` |
+| `Vector3.Scale(a, b)` | `a.scale(b)` |
+| `a == b` (approximate) | `a.equals(b)` |
+| `q1 * q2` | `q1.mul(q2)` |
+| `q * v` | `q.rotate(v)` |
+| `transform.position += Vector3.up` | `transform.position = transform.position.add(Vector3.up)` |
+| `new Vector3(p.x, 0, p.z)` | `p.withY(0)` |
+
+## API map
+
+### Objects and components
+
+| Unity | Synergy |
+|-------|---------|
+| `new GameObject("Name")` | `new GameObject('Name')` |
+| `new GameObject("Name", typeof(A), typeof(B))` | `new GameObject('Name', A, B)` |
+| `go.AddComponent<T>()` | `go.addComponent(T)` |
+| `GetComponent<T>()`, `GetComponents`, `GetComponentInChildren`, `GetComponentInParent` | same names in camelCase, class as argument |
+| `go.SetActive(false)`, `activeSelf`, `activeInHierarchy` | `go.setActive(false)`, same properties |
+| `go.tag`, `CompareTag`, `go.layer` | same |
+| `GameObject.Find`, `FindWithTag`, `FindGameObjectsWithTag` | `GameObject.find`, `findWithTag`, `findGameObjectsWithTag` |
+| `FindFirstObjectByType<T>()`, `FindObjectsByType<T>()` | `findObjectOfType(T)`, `findObjectsOfType(T)` |
+| `GameObject.CreatePrimitive(PrimitiveType.Cube)` | `GameObject.createPrimitive(PrimitiveType.Cube)` (Unity's sizes) |
+| `Instantiate(obj, pos, rot, parent)` | `instantiate(obj, pos, rot, parent)` |
+| `Destroy(obj, delay)`, `DestroyImmediate` | `destroy(obj, delay)`, `destroyImmediate` |
+| `DontDestroyOnLoad(obj)` | `dontDestroyOnLoad(obj)` |
+| `[RequireComponent(typeof(X))]` | `static readonly requireComponents = [X]` |
+| `[DisallowMultipleComponent]` | `static readonly disallowMultiple = true` |
+| Prefab asset | `new Prefab('Name', (go) => { ... })` |
+| ScriptableObject | A plain typed object in a `.ts` module (`export const footman: UnitDef = {...}`) |
+
+### MonoBehaviour messages
+
+`awake`, `onEnable`, `start`, `update`, `lateUpdate`, `fixedUpdate`, `onDisable`,
+`onDestroy`, `onMouseDown`, `onMouseUp`, `onMouseEnter`, `onMouseOver`, `onMouseExit`.
+
+The order within a frame is Unity's: `awake` → `onEnable` → `start` → `fixedUpdate` (zero
+or more times) → `update` → coroutines → `lateUpdate` → destroy queue.
+
+Do setup in `awake`/`start`, never in a constructor. Components cannot be created with
+`new`; always use `addComponent`.
+
+### Coroutines
+
+```ts
+*fadeOut(): IEnumerator {
+  yield new WaitForSeconds(1);
+  yield null;                         // wait one frame
+  yield new WaitUntil(() => this.ready);
+  yield this.startCoroutine(this.other());
+  yield fetch('/data.json');          // TypeScript extra: wait for a promise
+}
+this.startCoroutine(this.fadeOut());  // note the call: pass the generator object
+```
+
+`yield return x` becomes `yield x`. Also available: `WaitForSecondsRealtime`,
+`WaitForEndOfFrame`, `WaitForFixedUpdate`, `WaitWhile`, `stopCoroutine`,
+`stopAllCoroutines`, `invoke`, `invokeRepeating`, `cancelInvoke`.
+
+### Transform
+
+`position`, `localPosition`, `rotation`, `localRotation`, `eulerAngles`,
+`localEulerAngles`, `localScale`, `lossyScale`, `forward`, `right`, `up`, `parent`,
+`setParent(parent, worldPositionStays)`, `root`, `childCount`, `getChild(i)`, `find(path)`,
+`isChildOf`, `translate`, `rotate`, `rotateAround`, `lookAt`, `transformPoint`,
+`inverseTransformPoint`, `transformDirection`, `transformVector`, `getSiblingIndex`.
+
+Iterate children with `for (const child of transform)`.
+
+### Statics
+
+| Unity | Synergy |
+|-------|---------|
+| `Time.deltaTime`, `time`, `timeScale`, `fixedDeltaTime`, `unscaledDeltaTime`, `frameCount` | same |
+| `Input.GetKey(KeyCode.W)`, `GetKeyDown`, `GetKeyUp` | `Input.getKey(KeyCode.W)`, ... |
+| `Input.GetMouseButtonDown(0)` (0 left, 1 right, 2 middle) | `Input.getMouseButtonDown(0)`, same numbering |
+| `Input.mousePosition`, `mouseScrollDelta` | same (top-left origin) |
+| `Input.GetAxis("Horizontal")`, `GetButtonDown("Jump")` | `Input.getAxis('Horizontal')`, `Input.getButtonDown('Jump')` |
+| Input Manager settings | `Input.defineAxis(...)`, `Input.defineButton(...)` |
+| `Screen.width`, `Screen.height` | same (CSS pixels) |
+| `Debug.Log`, `LogWarning`, `LogError`, `DrawLine`, `DrawRay` | `Debug.log`, `logWarning`, `logError`, `drawLine`, `drawRay` |
+| `Mathf.*` | `Mathf.*` in camelCase; `Mathf.SmoothDamp(..., ref v, ...)` returns `[value, velocity]` |
+| `SceneManager.LoadScene("Main")` | `await SceneManager.loadScene('Main')` after `SceneManager.register('Main', build)` |
+| `RenderSettings.ambientLight` | same |
+| `Camera.main`, `ScreenPointToRay`, `WorldToScreenPoint`, `ScreenToWorldPoint` | same in camelCase |
+| `LayerMask.GetMask("Units")`, `NameToLayer` | `LayerMask.getMask('Units')`, `nameToLayer`; name layers with `LayerMask.define(8, 'Units')` |
+| `UnityEvent`, `event Action` | `UnityEvent<[args]>` with `addListener`, `invoke` |
+
+### Rendering
+
+| Unity | Synergy |
+|-------|---------|
+| `MeshFilter.mesh`, `MeshRenderer.material` / `sharedMaterial` | same. `.material` copies on first access, as in Unity |
+| `new Material(shader)`, `material.color`, `mainTexture` | `new Material()`, `color`, `mainTexture`, `metallic`, `smoothness`, `emissionColor` |
+| `new Mesh { vertices, triangles }`, `RecalculateNormals()` | `new Mesh()`, `vertices`, `triangles`, `recalculateNormals()` |
+| `Light` (type, color, intensity, range, spotAngle, shadows) | same, plus `direction` |
+| `Resources.Load` / Addressables | `await Assets.loadModel(url)`, `Assets.loadTexture(url)` |
+
+### UI
+
+The HUD is React, drawn over the canvas (think Screen Space - Overlay).
+
+| Unity | Synergy |
+|-------|---------|
+| Canvas + UI components | `mountUI(<Hud />, { engine })` |
+| Binding UI to game data | Game code writes an `Observable`; components read it with `useObservable(obs)` |
+| World Space canvas / `WorldToScreenPoint` for health bars | `<WorldAnchor target={gameObject}>` |
+| `EventSystem.IsPointerOverGameObject()` | Not needed: clicks on HUD controls never reach `Input` |
+| Button `onClick` → method | `onClick={() => GameController.instance?.endTurn()}` |
+
+### Multiplayer
+
+There is no Netcode-for-GameObjects equivalent (`NetworkBehaviour`, `NetworkVariable`).
+Instead, players exchange **commands** and every machine applies them in the same order.
+See [multiplayer.md](multiplayer.md).
+
+## Not implemented yet
+
+Rigidbodies and collision/trigger messages, animation (Animator), audio (AudioSource),
+particles, NavMesh/pathfinding, skyboxes, post-processing wrappers, touch gestures.
+
+PlayCanvas has all of these. Until they are wrapped you can reach them directly through
+the escape hatches: `gameObject.entity` (the `pc.Entity`), `engine.app` (the
+`pc.AppBase`), `camera.pcCamera`, `light.pcLight`, `material.pcMaterial`. Extra PlayCanvas
+component systems are switched on in `Engine.create({ componentSystems: [...] })`.

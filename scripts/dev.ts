@@ -14,8 +14,12 @@ const server = Bun.serve({
   // Anything that is not a bundled route is looked up in game/public.
   async fetch(request) {
     const { pathname } = new URL(request.url);
-    const file = Bun.file(path.join(publicDir, path.normalize(pathname)));
-    if (pathname !== '/' && (await file.exists())) return new Response(file);
+    const requested = path.join(publicDir, path.normalize(pathname));
+    const file = Bun.file(requested);
+    // Never serve anything outside game/public.
+    if (pathname !== '/' && requested.startsWith(publicDir + path.sep) && (await file.exists())) {
+      return new Response(file);
+    }
     return new Response('Not found', { status: 404 });
   },
 });

@@ -22,7 +22,9 @@ const server = Bun.serve({
     const { pathname } = new URL(request.url);
     const requested = path.join(dir, path.normalize(pathname));
     // Stay inside the build folder and fall back to index.html.
-    const file = Bun.file(requested.startsWith(dir) && pathname !== '/' ? requested : path.join(dir, 'index.html'));
+    const file = Bun.file(
+      requested.startsWith(dir + path.sep) && pathname !== '/' ? requested : path.join(dir, 'index.html'),
+    );
     return new Response((await file.exists()) ? file : Bun.file(path.join(dir, 'index.html')));
   },
 });

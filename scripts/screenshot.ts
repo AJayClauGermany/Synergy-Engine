@@ -94,8 +94,10 @@ if (!url) {
     port: 0,
     async fetch(request) {
       const { pathname } = new URL(request.url);
-      const file = Bun.file(path.join(dist, pathname === '/' ? 'index.html' : path.normalize(pathname)));
-      return (await file.exists()) ? new Response(file) : new Response('Not found', { status: 404 });
+      const requested = path.join(dist, pathname === '/' ? 'index.html' : path.normalize(pathname));
+      const file = Bun.file(requested);
+      const inside = requested.startsWith(dist + path.sep);
+      return inside && (await file.exists()) ? new Response(file) : new Response('Not found', { status: 404 });
     },
   });
   url = server.url.href;

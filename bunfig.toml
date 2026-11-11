@@ -2,7 +2,3 @@
 # Only variables starting with PUBLIC_ are exposed to browser code in `bun run dev`.
 # The production build applies the same rule (scripts/build.ts). Never put secrets in them.
 env = "PUBLIC_*"
-
-[test]
-# Keep bun test away from build output and the Electrobun project.
-coveragePathIgnorePatterns = ["dist/**", "desktop/**"]
