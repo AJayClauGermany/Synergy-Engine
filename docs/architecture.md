@@ -30,7 +30,7 @@ in a renderer: `@synergy/engine/math` (vectors, colours, `Random`) and
 | `Material` | wraps a `pc.StandardMaterial` |
 | `SpriteRenderer` | a `render` component with one quad and its own unlit `pc.StandardMaterial` |
 | `Canvas`, `RectTransform`, `Image` | wrap the entity's `screen` / `element` components (PlayCanvas UI, drawn on the UI layer) |
-| `Grid`, `Tilemap` | Synergy data structures over `grid/`; `TilemapRenderer` builds one `pc.Mesh` per texture |
+| `Grid`, `Tilemap` | Synergy data structures over `grid/`; `TilemapRenderer` keeps one `pc.Mesh` per 16 x 16 block of cells and texture, added to the world layer directly |
 | `MonoBehaviour`, coroutines, `Time`, `Input`, `Physics` | implemented by Synergy, not PlayCanvas scripts |
 
 Wrapping is lazy in the other direction too: any `pc.Entity` (for example the nodes of a

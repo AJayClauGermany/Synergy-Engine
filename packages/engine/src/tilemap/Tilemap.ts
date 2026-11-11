@@ -70,6 +70,17 @@ export class Tile extends TileBase {
   }
 }
 
+/**
+ * @internal Cells are grouped into square blocks of this many cells a side. A renderer
+ * keeps one mesh per block, so changing a cell redoes its block rather than the map.
+ */
+export const TILEMAP_CHUNK_SIZE = 16;
+
+/** @internal The block a cell belongs to. Every `z` of a cell shares its block. */
+export function chunkKeyOf(cell: CellLike): string {
+  return `${Math.floor(cell.x / TILEMAP_CHUNK_SIZE)},${Math.floor(cell.y / TILEMAP_CHUNK_SIZE)}`;
+}
+
 /** @internal One painted cell. */
 export interface TilemapEntry {
   cell: Vector3Int;
@@ -100,9 +111,46 @@ export class Tilemap extends Behaviour {
 
   /** @internal */
   readonly _entries = new Map<string, TilemapEntry>();
-  /** @internal Bumped on every change, so the renderer knows to rebuild. */
+  /** @internal The same entries by block (see `TILEMAP_CHUNK_SIZE`). */
+  readonly _chunks = new Map<string, Set<TilemapEntry>>();
+  /** @internal Bumped on every change. */
   _version = 0;
+  /** @internal Blocks changed since a renderer last asked. `null` means all of them. */
+  private dirtyChunks: Set<string> | null = null;
   private tint = Color.white;
+
+  /**
+   * @internal Hands over the blocks that changed since the last call (`null` for all of
+   * them) and starts a fresh list.
+   */
+  _takeDirtyChunks(): Set<string> | null {
+    const dirty = this.dirtyChunks;
+    this.dirtyChunks = new Set();
+    return dirty;
+  }
+
+  private touch(cell: CellLike): void {
+    this.dirtyChunks?.add(chunkKeyOf(cell));
+    this._version++;
+  }
+
+  private touchAll(): void {
+    this.dirtyChunks = null;
+    this._version++;
+  }
+
+  private index(entry: TilemapEntry): void {
+    const key = chunkKeyOf(entry.cell);
+    const chunk = this._chunks.get(key);
+    if (chunk) chunk.add(entry);
+    else this._chunks.set(key, new Set([entry]));
+  }
+
+  private unindex(entry: TilemapEntry): void {
+    const key = chunkKeyOf(entry.cell);
+    const chunk = this._chunks.get(key);
+    if (chunk?.delete(entry) && chunk.size === 0) this._chunks.delete(key);
+  }
 
   /**
    * The Grid this tilemap is laid out on: the nearest one on this object or its parents.
@@ -137,7 +185,7 @@ export class Tilemap extends Behaviour {
 
   set color(value: Color) {
     this.tint = value;
-    this._version++;
+    this.touchAll();
   }
 
   // ---- Tiles --------------------------------------------------------------------------
@@ -148,14 +196,16 @@ export class Tilemap extends Behaviour {
     const existing = this._entries.get(key);
     if (existing?.tile === tile || (!existing && !tile)) return;
     if (existing?.instance) destroy(existing.instance);
+    if (existing) this.unindex(existing);
     if (!tile) {
       this._entries.delete(key);
     } else {
       const entry: TilemapEntry = { cell: Vector3Int.from(cell), tile, color: existing?.color ?? null, instance: null };
       this._entries.set(key, entry);
+      this.index(entry);
       this.spawn(entry);
     }
-    this._version++;
+    this.touch(cell);
   }
 
   /** Paints several cells at once. `tiles` may be one tile for all of them. */
@@ -217,7 +267,8 @@ export class Tilemap extends Behaviour {
       if (entry.instance) destroy(entry.instance);
     }
     this._entries.clear();
-    this._version++;
+    this._chunks.clear();
+    this.touchAll();
   }
 
   /** Number of painted cells. */
@@ -256,7 +307,7 @@ export class Tilemap extends Behaviour {
     const entry = this._entries.get(cellKey(cell));
     if (!entry) return;
     entry.color = color;
-    this._version++;
+    this.touch(entry.cell);
   }
 
   getColor(cell: CellLike): Color {
@@ -276,12 +327,12 @@ export class Tilemap extends Behaviour {
     if (entry.instance) destroy(entry.instance);
     entry.instance = null;
     this.spawn(entry);
-    this._version++;
+    this.touch(entry.cell);
   }
 
   refreshAllTiles(): void {
     for (const entry of this._entries.values()) this.refreshTile(entry.cell);
-    this._version++;
+    this.touchAll();
   }
 
   // ---- Positions (relative to this tilemap's own transform) -----------------------------
@@ -325,6 +376,7 @@ export class Tilemap extends Behaviour {
 
   override _destroy(): void {
     this._entries.clear();
+    this._chunks.clear();
   }
 
   override _copyFrom(source: this, remap: <V>(value: V) => V): void {
@@ -332,8 +384,10 @@ export class Tilemap extends Behaviour {
     this.tint = source.tint;
     for (const [key, entry] of source._entries) {
       // Spawned objects are children, so they were cloned with the hierarchy.
-      this._entries.set(key, { ...entry, instance: entry.instance ? remap(entry.instance) : null });
+      const copy = { ...entry, instance: entry.instance ? remap(entry.instance) : null };
+      this._entries.set(key, copy);
+      this.index(copy);
     }
-    this._version++;
+    this.touchAll();
   }
 }
