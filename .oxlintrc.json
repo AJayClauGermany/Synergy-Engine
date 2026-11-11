@@ -48,7 +48,10 @@
     // `let node = this` is how the engine walks up a hierarchy
     "typescript/no-this-alias": "off",
     // `for (const x of [...set])` copies on purpose: the loop body changes the set
-    "unicorn/no-useless-spread": "off"
+    "unicorn/no-useless-spread": "off",
+    // knows refs only from `react`'s useRef; the HUD's come from `preact/hooks`, so every
+    // `ref.current = ...` is reported as changing a hook's return value
+    "react/immutability": "off"
   },
   "overrides": [
     // Game scripts: one per file, named after the class.
@@ -75,7 +78,8 @@
                 "message": "Game rules are pure: no networking in them. Rules decide; a NetworkBehaviour or a command session carries the result."
               },
               { "name": "playcanvas", "message": "Game rules are pure: no rendering in them." },
-              { "name": "react", "message": "Game rules are pure: no UI in them." }
+              { "name": "preact", "message": "Game rules are pure: no UI in them." },
+              { "name": "preact/hooks", "message": "Game rules are pure: no UI in them." }
             ]
           }
         ],

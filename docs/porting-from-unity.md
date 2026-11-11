@@ -13,7 +13,7 @@ systems, where its data lives. For each, find the row in
 answers are possible:
 
 - **It exists here** under the same name: port the code that uses it.
-- **It is covered differently** (uGUI text and buttons → the React HUD; DOTween →
+- **It is covered differently** (uGUI text and buttons → the Preact HUD; DOTween →
   `Tween`; ScriptableObjects → a `Catalog`): port to the equivalent.
 - **It is missing** (rigidbody physics, Animator, audio, particles): decide now whether
   to wrap the PlayCanvas feature (`extend-engine` skill), reach it through
@@ -79,7 +79,7 @@ actually in the scene, and `--click`/`--key` drive it.
 
 ## 6. Then presentation
 
-HUD (React over the canvas, `Canvas`/`Image` for in-scene images), tweens and
+HUD (Preact over the canvas, `Canvas`/`Image` for in-scene images), tweens and
 coroutines for animation, the camera, effects. This is where the engine has the most
 gaps, so it comes last, when the game underneath already works.
 

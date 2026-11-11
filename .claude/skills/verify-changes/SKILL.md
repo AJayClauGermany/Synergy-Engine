@@ -93,7 +93,7 @@ Drive the game first, in order:
 bun run screenshot --click 603,466 --click 606,365 --wait 700 --out .screenshots/moved.png
 ```
 
-Options: `--click x,y` · `--key Space` · `--wait ms` · `--eval "<js>"` · `--hierarchy` ·
+Options: `--click x,y` · `--key Space` · `--wait ms` · `--eval "<js>"` · `--hierarchy` · `--renderer webgl2` ·
 `--scene Name` · `--width/--height` · `--scale 2` · `--out file` ·
 `--url http://localhost:3000` (use a running dev server) · `--no-build` · `--release`.
 
@@ -109,6 +109,11 @@ cases where a game class prints under another name (engine classes never do): wi
 shortened. `nameType(CameraRig, 'CameraRig')` after a class fixes its name everywhere.
 
 `--scene Frontier` opens the netcode sample.
+
+The game renders with WebGPU where it can and WebGL2 otherwise, and the tool runs
+Chromium with software WebGPU, so a screenshot uses WebGPU; the `Saved` line names the
+device. For a rendering change, also check `--renderer webgl2`, the path players get
+on Linux and older macOS.
 
 `--eval` runs in the page and prints JSON. `synergy` is the engine API plus `engine`:
 

@@ -40,7 +40,7 @@ export class Spinner extends MonoBehaviour {
 | 3 | Operators: `a + b`, `v * 2`, `q * v` | Methods: `a.add(b)`, `v.mul(2)`, `q.rotate(v)` | No operator overloading. See the table below. |
 | 4 | `Vector3` is a mutable struct | `Vector3`, `Quaternion`, `Color` are **immutable**; every operation returns a new value | Gives struct-like value semantics. `transform.position.x = 5` is a compile error in both. |
 | 5 | Left-handed, forward is `+Z` | **Right-handed, forward is `-Z`** | Matches PlayCanvas and glTF. Use `Vector3.forward` / `transform.forward`, never literal axes, and code ports unchanged. |
-| 6 | Screen origin bottom-left, Y up | **Screen origin top-left, Y down**, in CSS pixels | Same space as the DOM and the React HUD. Affects `Input.mousePosition`, `Camera.worldToScreenPoint`. |
+| 6 | Screen origin bottom-left, Y up | **Screen origin top-left, Y down**, in CSS pixels | Same space as the DOM and the Preact HUD. Affects `Input.mousePosition`, `Camera.worldToScreenPoint`. |
 | 7 | `Physics.Raycast(ray, out hit)` returns bool | `Physics.raycast(ray)` returns the hit or `null` | No `out` parameters. |
 | 8 | `if (target != null)` is false for destroyed objects | `if (isAlive(target))` | `==` cannot be overloaded. |
 | 9 | Scenes and prefabs are assets made in the editor | Scenes and prefabs are **functions** (`SceneManager.register`, `new Prefab`) | There is no editor. Code is easy to diff and generate. |
@@ -48,7 +48,7 @@ export class Spinner extends MonoBehaviour {
 | 11 | Euler order Z, X, Y | Euler order X, Y, Z | PlayCanvas convention. Single-axis rotations are identical. |
 | 12 | Mesh triangles are clockwise | Counter-clockwise | Follows from the right-handed world. |
 | 13 | Rigidbody physics, collisions, triggers | **Not available yet.** Colliders exist for raycasts and overlap queries only | Kept out of the core to stay small. |
-| 14 | UI: uGUI / UI Toolkit | In-scene `Canvas` + `Image` for UI images; React (`@synergy/ui`) for interactive HUDs | See below. |
+| 14 | UI: uGUI / UI Toolkit | In-scene `Canvas` + `Image` for UI images; Preact (`@synergy/ui`) for interactive HUDs | See below. |
 | 15 | `Invoke("Method", 2f)` | `this.invoke(this.method, 2)` | Pass the function, not its name. |
 | 16 | `[SerializeField] private` vs `private` | `instantiate` copies a script's fields except those starting with `_`, functions, and `UnityEvent`/`Observable`/`Map`/`Set` instances. Arrays and object literals are deep-copied | There is no serializer; this is the stand-in. |
 | 17 | `Random` is one global generator | `new Random(seed)` is an object you own | Deterministic rules need an explicit, seedable generator. Its numbers do not match Unity's. |
@@ -248,7 +248,9 @@ Two complementary ways, usable together:
 - **In-scene UI images**, the uGUI way: a `Canvas` GameObject with `Image` children laid
   out by `RectTransform`. Drawn by PlayCanvas over the 3D world and sprites. Good for
   icons, frames, bars and badges. Not clickable yet, and there is no `Text`.
-- **The React HUD** (`@synergy/ui`), drawn over the canvas as DOM: text, buttons, forms.
+- **The Preact HUD** (`@synergy/ui`), drawn over the canvas as DOM: text, buttons, forms.
+  It is [Preact](https://preactjs.com), not React: hooks come from `preact/hooks`, and a
+  text field updates with `onInput` (Preact's `onChange` fires only when the field loses focus).
 
 | Unity | Synergy |
 |-------|---------|

@@ -19,10 +19,10 @@ same engine, so there is no second renderer to integrate.
 |---|---|---|---|
 | **2D Tilemap** (hex) | Tactical terrain, selection overlays, fog layers | `Grid`, `Tilemap`, `Tile`, `TilemapRenderer`, same hex coordinates. [tilemaps.md](../../docs/tilemaps.md) | **Built in** |
 | Custom hex maths, weighted pathfinding | Movement, weapon patterns | `Hex`, `findPath`, `findReachable` in `@synergy/engine/grid` (pure, usable server-side) | **Built in** |
-| **DOTween / DOTween Pro** | UI transitions, fades, health-bar effects, camera tweens | `Tween` (`to`, `move`, `rotate`, `scale`, eases, loops, delay, `yield` in coroutines). CSS transitions for the React HUD | **Built in** (core subset) |
+| **DOTween / DOTween Pro** | UI transitions, fades, health-bar effects, camera tweens | `Tween` (`to`, `move`, `rotate`, `scale`, eases, loops, delay, `yield` in coroutines). CSS transitions for the Preact HUD | **Built in** (core subset) |
 | Unity `Random` in rules and generation | Combat rolls, map generation | Seeded `Random` class. Same seed gives the same sequence everywhere, but **not** Unity's sequence | **Built in**, see caveat below |
-| **uGUI, TextMesh Pro** | Menus, HUD, notifications | In-scene `Canvas`, `CanvasScaler`, `RectTransform`, `Image` for UI images; React via `@synergy/ui` for text and interactive UI | **Built in** (images in-scene; text and buttons in React) |
-| **Multiplayer Widgets** | Lobby, player list | Build from React + `ConvexLobby.watchOpenRooms` / `watchRoom` | Building blocks exist |
+| **uGUI, TextMesh Pro** | Menus, HUD, notifications | In-scene `Canvas`, `CanvasScaler`, `RectTransform`, `Image` for UI images; Preact via `@synergy/ui` for text and interactive UI | **Built in** (images in-scene; text and buttons in Preact) |
+| **Multiplayer Widgets** | Lobby, player list | Build from Preact + `ConvexLobby.watchOpenRooms` / `watchRoom` | Building blocks exist |
 | **Kamgam UI blur** | Blurred panel backgrounds | CSS `backdrop-filter` (the sample HUD uses it) | **Covered** |
 | **Newtonsoft.Json** | Transport, saves, schemas | Native JSON and TypeScript types; Convex validators on the server. Add Zod if client-side validation of untrusted data is needed | **Covered** |
 | **Unity Test Framework** | EditMode tests | `bun test`, including whole scenes headlessly | **Covered** |
@@ -89,7 +89,8 @@ in the game state so every player rolls the same numbers.
 
 - **The Convex campaign backend carries over.** It is already TypeScript on Convex. Call
   it from the browser with the Convex client (`ConvexLobby` accepts an existing
-  `ConvexClient`, or use `convex/browser` and `convex/react` directly). Merge its
+  `ConvexClient`, or use `convex/browser` directly; `convex/react` needs React, which
+  this project does not ship). Merge its
   functions into `convex/`, or point `PUBLIC_CONVEX_URL` at the existing deployment.
 - **Authentication must change.** That backend trusts Unity-issued identities. A browser
   client needs another identity provider wired into Convex (Convex Auth or any OIDC

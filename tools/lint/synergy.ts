@@ -70,7 +70,7 @@ export const NOT_SENT: Readonly<Record<string, string>> = {
   ontriggerexit2d: 'there is no 2D physics; test for overlap with Physics.overlapSphere in update()',
   onmousedrag: 'track the drag yourself between onMouseDown() and onMouseUp() with Input.mousePosition',
   onmouseupasbutton: 'use onMouseUp()',
-  ongui: 'draw UI with a Canvas and Image, or with the React HUD',
+  ongui: 'draw UI with a Canvas and Image, or with the Preact HUD',
   onbecamevisible: 'visibility messages are not sent',
   onbecameinvisible: 'visibility messages are not sent',
   onapplicationquit: 'listen for the page closing instead (the "pagehide" event)',

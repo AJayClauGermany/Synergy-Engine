@@ -22,7 +22,7 @@ export enum CameraClearFlags {
  * forward direction (-Z).
  *
  * Screen points are CSS pixels with the origin at the TOP-left of the game view, the
- * same space as `Input.mousePosition` and the React HUD.
+ * same space as `Input.mousePosition` and the Preact HUD.
  */
 export class Camera extends Behaviour {
   static readonly disallowMultiple = true;

@@ -2,7 +2,7 @@ import { type GameObject, Observable } from '@synergy/engine';
 import type { Team, Unit } from './rules/skirmish';
 
 /**
- * State the HUD shows. Game code writes these observables; React components read them
+ * State the HUD shows. Game code writes these observables; Preact components read them
  * with `useObservable`. Keeping this in one small module is the whole "UI binding" layer.
  */
 export interface HudState {
