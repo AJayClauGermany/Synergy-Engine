@@ -10,20 +10,20 @@
     "game"
   ],
   "scripts": {
-    "dev": "VARLOCK_TELEMETRY_DISABLED=1 varlock run -- bun run scripts/dev.ts",
-    "build": "VARLOCK_TELEMETRY_DISABLED=1 varlock run -- bun run scripts/build.ts",
-    "start": "VARLOCK_TELEMETRY_DISABLED=1 varlock run -- bun run scripts/serve.ts",
+    "dev": "varlock run -- bun run scripts/dev.ts",
+    "build": "varlock run -- bun run scripts/build.ts",
+    "start": "varlock run -- bun run scripts/serve.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p convex/tsconfig.json && tsc --noEmit -p cloudflare/tsconfig.json",
     "check": "bun run typecheck && bun test",
-    "screenshot": "VARLOCK_TELEMETRY_DISABLED=1 varlock run -- bun run scripts/screenshot.ts",
+    "screenshot": "varlock run -- bun run scripts/screenshot.ts",
     "backend": "convex dev",
-    "preview:local": "bun run build && VARLOCK_TELEMETRY_DISABLED=1 varlock run -- wrangler dev",
-    "preview:deploy": "bun run build && VARLOCK_TELEMETRY_DISABLED=1 varlock run -- wrangler preview",
-    "deploy": "bun run build && VARLOCK_TELEMETRY_DISABLED=1 varlock run -- wrangler deploy",
-    "desktop:dev": "VARLOCK_TELEMETRY_DISABLED=1 varlock run -- bun run scripts/build.ts --outdir desktop/dist && cd desktop && bun ../node_modules/electrobun/bin/electrobun.cjs dev",
-    "desktop:build": "VARLOCK_TELEMETRY_DISABLED=1 varlock run -- bun run scripts/build.ts --outdir desktop/dist && cd desktop && bun ../node_modules/electrobun/bin/electrobun.cjs build --env=stable",
-    "env": "VARLOCK_TELEMETRY_DISABLED=1 varlock load"
+    "preview:local": "bun run build && varlock run -- wrangler dev",
+    "preview:deploy": "bun run build && varlock run -- wrangler preview",
+    "deploy": "bun run build && varlock run -- wrangler deploy",
+    "desktop:dev": "varlock run -- bun run scripts/build.ts --outdir desktop/dist && cd desktop && bun ../node_modules/electrobun/bin/electrobun.cjs dev",
+    "desktop:build": "varlock run -- bun run scripts/build.ts --outdir desktop/dist && cd desktop && bun ../node_modules/electrobun/bin/electrobun.cjs build --env=stable",
+    "env": "varlock load"
   },
   "dependencies": {
     "convex": "^1.49.0"

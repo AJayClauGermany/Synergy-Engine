@@ -1,3 +1,8 @@
+# varlock loads the environment (see .env.schema), so Bun's own .env loading is turned off,
+# as varlock's Bun guide recommends: otherwise Bun could pass it values from files such as
+# .env.development. Scripts reach varlock through `varlock run --` (see package.json).
+env = false
+
 [serve.static]
 # Only variables starting with PUBLIC_ are exposed to browser code in `bun run dev`.
 # The production build applies the same rule (scripts/build.ts). Never put secrets in them.

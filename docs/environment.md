@@ -88,10 +88,11 @@ the game can read them. Never put a secret in one.
 
 ## Analytics
 
-varlock sends anonymous usage statistics unless told not to. The scripts here turn that off
-with `VARLOCK_TELEMETRY_DISABLED=1`. If you run `bunx varlock ...` yourself, add
-`DO_NOT_TRACK=1` to your shell or run `bunx varlock telemetry disable` once; to opt in
-for the project's scripts, remove the prefix in `package.json`.
+varlock sends anonymous usage statistics unless told not to (the command used, versions,
+a hash of the repository name; never your configuration or values). This project turns
+that off for everyone who clones it, with `.varlock/config.json`, which covers the
+scripts and any `bunx varlock ...` you run in the project. To opt in, delete that file.
+To opt out everywhere, run `bunx varlock telemetry disable` once, or set `DO_NOT_TRACK=1`.
 
 ## CI and deploys
 
