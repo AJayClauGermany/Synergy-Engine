@@ -59,9 +59,10 @@ scripts/                 dev server, build, deploy, screenshot tool, the check r
 tools/unity/             editor script that exports Unity tiles, tilemaps and ScriptableObjects
 tools/lint/              lint rules for the mistakes a Unity port makes (loaded by oxlint)
 .env.schema              every environment variable: type, comment, secret or not (varlock)
-docs/                    unity-to-synergy.md, porting-from-unity.md, checks.md, content.md,
-                         tilemaps.md, architecture.md, multiplayer.md, netcode.md,
-                         environment.md, deploying.md, desktop.md
+docs/                    setup.md (accounts, secrets, first deploy), unity-to-synergy.md,
+                         porting-from-unity.md, checks.md, content.md, tilemaps.md,
+                         architecture.md, multiplayer.md, netcode.md, environment.md,
+                         deploying.md, desktop.md
 ```
 
 ## Unity knowledge transfers, with these differences

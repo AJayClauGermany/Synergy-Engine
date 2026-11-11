@@ -66,10 +66,17 @@ formats, lints, type-checks and tests everything in a few seconds, with no brows
 and ends with `PASSED` or `FAILED`. `bun run fix` applies what can be fixed automatically
 first. [docs/checks.md](docs/checks.md) describes each check.
 
+## Setting up everything around the game
+
+[docs/setup.md](docs/setup.md) takes the sample game through every piece once (CI, the
+Convex backend, private Cloudflare previews), with a check after each step. Do it before
+starting on your game, so nothing is left to set up later.
+
 ## Making it yours
 
-1. Rename things: `name` in `wrangler.jsonc`, the app in `desktop/electrobun.config.ts`,
-   `PEER_PREFIX` in `game/src/online.ts`, the `<title>` in `game/index.html`.
+1. Rename things ([docs/setup.md](docs/setup.md), step 3): `name` in `wrangler.jsonc`,
+   the app in `desktop/electrobun.config.ts`, `PEER_PREFIX` in `game/src/online.ts`, the
+   `<title>` in `game/index.html`.
 2. Replace the sample: `game/src/rules/` (your rules), `game/src/behaviours/` (your
    scripts), `game/src/scenes/` (your scenes), `game/src/ui/` (your HUD).
 3. Keep the shape of the sample you started from. Skirmish: input submits commands,
@@ -100,6 +107,7 @@ Coming from an existing Unity project? Start at
 
 ## Documentation
 
+- [Setting up](docs/setup.md): every piece around the game, once, start to finish; moving from a test game to the real one
 - [Unity to Synergy](docs/unity-to-synergy.md): the API map and the differences
 - [Architecture](docs/architecture.md): how it sits on PlayCanvas, the frame loop, headless mode
 - [Porting from Unity](docs/porting-from-unity.md): the order to bring an existing project across
@@ -108,7 +116,7 @@ Coming from an existing Unity project? Start at
 - [Content as data](docs/content.md): tile palettes, maps and definitions from JSON; exporting from Unity
 - [Netcode](docs/netcode.md): Netcode for GameObjects in TypeScript: spawning, variables, RPCs, scenes, lobby
 - [Multiplayer](docs/multiplayer.md): command sessions, PeerJS, Convex
-- [Environment](docs/environment.md): variables, secrets, setting up Convex
+- [Environment](docs/environment.md): variables, secrets, how values resolve
 - [Deploying](docs/deploying.md): private Cloudflare previews per pull request, assets in R2
 - [Desktop](docs/desktop.md): Electrobun packaging
 - [Agent skills](docs/agent-skills.md): what agents get, and optional vendor skills

@@ -10,11 +10,12 @@ name: Preview
 # Each deploy uploads only the assets that changed to R2 and makes Cloudflare Access admit
 # exactly the people in PREVIEW_ALLOWED_EMAILS.
 #
-# The one-time setup is three values, under Settings > Secrets and variables > Actions:
+# The one-time setup (docs/setup.md) is these values, under Settings > Secrets and variables > Actions:
 #   secret    CLOUDFLARE_API_TOKEN     Workers Scripts: Edit, Workers R2 Storage: Edit,
 #                                      Access: Apps and Policies: Edit
 #   secret    CLOUDFLARE_ACCOUNT_ID
 #   variable  PREVIEW_ALLOWED_EMAILS   e.g. "ada@studio.com, bob@studio.com, @studio.com"
+#   variable  PUBLIC_CONVEX_URL        optional: the production Convex deployment, for the lobby
 # Until the two secrets exist this workflow does nothing and passes.
 
 on:
@@ -47,7 +48,7 @@ jobs:
           if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::notice::Previews are off: add the secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID (docs/deploying.md)."
+            echo "::notice::Previews are off: add the secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID (docs/setup.md)."
           fi
 
   deploy:
@@ -70,6 +71,8 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           PREVIEW_ALLOWED_EMAILS: ${{ vars.PREVIEW_ALLOWED_EMAILS }}
+          # Built into the page; empty means the game offers peer-to-peer play only.
+          PUBLIC_CONVEX_URL: ${{ vars.PUBLIC_CONVEX_URL }}
         run: bun run preview:deploy --name "$PREVIEW_NAME"
 
   cleanup:
