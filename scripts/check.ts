@@ -11,6 +11,7 @@
  * cut to its first lines (the first error is the one to fix), and the last line says
  * whether the change is good. `docs/checks.md` describes each check.
  */
+import path from 'node:path';
 
 /** One check: a command that exits 0 when the code is fine. */
 export interface Step {
@@ -310,7 +311,7 @@ async function main(): Promise<number> {
     return 2;
   }
 
-  const cwd = new URL('..', import.meta.url).pathname;
+  const cwd = path.resolve(import.meta.dir, '..');
   const started = performance.now();
   const steps = options.only.length > 0 ? STEPS.filter((step) => options.only.includes(step.name)) : [...STEPS];
 

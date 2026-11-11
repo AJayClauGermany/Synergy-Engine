@@ -205,6 +205,9 @@ const noDetachedMethod: Rule = {
         '(C# binds a method to its object; JavaScript does not). ' +
         'Pass `() => this.{{name}}()` or `(...args) => this.{{name}}(...args)`, ' +
         'or declare the method as a field: `{{name}} = () => { ... }`.',
+      coroutine:
+        'startCoroutine takes a running coroutine, not the method that makes one. Call it: ' +
+        '`this.startCoroutine(this.{{name}}())`.',
     },
   },
   create(context) {
@@ -243,6 +246,16 @@ const noDetachedMethod: Rule = {
       }
     }
 
+    /** `startCoroutine(this.run)`: Unity's `StartCoroutine(Run())` with the call left off. */
+    function startsCoroutine(node: Node): boolean {
+      const { parent, child } = siteOf(node);
+      if (parent?.type !== 'CallExpression' || parent.callee === child) return false;
+      const callee = unwrap(parent.callee);
+      return (
+        callee.type === 'MemberExpression' && !callee.computed && identifierName(callee.property) === 'startCoroutine'
+      );
+    }
+
     return {
       MemberExpression(node) {
         if (node.computed || node.object.type !== 'ThisExpression') return;
@@ -250,7 +263,12 @@ const noDetachedMethod: Rule = {
         const owner = enclosingClass(node);
         if (!name || !owner) return;
         const method = findMethod(owner, name);
-        if (!method || !mentionsThis(method.value) || !escapes(node)) return;
+        if (!method) return;
+        if (startsCoroutine(node)) {
+          context.report({ node, messageId: 'coroutine', data: { name } });
+          return;
+        }
+        if (!mentionsThis(method.value) || !escapes(node)) return;
         context.report({ node, messageId: 'detached', data: { name } });
       },
     };

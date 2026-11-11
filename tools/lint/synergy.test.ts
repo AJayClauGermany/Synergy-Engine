@@ -44,6 +44,8 @@ const CASES: Record<RuleName, { valid: (string | Snippet)[]; invalid: Snippet[] 
       'class A { run() { events.add(this.hit); } }',
       // Getters and fields are values already.
       'class A { get hp() { return this._hp; } run() { show(this.hp); } }',
+      // A coroutine is started by calling the method that makes it.
+      'class A { *blink() { yield null; } start() { this.startCoroutine(this.blink()); } }',
     ],
     invalid: [
       {
@@ -59,6 +61,11 @@ const CASES: Record<RuleName, { valid: (string | Snippet)[]; invalid: Snippet[] 
       { code: 'class A { hit() { this.hp--; } run() { return { onHit: this.hit }; } }', errors: ['this.hit'] },
       { code: 'class A { hit() { this.hp--; } handler() { return this.hit; } }', errors: ['this.hit'] },
       { code: 'class A { hit() { super.hit(); } start() { events.add(this.hit!); } }', errors: ['this.hit'] },
+      // Unity's StartCoroutine(Blink()) with the call left off: the advice is to call it, not to wrap it.
+      {
+        code: 'class A { *blink() { yield null; } start() { this.startCoroutine(this.blink); } }',
+        errors: ['Call it: `this.startCoroutine(this.blink())`'],
+      },
       {
         code: 'class A { hit() { this.hp--; } render() { return <button onClick={this.hit} />; } }',
         filename: 'View.tsx',

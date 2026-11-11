@@ -88,7 +88,8 @@ Why each matters:
 - **Detached methods.** C# binds `OnClick` to its object when you pass it. JavaScript
   passes the bare function, and `this` is `undefined` when it runs. The rule knows the
   two calls that bind for you: the `invoke` family (`this.invoke(this.tick, 1)` is
-  correct) and any call that is also given `this`.
+  correct) and any call that is also given `this`. `this.startCoroutine(this.run)` gets its own
+  message, because there the fix is to call the method: `this.startCoroutine(this.run())`.
 - **Messages.** The engine calls `start`, `update` and the others by name. A method named
   almost like one is never called and nothing fails; the script just does nothing.
   (`Update()` in Unity's capitals is a type error, so the type check reports that one.)
