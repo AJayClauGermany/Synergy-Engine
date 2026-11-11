@@ -86,6 +86,22 @@ describe('Catalog', () => {
     expect(() => new Catalog('weapon').get('bow')).toThrow('Known weapons: (none).');
   });
 
+  test('definitions are read-only, so one unit cannot change the numbers for all of them', () => {
+    const types = new Catalog('unit type', [{ id: 'tank', hp: 20, tags: ['armoured'], weapon: { damage: 5 } }]);
+    const tank = types.get('tank');
+    expect(() => {
+      tank.hp = 1;
+    }).toThrow();
+    expect(() => tank.tags.push('fast')).toThrow();
+    expect(() => {
+      tank.weapon.damage = 99;
+    }).toThrow();
+    // A copy is yours to change.
+    const mine = { ...tank, hp: 12 };
+    expect(mine.hp).toBe(12);
+    expect(types.get('tank').hp).toBe(20);
+  });
+
   test('duplicate and missing ids are refused when the catalog is made', () => {
     expect(() => new Catalog('unit type', [{ id: 'a' }, { id: 'a' }])).toThrow('Two unit types share the id "a"');
     expect(() => new Catalog('unit type', [{ id: '' }])).toThrow('Every unit type needs an "id"');

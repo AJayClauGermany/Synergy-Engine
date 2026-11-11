@@ -291,12 +291,21 @@ scene, its assets and its objects.
 
 ```ts
 // On the host. The scene is registered with SceneManager.register on every machine.
-manager.sceneManager.onLoadEventCompleted.add((scene, loaded, timedOut) => {
-  if (scene === 'Match') match.phase.value = 'playing';     // everyone is in
+const scenes = manager.sceneManager;
+scenes.onLoadComplete.add((clientId, scene) => {
+  if (clientId === 0 && scene === 'Match') spawnUnits();    // the host's own copy is loaded;
+});                                                          // spawn(true): these belong to the match
+scenes.onLoadEventCompleted.add((scene, loaded, timedOut) => {
+  if (scene === 'Match') match.phase.value = 'playing';     // everyone is in: play may begin
 });
-await manager.sceneManager.loadScene('Match');   // resolves when the host's copy is loaded
-spawnUnits();                                    // spawn(true): these belong to the match
+void scenes.loadScene('Match');
 ```
+
+`loadScene` also returns a promise that resolves when the host's copy is loaded, so
+`await scenes.loadScene('Match'); spawnUnits();` reads more simply and is fine in the
+game. Prefer the events in code you test with simulated machines: after an `await`,
+another machine's engine may be the current one (wrap what follows in `machine.run`).
+`game/src/frontier/session.ts` is a complete example.
 
 - The host tells every client which scene to load, then loads it. A client loads the
   scene **before it handles anything else the host sends**, so objects the host spawns

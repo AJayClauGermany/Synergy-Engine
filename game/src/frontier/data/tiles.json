@@ -1,0 +1,15 @@
+{
+  "sheets": {
+    "terrain": { "image": "terrain.png", "pixelsPerUnit": 64, "columns": 4, "rows": 1 }
+  },
+  "tiles": [
+    { "id": "plain", "sprite": "terrain/0", "data": { "climate": "temperate", "elevation": 0, "moveCost": 1, "cover": 0 } },
+    { "id": "forest", "sprite": "terrain/1", "data": { "climate": "temperate", "elevation": 0, "moveCost": 2, "cover": 1 } },
+    { "id": "hill", "sprite": "terrain/2", "data": { "climate": "arid", "elevation": 1, "moveCost": 2, "cover": 0 } },
+    { "id": "water", "sprite": "terrain/3", "data": { "climate": "temperate", "elevation": 0, "moveCost": 99, "cover": 0 } },
+    { "id": "fog", "color": "#0b1118b8" },
+    { "id": "reach", "color": "#5aa7e88c" },
+    { "id": "target", "color": "#e8695ab3" },
+    { "id": "selected", "color": "#f2d264b3" }
+  ]
+}

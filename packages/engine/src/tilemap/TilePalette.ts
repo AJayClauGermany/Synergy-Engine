@@ -3,7 +3,7 @@ import type { Texture } from '../components/rendering';
 import { Sprite } from '../components/Sprite';
 import { GameObject } from '../core/GameObject';
 import type { Transform } from '../core/Transform';
-import { Catalog } from '../data/Catalog';
+import { Catalog, deepFreeze } from '../data/Catalog';
 import {
   checkTilemapData,
   checkTilePaletteData,
@@ -81,7 +81,8 @@ export class TilePalette<Data = Record<string, unknown>> {
         name: definition.id,
         color: definition.color ? Color.fromHex(definition.color) : Color.white,
         sprite: definition.sprite ? this.sprite(definition.sprite) : null,
-        data: definition.data,
+        // Every cell painted with this tile shares this one object: keep it from being changed.
+        data: deepFreeze(definition.data),
       });
       this.catalog.add({ id: definition.id, tile });
     }

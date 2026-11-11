@@ -1,6 +1,9 @@
 import * as synergy from '@synergy/engine';
 import { Engine, SceneManager } from '@synergy/engine';
 import { mountUI } from '@synergy/ui';
+import { FrontierHud } from './frontier/FrontierHud';
+import { FRONTIER_SCENE } from './frontier/scene';
+import { createFrontierManager, playOffline } from './frontier/session';
 import { buildShowcaseScene } from './scenes/ShowcaseScene';
 import { buildSkirmishScene } from './scenes/SkirmishScene';
 import { Hud } from './ui/Hud';
@@ -19,10 +22,18 @@ async function main() {
 
   // `?scene=Name` opens a different registered scene, handy while building new ones.
   const requested = new URLSearchParams(location.search).get('scene');
-  const scene = requested && SceneManager.isRegistered(requested) ? requested : 'Skirmish';
-  // The React HUD belongs to the Skirmish game; other scenes bring their own UI.
-  if (scene === 'Skirmish') mountUI(<Hud />, { engine });
-  await SceneManager.loadScene(scene);
+  if (requested === FRONTIER_SCENE) {
+    // The netcode sample (game/src/frontier). Its scene is loaded through the network
+    // manager, so that a second player who joins is taken to the same place.
+    const manager = createFrontierManager();
+    mountUI(<FrontierHud manager={manager} />, { engine });
+    await playOffline(manager);
+  } else {
+    const scene = requested && SceneManager.isRegistered(requested) ? requested : 'Skirmish';
+    // The React HUD belongs to the Skirmish game; other scenes bring their own UI.
+    if (scene === 'Skirmish') mountUI(<Hud />, { engine });
+    await SceneManager.loadScene(scene);
+  }
   document.documentElement.dataset.ready = 'true';
 }
 

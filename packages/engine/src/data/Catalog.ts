@@ -13,6 +13,19 @@ function editDistance(a: string, b: string): number {
 }
 
 /**
+ * Makes plain data read-only all the way down (arrays and object literals; class
+ * instances are left alone). Returns the same value.
+ */
+export function deepFreeze<T>(value: T): T {
+  if (value === null || typeof value !== 'object' || Object.isFrozen(value)) return value;
+  const plain = Array.isArray(value) || Object.getPrototypeOf(value) === Object.prototype;
+  if (!plain) return value;
+  Object.freeze(value);
+  for (const item of Object.values(value)) deepFreeze(item);
+  return value;
+}
+
+/**
  * A set of definitions looked up by id: unit types, buildings, weapons, tiles.
  *
  * This is where Unity's ScriptableObject assets go. Each asset becomes one plain record
@@ -31,6 +44,12 @@ function editDistance(a: string, b: string): number {
  * The records can equally come from a JSON file. A duplicate or empty id is an error
  * when the catalog is made, so a bad data file fails at startup and in tests rather
  * than at the moment the missing thing is first needed.
+ *
+ * Definitions are shared by everything that looks them up, so the catalog makes them
+ * read-only: `unitTypes.get('scout').hp = 3` throws instead of quietly changing every
+ * scout. This is the difference from a C# struct, which would have been copied. For a
+ * value of your own to change (a unit's current health), copy what you need:
+ * `{ ...unitTypes.get('scout') }`.
  */
 export class Catalog<T extends { readonly id: string }> implements Iterable<T> {
   private readonly byId = new Map<string, T>();
@@ -49,7 +68,7 @@ export class Catalog<T extends { readonly id: string }> implements Iterable<T> {
       throw new Error(`Every ${this.kind} needs an "id" (a non-empty string); got ${JSON.stringify(entry)}.`);
     }
     if (this.byId.has(entry.id)) throw new Error(`Two ${this.kind}s share the id "${entry.id}". Ids must be unique.`);
-    this.byId.set(entry.id, entry);
+    this.byId.set(entry.id, deepFreeze(entry));
     return this;
   }
 

@@ -8,11 +8,14 @@ import type { NetworkManager } from './NetworkManager';
  * machine reports in.
  *
  *   // on the host
- *   manager.sceneManager.onLoadEventCompleted.add((scene, loaded, timedOut) => {
+ *   const scenes = manager.sceneManager;
+ *   scenes.onLoadComplete.add((clientId, scene) => {
+ *     if (clientId === 0 && scene === 'Match') spawnTheUnits();   // the host has the scene;
+ *   });                                                           // spawn(true): they belong to it
+ *   scenes.onLoadEventCompleted.add((scene) => {
  *     if (scene === 'Match') startPlay();          // everyone is in: the barrier has lifted
  *   });
- *   await manager.sceneManager.loadScene('Match');  // resolves when the host's own copy is loaded
- *   spawnTheMap();                                  // spawn(true): these belong to the match scene
+ *   void scenes.loadScene('Match');
  *
  * What happens, in order: the server tells every client which scene to load, then loads
  * it itself. Each client loads the scene before it handles anything else the server
