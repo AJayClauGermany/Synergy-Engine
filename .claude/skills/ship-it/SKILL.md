@@ -81,6 +81,11 @@ bun run desktop:build
 
 ## Build-time configuration
 
+Variables are declared in `.env.schema` and loaded by varlock: the package scripts run
+through `varlock run --`. See `docs/environment.md`; run `bun run env` to check them.
+Add new ones to the schema, mark secrets `@sensitive`, and never read or edit `.env.local`
+(it may hold secrets).
+
 `process.env.PUBLIC_*` is inlined into the browser bundle at build time (and by the dev
 server). Read such variables through a guarded helper like `game/src/env.ts`, because an
 unset variable is left as a bare `process.env` reference that would throw in a browser.
