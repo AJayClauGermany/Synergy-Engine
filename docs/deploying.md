@@ -14,24 +14,10 @@ you chose can open it. Three things are automatic:
 
 ## Set-up, once
 
-What cannot be automated, because it is an account or a secret:
-
-1. **Cloudflare account.** In the dashboard, open *R2 Object Storage* and switch it on
-   (it asks for a payment method; the free allowance is 10 GB), and open *Zero Trust*,
-   pick a team name and the free plan (50 people).
-2. **API token.** *My Profile > API Tokens > Create Token*, starting from the template
-   "Edit Cloudflare Workers", plus two account permissions: *Workers R2 Storage: Edit*
-   and *Access: Apps and Policies: Edit*.
-3. **GitHub**, under *Settings > Secrets and variables > Actions*:
-
-   | Kind | Name | Value |
-   |------|------|-------|
-   | secret | `CLOUDFLARE_API_TOKEN` | the token |
-   | secret | `CLOUDFLARE_ACCOUNT_ID` | the account id (dashboard, *Workers & Pages*, right-hand column) |
-   | variable | `PREVIEW_ALLOWED_EMAILS` | who may look, e.g. `ada@studio.com, bob@studio.com, @studio.com` |
-
-4. **Name the Worker.** Change `"name"` in `wrangler.jsonc`, and the two
-   `"bucket_name"`s to `<name>-assets`.
+[setup.md](setup.md), step 5, has the steps: switch on R2 and Zero Trust, create an API
+token, and give GitHub two secrets (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`) and
+two variables (`PREVIEW_ALLOWED_EMAILS`, and `PUBLIC_CONVEX_URL` if the game uses Convex).
+Step 3 there names the Worker and its bucket in `wrangler.jsonc`.
 
 Everything else is created by the first deploy: the Worker, the R2 bucket and the Access
 application. To let someone in or out later, edit `PREVIEW_ALLOWED_EMAILS`; the next deploy
@@ -163,4 +149,5 @@ your Cloudflare plan's limits.
 
 Only environment variables starting with `PUBLIC_` are compiled into the bundle (for
 example `PUBLIC_CONVEX_URL`). They are visible to anyone who can open the game, so never
-put a secret in one.
+put a secret in one. Pull-request previews take `PUBLIC_CONVEX_URL` from the repository
+variable of that name; a deploy by hand takes it from `.env.local` or the command line.

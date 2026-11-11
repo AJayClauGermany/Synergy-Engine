@@ -11,24 +11,10 @@ Values you set turn on more.
 
 ## Setting up Convex (the lobby)
 
-Once per developer, with two terminals:
-
-```bash
-bun install
-```
-
-```bash
-bun run backend
-```
-
-The first time, `convex dev` asks you to log in and creates a development deployment for
-you. It pushes the functions in `convex/` and writes `CONVEX_DEPLOYMENT` and `CONVEX_URL`
-to `.env.local` (git-ignored). Leave it running while you work: it re-pushes when you edit
-`convex/`.
-
-```bash
-bun run dev
-```
+[setup.md](setup.md), step 4, has the steps. In short: `bun run backend` logs you in,
+creates a development deployment, pushes the functions in `convex/` and writes
+`CONVEX_DEPLOYMENT` and `CONVEX_URL` to `.env.local` (git-ignored); `bunx convex deploy`
+pushes the functions to the production deployment, which the builds on Cloudflare use.
 
 `PUBLIC_CONVEX_URL` is defined in the schema as `${CONVEX_URL}`, so the game finds your
 deployment with nothing to copy. Everyone who clones the project runs these same commands
@@ -99,5 +85,6 @@ To opt out everywhere, run `bunx varlock telemetry disable` once, or set `DO_NOT
 CI needs no values to type-check, test and build. To deploy, give the job
 `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (and `CONVEX_DEPLOY_KEY` if it pushes
 Convex functions) as secrets, and `PREVIEW_ALLOWED_EMAILS` as a repository variable: the
-people Cloudflare Access admits. See [deploying.md](deploying.md). The optional password
+people Cloudflare Access admits, and `PUBLIC_CONVEX_URL`, the Convex deployment the build
+talks to. [setup.md](setup.md) lists them in order. The optional password
 gate is separate: it is a Worker secret, not a build variable.

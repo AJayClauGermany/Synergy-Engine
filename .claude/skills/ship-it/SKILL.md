@@ -7,7 +7,8 @@ description: Use when deploying a password-protected preview or the main build t
 
 ## Web previews (Cloudflare Workers)
 
-Details: `docs/deploying.md`. The moving parts:
+Details: `docs/deploying.md`. First-time set-up (accounts, secrets, names) and how to
+clear what a test run created: `docs/setup.md`. The moving parts:
 
 - `bun run build` → `dist/` (static site). Imported files land in `dist/assets/` under a
   content-hashed name; the game asks for `./assets/<name>-<hash>.<ext>`.
