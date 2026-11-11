@@ -1,4 +1,5 @@
 import { Behaviour } from '../core/Component';
+import { nameType } from '../core/typeNames';
 import {
   cellCenterToLocal,
   cellCorners,
@@ -149,3 +150,6 @@ export class Grid extends Behaviour {
     this._version++;
   }
 }
+
+// The names to print, whatever a bundler renames these classes to (see nameType).
+nameType(Grid, 'Grid');

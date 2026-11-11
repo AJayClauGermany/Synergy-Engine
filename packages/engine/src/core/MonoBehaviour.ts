@@ -8,6 +8,7 @@ import {
 import { Observable, UnityEvent } from './events';
 import { checkMessageNames, type UseCamelCase } from './messageNames';
 import { currentEngine } from './runtime';
+import { typeNameOf } from './typeNames';
 
 /**
  * Base class for your game scripts, with Unity's lifecycle. Define only the messages you
@@ -208,7 +209,7 @@ export abstract class MonoBehaviour extends Behaviour {
     try {
       handler.call(this);
     } catch (error) {
-      currentEngine().reportError(error, `${this.constructor.name}.${message} on "${this.name}"`);
+      currentEngine().reportError(error, `${typeNameOf(this)}.${message} on "${this.name}"`);
     }
   }
 

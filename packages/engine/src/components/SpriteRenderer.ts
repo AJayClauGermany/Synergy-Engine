@@ -1,4 +1,5 @@
 import * as pc from 'playcanvas';
+import { nameType } from '../core/typeNames';
 import { Behaviour } from '../core/Component';
 import { currentEngine } from '../core/runtime';
 import { Color } from '../math/Color';
@@ -191,3 +192,6 @@ export class SpriteRenderer extends Behaviour {
     this.component.enabled = this._enabled;
   }
 }
+
+// The names to print, whatever a bundler renames these classes to (see nameType).
+nameType(SpriteRenderer, 'SpriteRenderer');

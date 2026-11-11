@@ -23,6 +23,25 @@ Board            Grid                         cellLayout, cellSwizzle, cellSize
   after, either works. `tilemap.layoutGrid` throws if there is none.
 - Tiles are created once (module-level constants) and reused across cells.
 
+## A map from files
+
+When the map and its tiles are data (exported from Unity with `tools/unity`, or written
+by hand), do not paint them in code. Read `docs/content.md`; the short of it:
+
+```ts
+const palette = await TilePalette.load<Terrain>(tiles, { images: { 'terrain.png': terrainUrl } });
+const { grid, layer } = createTilemaps(map, palette, { name: 'Map' });
+layer('Terrain').getTile<Tile<Terrain>>(cell)?.data.moveCost
+```
+
+- `tiles.json` (the palette): sprite sheets, and tiles with an `id`, a `sprite`, and
+  `data` for whatever the game needs to know about that terrain.
+- `map.json`: the grid's shape and layers of cells, each an index into the layer's `tiles`.
+- Load in a scene's `preload`; in a headless test use `TilePalette.create(tiles)` (no
+  images). Rules read the same files with `layerTileAt` and a `Catalog`, without a Tilemap.
+- Add layers that change during play (highlights, fog) in code, as below.
+- Worked example: `game/src/frontier/` (`data/`, `rules.ts`, `FrontierBoard.ts`, `scene.ts`).
+
 ## Decisions to make up front
 
 1. **Plane.** 3D game with units standing on the map: `grid.cellSwizzle = CellSwizzle.XZY`.
@@ -31,8 +50,9 @@ Board            Grid                         cellLayout, cellSwizzle, cellSize
    (odd rows shifted right). For regular hexagons set `grid.cellSize = hexCellSize(width)`.
    Flat-top hexes: swizzle `YXZ` (2D) or `YZX` (ground).
 3. **Where the map data lives.** If rules must run without the engine (multiplayer,
-   server validation, fast tests), keep the layout as plain data in `game/src/rules/` and
-   paint the Tilemap from it. Do not make `apply()` read a Tilemap.
+   server validation, fast tests), keep the layout as plain data (a map file, or an
+   array in `game/src/rules/`) and paint the Tilemap from it. Do not make `apply()` or
+   an RPC's checks read a Tilemap.
 
 ## Recipes
 

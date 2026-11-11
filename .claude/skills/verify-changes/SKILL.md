@@ -47,7 +47,14 @@ test('space fires', () => {
 - A whole scene: `SceneManager.register('S', build); await SceneManager.loadScene('S');`
 - Input "down" edges last one frame: read them inside a behaviour's `update`, not after
   `engine.step()` returns.
-- Pure rules (`game/src/rules`) need no engine at all; test them directly.
+- Pure rules (`game/src/rules`, `game/src/frontier/rules.ts`) need no engine at all; test
+  them directly.
+- Networked code: a host and clients as simulated machines, with `TestNetwork` from
+  `@synergy/netcode/testing`. Copy `game/test/frontier.test.ts`. Do things as a machine
+  inside `machine.run(() => ...)`, call `net.pump()` to pass time and messages, and
+  `await net.settle()` after anything asynchronous (a scene load).
+- Content files: `game/test/content.test.ts` checks every palette and map. Extend it
+  when you add one.
 - When an assertion fails and you cannot see why, `console.log(Debug.hierarchy())` prints
   every GameObject with its components, position and script fields. Pass
   `{ root: gameObject }` for one object, `{ fields: false }` for names only.
@@ -81,10 +88,11 @@ positions, script fields. It is an action like the others, so
 `--hierarchy --click 603,466 --hierarchy` shows the scene before and after a click. Read
 it first; open the PNG for what only a picture shows (colours, overlap, layout).
 
-The tool builds with class names kept, so messages and the hierarchy are readable. A
-built-in component may print with a `2` on the end (`Camera2`): that is the bundler
-keeping it apart from PlayCanvas's class of the same name. `--release` tests the fully
-minified build that is deployed.
+The tool builds with class names kept, so messages and the hierarchy are readable.
+`--release` tests the fully minified build that is deployed (there your own classes
+print as shortened names unless registered with `nameType`).
+
+`--scene Frontier` opens the netcode sample.
 
 `--eval` runs in the page and prints JSON. `synergy` is the engine API plus `engine`:
 

@@ -1,4 +1,5 @@
 import * as pc from 'playcanvas';
+import { nameType } from '../core/typeNames';
 import { MonoBehaviour } from '../core/MonoBehaviour';
 import { currentEngine } from '../core/runtime';
 import { cellCorners, cellToLocal, type GridShape, inverseSwizzle, planeNormal } from '../grid/layout';
@@ -317,3 +318,6 @@ export class TilemapRenderer extends MonoBehaviour {
     return material;
   }
 }
+
+// The names to print, whatever a bundler renames these classes to (see nameType).
+nameType(TilemapRenderer, 'TilemapRenderer');

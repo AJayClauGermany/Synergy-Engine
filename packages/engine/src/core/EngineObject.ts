@@ -1,3 +1,5 @@
+import { typeNameOf } from './typeNames';
+
 let nextInstanceId = 1;
 
 /**
@@ -23,7 +25,7 @@ export abstract class EngineObject {
   }
 
   toString(): string {
-    return `${this.name} (${this.constructor.name})`;
+    return `${this.name} (${typeNameOf(this)})`;
   }
 }
 

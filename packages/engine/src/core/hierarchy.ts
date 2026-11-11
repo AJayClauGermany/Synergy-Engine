@@ -3,6 +3,7 @@ import { EngineObject } from './EngineObject';
 import type { GameObject } from './GameObject';
 import { currentEngine } from './runtime';
 import { Transform } from './Transform';
+import { typeNameOf } from './typeNames';
 
 /** What `Debug.hierarchy()` prints. */
 export interface HierarchyOptions {
@@ -34,7 +35,7 @@ function show(value: unknown, depth = 0): string | null {
     default:
       return null; // undefined, functions, symbols
   }
-  if (value instanceof EngineObject) return value.isDestroyed ? `${value.constructor.name} (destroyed)` : value.toString();
+  if (value instanceof EngineObject) return value.isDestroyed ? `${typeNameOf(value)} (destroyed)` : value.toString();
   if (Array.isArray(value)) {
     if (value.length > 6 || depth > 0) return `[${value.length} items]`;
     const items = value.map((item) => show(item, depth + 1));
@@ -80,7 +81,7 @@ function describe(gameObject: GameObject, indent: string, levels: number, option
   const transform = gameObject.transform;
   const components = gameObject._components.filter((component) => !(component instanceof Transform));
   let line = `${indent}${gameObject.name}`;
-  if (components.length > 0) line += ` <${components.map((component) => component.constructor.name).join(', ')}>`;
+  if (components.length > 0) line += ` <${components.map(typeNameOf).join(', ')}>`;
   if (!gameObject.activeSelf) line += ' (inactive)';
   if (gameObject.tag !== 'Untagged') line += ` tag=${gameObject.tag}`;
   if (gameObject.layer !== 0) line += ` layer=${gameObject.layer}`;
@@ -94,7 +95,7 @@ function describe(gameObject: GameObject, indent: string, levels: number, option
     for (const component of components) {
       const fields = fieldsOf(component);
       const disabled = 'enabled' in component && component.enabled === false ? ' (disabled)' : '';
-      if (fields || disabled) out.push(`${indent}  | ${component.constructor.name}${disabled}${fields ? `: ${fields}` : ''}`);
+      if (fields || disabled) out.push(`${indent}  | ${typeNameOf(component)}${disabled}${fields ? `: ${fields}` : ''}`);
     }
   }
 

@@ -31,18 +31,22 @@ through `varlock run --`); see `docs/environment.md`.
 ## Layout
 
 ```
-game/                    THE GAME. Most work happens here.
+game/                    THE GAME. Most work happens here. It holds two samples:
+                         Skirmish (commands, turn-based) and Frontier (netcode, real-time).
   index.html             page shell: a canvas, plus the script tag
   src/main.tsx           boot: create engine, register scenes, mount HUD, load scene
   src/scenes/            scenes as functions (Unity: .unity files)
   src/behaviours/        MonoBehaviour scripts and prefabs
-  src/rules/             pure game rules: state, commands, check(), apply()
+  src/rules/             Skirmish's pure rules: state, commands, check(), apply()
   src/ui/                React HUD and CSS
   src/hud.ts             Observables the HUD reads
   src/online.ts          host/join helpers (PeerJS, Convex)
-  test/                  rule tests and headless scene tests
+  src/frontier/          the netcode sample, whole: data/ (map, tiles, sprite sheet as files),
+                         rules.ts, Match.ts, Soldier.ts, board, player, scene, session, HUD
+  test/                  rule tests, headless scene tests, simulated-network tests
+  docs/                  notes about this particular game (not the engine)
 packages/engine/         Unity-style runtime on PlayCanvas   (@synergy/engine)
-                         src/grid + src/math are pure: import as @synergy/engine/grid, /math
+                         src/math, src/grid, src/data are pure: @synergy/engine/math, /grid, /data
 packages/ui/             React helpers: mountUI, useObservable, WorldAnchor   (@synergy/ui)
 packages/net/            command sessions, transports, Convex lobby   (@synergy/net)
 packages/netcode/        Netcode for GameObjects on those transports  (@synergy/netcode)
@@ -50,10 +54,11 @@ convex/                  backend functions; _generated/ is generated, never edit
 cloudflare/worker.ts     password gate in front of the static build
 desktop/                 Electrobun shell
 scripts/                 dev server, build, screenshot tool
+tools/unity/             editor script that exports Unity tiles, tilemaps and ScriptableObjects
 .env.schema              every environment variable: type, comment, secret or not (varlock)
-docs/                    unity-to-synergy.md, architecture.md, tilemaps.md, multiplayer.md,
-                         netcode.md, environment.md, deploying.md, desktop.md,
-                         porting-notes.md (roadmap from the Unity original)
+docs/                    unity-to-synergy.md, porting-from-unity.md, content.md, tilemaps.md,
+                         architecture.md, multiplayer.md, netcode.md, environment.md,
+                         deploying.md, desktop.md
 ```
 
 ## Unity knowledge transfers, with these differences
@@ -81,7 +86,7 @@ Read `docs/unity-to-synergy.md` for the full map. The ones that cause bugs:
    comparer. The table is in `docs/unity-to-synergy.md`, "C# to TypeScript".
 10. **No rigidbody physics, animation, audio or particles yet.** Colliders are for
    raycasts only. Reach PlayCanvas directly via `gameObject.entity` / `engine.app` when needed.
-   `docs/porting-notes.md` lists what is missing and in what order to build it.
+   "Not implemented yet" in `docs/unity-to-synergy.md` lists what is missing.
 
 ## How to do common things
 
@@ -113,6 +118,15 @@ and `cellSwizzle = CellSwizzle.XZY` for a ground map), child GameObjects with `T
 `TilemapRenderer` per layer, `tilemap.setTile({ x, y }, tile)`. Place things with
 `grid.getCellCenterWorld(cell)`; turn the mouse into a cell with `grid.raycast(ray)`.
 For movement ranges and routes use `findReachable` / `findPath` with `Hex.neighbors`.
+
+**Put numbers and maps in data, not code** (`docs/content.md`). Definitions (unit types,
+items; Unity's ScriptableObjects) go in a `Catalog` and are looked up by id:
+`unitTypes.get('scout').moveRange`. A wrong id throws and names the right ones. Tiles
+with their own data (climate, elevation) and painted maps load from JSON:
+`TilePalette.load(tiles)`, `createTilemaps(map, palette)`, then
+`tilemap.getTile<Tile<Terrain>>(cell)?.data`. Definitions are read-only; copy one to
+change it. Rules read the same files through `@synergy/engine/data`. Content from a Unity
+project is exported with `tools/unity`. `game/src/frontier/rules.ts` shows all of it.
 
 **Animate something.** Short one-off motion: `Tween.move(transform, target, 0.3)`.
 Multi-step sequences: a coroutine (which can `yield` a tween).
@@ -157,13 +171,20 @@ export class Soldier extends NetworkBehaviour {
 export const SoldierPrefab = new NetworkPrefab('Soldier', (go) => { go.addComponent(Soldier); });
 ```
 
+`game/src/frontier/` is a complete match built this way: copy its shape. To start a
+match for everyone, load its scene with `networkManager.sceneManager.loadScene(name)`,
+spawn into it when `onLoadComplete` fires for client 0, and enable play on
+`onLoadEventCompleted` (`session.ts`). Test it with simulated machines:
+`TestNetwork` from `@synergy/netcode/testing` (`game/test/frontier.test.ts`).
+
 ## Verifying your work
 
 1. `bun run check` must pass.
 2. Gameplay logic: add or extend a test. Pure rules go in `game/test/*.test.ts`;
    behaviours can be tested in a real scene with `Engine.createHeadless()`, `engine.step()`
    and `engine.input.pressKey(...)` / `moveMouse(...)` / `pressMouseButton(...)`
-   (copy the pattern in `game/test/scene.test.ts`).
+   (copy the pattern in `game/test/scene.test.ts`). Networked behaviour: a host and
+   clients as simulated machines (copy `game/test/frontier.test.ts`).
 3. Anything visual: `bun run screenshot`, then look at the PNG. It can drive the game:
    `bun run screenshot --click 640,360 --key Space --eval "synergy.Time.frameCount"`.
 4. To see what is in the scene without an image, print `Debug.hierarchy()` in a test, or
@@ -179,13 +200,16 @@ warning or nothing at all. Test or screenshot behaviour changes.
 - TypeScript strict mode. No `any`; no non-null `!` where a check is cheap.
 - Engine code in `packages/`, game code in `game/`. `packages/engine` may import only
   `playcanvas`; `packages/net` imports nothing from the engine; `packages/netcode` imports
-  only the engine and `packages/net`; `packages/engine/src/math` imports nothing at all.
+  only the engine and `packages/net`; `packages/engine/src/math` imports nothing at all,
+  and `src/grid` and `src/data` only `src/math`.
 - One exported behaviour per file, named like the class.
 - Comments explain why, or map a concept to Unity. Public engine APIs get a doc comment.
 - Game rules are pure and deterministic: no `Math.random()`, `Date.now()` or scene access
   inside `apply()`. Use `new Random(state.seed)` for randomness and
   `@synergy/engine/grid` for grid maths.
 - Tests sit next to what they test: `packages/*/test`, `game/test`, `cloudflare/*.test.ts`.
+- Content files get a test too: one that runs `checkTilePaletteData` / `checkTilemapData`
+  over every palette and map the game ships (`game/test/content.test.ts`).
 
 ## Boundaries
 
@@ -199,6 +223,8 @@ warning or nothing at all. Test or screenshot behaviour changes.
 - The PeerJS and Convex integrations (including `@synergy/netcode/lobby`) have no
   automated tests (they need live services). If you change them, say so and test by hand.
   The rest of netcode is tested with simulated machines (`packages/netcode/test`).
+- `tools/unity/Editor/SynergyExporter.cs` runs inside Unity and has not been compiled or
+  run here. If you change it, say so; the formats it writes are tested on the engine side.
 - Do not add dependencies to `packages/engine` beyond `playcanvas`. Keep the core small.
 
 ## Skills

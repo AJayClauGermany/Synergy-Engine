@@ -32,7 +32,9 @@ unit.transform.position = grid.getCellCenterWorld({ x: 4, y: 3 });
 ```
 
 `game/src/behaviours/BoardView.ts` is a complete example with terrain, spawned trees and
-a highlight layer.
+a highlight layer, built in code. To load a map and its tiles from files instead (the
+way a map painted in Unity arrives), see [content.md](content.md) and
+`game/src/frontier/FrontierBoard.ts`.
 
 ## Cells
 
@@ -91,12 +93,16 @@ new Tile({ color: Color.white.withAlpha(0.5) });        // see-through
 new Tile({ gameObject: TreePrefab });                   // spawns an object on the cell
 ```
 
-**Game data on tiles.** Subclass `Tile`:
+**Game data on tiles.** Put it in `data`:
 
 ```ts
-class TerrainTile extends Tile { moveCost = 1; blocksSight = false; }
-terrain.getTile<TerrainTile>(cell)?.moveCost
+interface Terrain { moveCost: number; blocksSight: boolean }
+const forest = new Tile<Terrain>({ name: 'forest', color: Color.fromHex('#3c6e47'), data: { moveCost: 2, blocksSight: true } });
+terrain.getTile<Tile<Terrain>>(cell)?.data.moveCost
 ```
+
+A `TilePalette` makes such tiles from a JSON file ([content.md](content.md)).
+Subclassing `Tile` works too, and is the way to give a tile behaviour.
 
 Keep the *rules* reading plain data rather than the Tilemap if they must run without the
 engine (on a server, in fast tests): the sample keeps the map layout in

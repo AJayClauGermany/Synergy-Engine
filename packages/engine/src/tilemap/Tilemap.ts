@@ -1,4 +1,5 @@
 import { Behaviour } from '../core/Component';
+import { nameType } from '../core/typeNames';
 import { isAlive } from '../core/EngineObject';
 import { GameObject } from '../core/GameObject';
 import { destroy, instantiate, type Prefab } from '../core/Object';
@@ -437,3 +438,6 @@ export class Tilemap extends Behaviour {
     this.touchAll();
   }
 }
+
+// The names to print, whatever a bundler renames these classes to (see nameType).
+nameType(Tilemap, 'Tilemap');

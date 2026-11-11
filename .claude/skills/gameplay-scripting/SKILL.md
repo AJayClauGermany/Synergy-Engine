@@ -17,6 +17,8 @@ in camelCase. Skim `docs/unity-to-synergy.md` if you have not this session.
   netcode it lives in `NetworkVariable`s on a `NetworkBehaviour` and only the host
   changes it (`netcode` skill).
 - Behaviours that only show state ("views") should not contain rules.
+- Numbers that describe content (a unit's health, a tile's movement cost) go in data, not
+  in a behaviour's fields: a `Catalog` or a tile's `data` (`docs/content.md`).
 
 ## Patterns
 

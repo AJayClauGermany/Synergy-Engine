@@ -6,7 +6,8 @@ description: Use when translating Unity C# scripts, Unity tutorials, or Unity-st
 # Porting from Unity
 
 The full mapping table is `docs/unity-to-synergy.md`. Read it first; this file is the
-procedure and the traps.
+procedure and the traps for porting scripts. `docs/porting-from-unity.md` is the plan for
+a whole project (what to export, what to port first).
 
 ## Procedure
 
@@ -17,8 +18,9 @@ procedure and the traps.
    inventing an API.
    Available and easy to miss: `SpriteRenderer`, `Canvas`/`CanvasScaler`/`RectTransform`/`Image`,
    `Grid`/`Tilemap`/`Tile` (including Unity's hex layout),
-   `Tween` for DOTween calls, seeded `Random`, grid pathfinding. `docs/porting-notes.md`
-   maps the original Unity project's packages one by one.
+   `Tween` for DOTween calls, seeded `Random`, grid pathfinding, `Catalog` for
+   ScriptableObject data, `TilePalette` and `createTilemaps` for Tile assets and painted
+   maps (`docs/content.md`; exported from Unity with `tools/unity`).
 2. **Port one script at a time, with its test.** Take the scripts that others depend on
    first (data and rules before managers, managers before views). If the Unity project
    has an EditMode test for the script, port it in the same change and make it pass
@@ -66,9 +68,13 @@ procedure and the traps.
    - Rotation signs: positive rotation about Y turns counter-clockwise seen from above
      (right-handed), the opposite of Unity. Prefer `lookAt` / `Quaternion.lookRotation`
      over hand-written angles.
-7. **Replace editor work with code.** Inspector references become assignments in the
-   scene builder; prefabs become `new Prefab(...)`; scenes become `SceneBuilder`s; tags
-   are plain strings; layers are named with `LayerMask.define`.
+7. **Replace editor work with code, and editor data with files.** Inspector references
+   become assignments in the scene builder; prefabs become `new Prefab(...)`; scenes
+   become `SceneBuilder`s; tags are plain strings; layers are named with
+   `LayerMask.define`. ScriptableObject assets, Tile assets and painted Tilemaps are
+   data: export them (`tools/unity`) and load them (`Catalog`, `TilePalette`,
+   `createTilemaps`) rather than retyping them as code. A reference to a ScriptableObject
+   becomes its id: `unitTypes.get(this.typeId)`.
 8. **Netcode scripts** (`NetworkBehaviour`, `NetworkVariable`, `[ServerRpc]`) keep their
    shape: see the `netcode` skill and the map in `docs/netcode.md`. Attributes become
    fields (`readonly moveRpc = this.serverRpc(...)`), and setup moves from `Awake` to

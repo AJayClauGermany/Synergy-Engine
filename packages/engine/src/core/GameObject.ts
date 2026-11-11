@@ -1,4 +1,5 @@
 import * as pc from 'playcanvas';
+import { nameType } from './typeNames';
 import {
   type Component,
   type ComponentClass,
@@ -312,3 +313,6 @@ export function walkScenes(visit: (node: pc.GraphNode) => boolean): void {
     if (!walk(scene._root)) return;
   }
 }
+
+// The names to print, whatever a bundler renames these classes to (see nameType).
+nameType(GameObject, 'GameObject');

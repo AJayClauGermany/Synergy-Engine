@@ -12,6 +12,12 @@ the match never goes through it.
 Use this for real-time play and many moving objects. For turn-based or asynchronous games
 that every machine can simulate identically, command sessions (`multiplayer` skill) fit.
 
+**Start from the sample.** `game/src/frontier/` is a complete, tested match built this
+way: `Match.ts` (the match's own state), `Soldier.ts` (a unit: variables, orders as RPCs,
+the host's checks), `session.ts` (starting a match, hosting, joining),
+`FrontierPlayer.ts` (local input), `game/test/frontier.test.ts` (tests). Copy its shape
+and replace its contents.
+
 ## Making something networked
 
 1. Make the prefab with `new NetworkPrefab('Name', (go) => { ... })` (it adds the
@@ -55,19 +61,47 @@ that every machine can simulate identically, command sessions (`multiplayer` ski
 - Moving things: add `NetworkTransform` (`authority = 'owner'` for client-driven).
 - Online: `hostGame` / `joinGame` from `@synergy/netcode/lobby`, with an optional Convex
   `lobby`. Without one, the PeerJS code is the join code.
+- Units a player commands do not have to be owned by that player. Keep them owned by the
+  server, store the team in a variable, and declare the order RPCs with
+  `{ requireOwnership: false }`; the handler checks that the caller's team matches.
+- Refer to another networked object by its `networkObjectId` in RPC arguments, and look
+  it up in `networkManager.spawnManager.spawnedObjects` on arrival: it may be gone.
+- No `static instance` on a NetworkBehaviour: tests run several machines in one process
+  and a static is shared by all of them. Keep a `WeakMap` keyed by the NetworkManager
+  (`Match.of(manager)` in the sample).
+- Set `networkConfig.protocolVersion` (the sample uses `buildId` from `game/src/env.ts`)
+  so two different builds refuse to connect instead of misreading each other.
+
+## Starting a match: scenes and readiness
+
+Everyone must be in the same scene, with its map loaded, before anyone acts.
+
+1. Register the match scene on every machine (`SceneManager.register`).
+2. Host: `manager.sceneManager.loadScene('Match')`. Clients load it before handling
+   anything else the host sends; late joiners are sent the scene first.
+3. Host, in `sceneManager.onLoadComplete` for client 0: spawn the match's objects, with
+   `spawn(true)` so they are removed when another scene loads.
+4. Host, in `sceneManager.onLoadEventCompleted`: every machine has reported in. Flip a
+   `phase` variable to `'playing'`; RPC handlers refuse orders until then.
+
+Spawn from the events rather than after `await loadScene(...)`: in a test with several
+machines, the code after an `await` can run with another machine's engine current.
 
 ## Testing
 
 Always test with simulated machines; the real transports need live services. Use
-`packages/netcode/test/harness.ts` (`TestNetwork`: `host()`, `client(id)`, `pump()`; each
-machine has its own `Engine` and `NetworkManager`). Create objects inside `machine.run(...)`
-or `machine.make(prefab)`, because each engine must be current while you use it. Write
+`TestNetwork` from `@synergy/netcode/testing` (`host()`, `client(id)`, `pump()`,
+`settle()`; each machine has its own `Engine` and `NetworkManager`): pass it a function
+that registers your prefabs on every machine. Create objects inside `machine.run(...)`
+or `machine.make(prefab)`, because each engine must be current while you use it.
+`game/test/frontier.test.ts` is the pattern for a game; `packages/netcode/test` for the
+package itself. Write
 the test for: the value or call reaching the right machines, the wrong machine being
 refused, and a late joiner seeing the current state. The loopback round-trips JSON, so
 non-serialisable values fail in tests.
 
 ## Known limits (say so, do not paper over them)
 
-The host is trusted and there is no authentication. No scene synchronization or
-scene-placed network objects, no reparenting, no prediction or reconciliation, no host
-migration or reconnect. The PeerJS and Convex helpers are untested against live services.
+The host is trusted and there is no authentication. No scene-placed network objects or
+additive networked scenes, no reparenting, no prediction or reconciliation, no host
+migration or reconnect. The network clock pauses through a stall instead of catching up. The PeerJS and Convex helpers are untested against live services.

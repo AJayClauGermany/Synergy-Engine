@@ -1,4 +1,5 @@
 import { Behaviour } from '../core/Component';
+import { nameType } from '../core/typeNames';
 import type { GameObject } from '../core/GameObject';
 import { currentEngine } from '../core/runtime';
 import type { Transform } from '../core/Transform';
@@ -227,3 +228,9 @@ function intersectRayCapsule(
   if (origin.sub(a.add(ba.mul(along))).sqrMagnitude <= radius * radius) return 0;
   return candidates.length ? Math.min(...candidates) : null;
 }
+
+// The names to print, whatever a bundler renames these classes to (see nameType).
+nameType(Collider, 'Collider');
+nameType(BoxCollider, 'BoxCollider');
+nameType(SphereCollider, 'SphereCollider');
+nameType(CapsuleCollider, 'CapsuleCollider');

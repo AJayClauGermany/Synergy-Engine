@@ -1,4 +1,5 @@
 import * as pc from 'playcanvas';
+import { nameType } from '../core/typeNames';
 import { Behaviour } from '../core/Component';
 import { adopters } from '../core/hooks';
 import { currentEngine } from '../core/runtime';
@@ -258,3 +259,6 @@ export class Camera extends Behaviour {
 adopters.push((gameObject, entity) => {
   if (entity.camera && !gameObject.getComponent(Camera)) gameObject.addComponent(Camera);
 });
+
+// The names to print, whatever a bundler renames these classes to (see nameType).
+nameType(Camera, 'Camera');

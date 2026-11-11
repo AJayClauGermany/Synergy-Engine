@@ -2,7 +2,8 @@
 
 Synergy keeps Unity's concepts and names. If you know `GameObject`, `MonoBehaviour`,
 `Transform` and `Time.deltaTime`, you already know most of this API. This page lists what
-maps one to one, and (more importantly) the places where it deliberately differs.
+maps one to one, and (more importantly) the places where it deliberately differs. For the
+order in which to bring a whole project across, see [porting-from-unity.md](porting-from-unity.md).
 
 Everything is imported from `@synergy/engine`.
 
@@ -118,7 +119,7 @@ compile here and then do something else, which makes them the costly ones in a p
 | `[RequireComponent(typeof(X))]` | `static readonly requireComponents = [X]` |
 | `[DisallowMultipleComponent]` | `static readonly disallowMultiple = true` |
 | Prefab asset | `new Prefab('Name', (go) => { ... })` |
-| ScriptableObject | A plain typed object in a `.ts` module (`export const footman: UnitDef = {...}`) |
+| ScriptableObject | A record in a `Catalog`, looked up by id: `unitTypes.get('footman')`. In a `.ts` module or exported from Unity as JSON. See [content.md](content.md) |
 
 ### MonoBehaviour messages
 
@@ -213,6 +214,9 @@ with canvas UI.
 | `Tilemap.SetTile`, `GetTile<T>`, `HasTile`, `SetTiles`, `FloodFill`, `SwapTile`, `ClearAllTiles`, `cellBounds`, `SetColor` | same in camelCase |
 | `Tilemap.BoxFill(position, tile, startX, startY, endX, endY)` | `tilemap.boxFill(tile, min, max)`: two corner cells, both inclusive |
 | `Tile`, `TileBase.GetTileData`, `Tile.gameObject` | `Tile`, `TileBase.getTileData`, `tile.gameObject` (a `Prefab` or GameObject) |
+| Fields on a custom `Tile` class (climate, elevation) | `tile.data`, typed: `Tile<Terrain>` |
+| Tile assets and a painted Tilemap, made in the editor | `TilePalette.load(tiles)` and `createTilemaps(map, palette)` from JSON files; `tools/unity` exports them. See [content.md](content.md) |
+| `TilemapRenderer` Chunk mode | always on: one mesh per 16 x 16 block of cells |
 | `TilemapRenderer` (`sortingOrder`) | same |
 | `Vector3Int`, `Vector2Int`, `BoundsInt` | same; any `{ x, y }` is accepted as a cell |
 | `Sprite` | `new Sprite(texture, rect)`, `Sprite.slice(texture, columns, rows)` |
@@ -268,8 +272,7 @@ applies them in the same order: [multiplayer.md](multiplayer.md).
 
 Rigidbodies and collision/trigger messages, animation (Animator), audio (AudioSource),
 particles, sorting layers, sliced/filled/clickable UI images, UI text, NavMesh (grid pathfinding exists), skyboxes, post-processing
-wrappers, gamepad and touch gestures. [porting-notes.md](porting-notes.md) lists these
-in priority order.
+wrappers, gamepad and touch gestures.
 
 PlayCanvas has all of these. Until they are wrapped you can reach them directly through
 the escape hatches: `gameObject.entity` (the `pc.Entity`), `engine.app` (the

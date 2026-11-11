@@ -1,4 +1,5 @@
 import * as pc from 'playcanvas';
+import { nameType } from '../core/typeNames';
 import { Behaviour } from '../core/Component';
 import { adopters } from '../core/hooks';
 import { Color } from '../math/Color';
@@ -98,3 +99,6 @@ export class Image extends Behaviour {
 adopters.push((gameObject, entity) => {
   if (entity.element?.type === pc.ELEMENTTYPE_IMAGE && !gameObject.getComponent(Image)) gameObject.addComponent(Image);
 });
+
+// The names to print, whatever a bundler renames these classes to (see nameType).
+nameType(Image, 'Image');

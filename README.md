@@ -28,16 +28,17 @@ has the full map and the handful of deliberate differences.
 | | |
 |---|---|
 | **Engine** (`packages/engine`) | Unity-style runtime. Its only dependency is PlayCanvas. |
-| **Tile maps** | Unity's `Grid`/`Tilemap`/`Tile` with square and hex cells, layers, mouse picking, hex maths and weighted pathfinding. |
+| **Tile maps** | Unity's `Grid`/`Tilemap`/`Tile` with square and hex cells, layers, mouse picking, hex maths and weighted pathfinding. Drawn in blocks, so maps of tens of thousands of tiles stay cheap to change. |
+| **Content from data** | Tile palettes, maps and definitions (Unity's Tile assets, painted Tilemaps and ScriptableObjects) load from JSON, with a Unity editor script to export them (`tools/unity`). |
 | **Tweens** | DOTween-style `Tween.move(...)`, eases, loops; usable from coroutines. |
 | **HUD** (`packages/ui`) | React over the canvas: `mountUI`, `useObservable`, `<WorldAnchor>` for health bars and labels. |
-| **Netcode** (`packages/netcode`) | Unity's Netcode for GameObjects: `NetworkManager`, `NetworkObject`, `NetworkVariable`, RPCs, ownership. One player hosts, the rest connect to them. |
+| **Netcode** (`packages/netcode`) | Unity's Netcode for GameObjects: `NetworkManager`, `NetworkObject`, `NetworkVariable`, RPCs, ownership, visibility, synchronized scene loading. One player hosts, the rest connect to them. |
 | **Multiplayer** (`packages/net`) | Transports (WebRTC via PeerJS, in-memory), plus ordered command sessions for turn-based and asynchronous games. |
 | **Backend** (`convex/`) | The lobby (rooms, join codes, open-games list) and a server-ordered command log. |
 | **Configuration** (`.env.schema`) | Every environment variable in one committed, secret-free file, managed by [varlock](https://varlock.dev). |
 | **Previews** (`cloudflare/`) | Deploy to Cloudflare Workers behind a password. |
 | **Desktop** (`desktop/`) | Package with Electrobun; runs offline. |
-| **Sample game** (`game/`) | A small turn-based hex skirmish that uses all of the above. |
+| **Sample games** (`game/`) | *Skirmish*: a turn-based hex game on command sessions. *Frontier* (`?scene=Frontier`): a real-time, host-authoritative match on netcode, with a map from data and fog of war. Start from the one that matches your game. |
 | **Agent support** | `AGENTS.md`, task skills, a headless test mode and a screenshot tool, so AI agents can build and verify changes on their own. |
 
 It is aimed at strategy games (turn-based and real-time), but the engine is generic.
@@ -69,8 +70,13 @@ type-checks everything and runs the tests, with no browser needed.
    `PEER_PREFIX` in `game/src/online.ts`, the `<title>` in `game/index.html`.
 2. Replace the sample: `game/src/rules/` (your rules), `game/src/behaviours/` (your
    scripts), `game/src/scenes/` (your scenes), `game/src/ui/` (your HUD).
-3. Keep the shape: input submits commands, rules apply them, views show the result.
-   [docs/architecture.md](docs/architecture.md) explains why.
+3. Keep the shape of the sample you started from. Skirmish: input submits commands,
+   rules apply them, views show the result. Frontier (`game/src/frontier/`): state in
+   `NetworkVariable`s, players ask through RPCs, the host decides.
+   [docs/architecture.md](docs/architecture.md) explains both.
+
+Coming from an existing Unity project? Start at
+[docs/porting-from-unity.md](docs/porting-from-unity.md).
 
 ## Commands
 
@@ -92,28 +98,29 @@ type-checks everything and runs the tests, with no browser needed.
 
 - [Unity to Synergy](docs/unity-to-synergy.md): the API map and the differences
 - [Architecture](docs/architecture.md): how it sits on PlayCanvas, the frame loop, headless mode
+- [Porting from Unity](docs/porting-from-unity.md): the order to bring an existing project across
 - [Tile maps](docs/tilemaps.md): grids, hex maps, layers, picking, pathfinding
-- [Netcode](docs/netcode.md): Netcode for GameObjects in TypeScript: spawning, variables, RPCs, lobby
+- [Content as data](docs/content.md): tile palettes, maps and definitions from JSON; exporting from Unity
+- [Netcode](docs/netcode.md): Netcode for GameObjects in TypeScript: spawning, variables, RPCs, scenes, lobby
 - [Multiplayer](docs/multiplayer.md): command sessions, PeerJS, Convex
 - [Environment](docs/environment.md): variables, secrets, setting up Convex
 - [Deploying](docs/deploying.md): password-protected Cloudflare previews
 - [Desktop](docs/desktop.md): Electrobun packaging
 - [Agent skills](docs/agent-skills.md): what agents get, and optional vendor skills
-- [Porting notes](docs/porting-notes.md): what the original Unity game used, and what is still to build
 
 ## Status
 
 This is an early foundation (v0.1). Working and tested: the engine core, tile maps and
-pathfinding, tweens, React HUD, command sessions, netcode (tested with simulated machines),
-the Cloudflare gate and the sample game. Type-checked but not tested
-against live services: PeerJS transport, Convex backend. The sample game uses command
-sessions; it has not been ported to netcode. Written from official templates
-but not yet build-verified: the Electrobun desktop shell.
+pathfinding, sprites, content loading, tweens, React HUD, command sessions, netcode
+(tested with simulated machines), the Cloudflare gate and both sample games.
+Type-checked but not tested against live services: PeerJS transport, Convex backend.
+Written from documentation but not yet run: the Unity exporter (`tools/unity`, which
+needs Unity) and the Electrobun desktop shell.
 
-Not built yet: sprite rendering, audio, rigidbody physics, animation and particles.
-PlayCanvas provides all of them and is reachable directly (`gameObject.entity`,
-`engine.app`) until they are wrapped. [Porting notes](docs/porting-notes.md) has the
-priority order.
+Not built yet: audio, rigidbody physics, animation and particles. PlayCanvas provides
+all of them and is reachable directly (`gameObject.entity`, `engine.app`) until they are
+wrapped. "Not implemented yet" in [docs/unity-to-synergy.md](docs/unity-to-synergy.md)
+has the list.
 
 ## License
 

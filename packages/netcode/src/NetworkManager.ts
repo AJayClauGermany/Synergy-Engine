@@ -1,4 +1,4 @@
-import { destroy, destroyImmediate, Debug, dontDestroyOnLoad, Engine, instantiate, MonoBehaviour, Quaternion, SceneManager, Time, Vector3 } from '@synergy/engine';
+import { Debug, destroy, destroyImmediate, dontDestroyOnLoad, Engine, instantiate, MonoBehaviour, nameType, Quaternion, SceneManager, Time, Vector3 } from '@synergy/engine';
 import { Signal, type Transport } from '@synergy/net';
 import { CustomMessagingManager } from './CustomMessaging';
 import type { NetworkBehaviour } from './NetworkBehaviour';
@@ -1276,3 +1276,6 @@ export class NetworkManager extends MonoBehaviour {
     return this.engine ? this.engine.run(action) : action();
   }
 }
+
+// The names to print, whatever a bundler renames these classes to (see nameType).
+nameType(NetworkManager, 'NetworkManager');

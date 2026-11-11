@@ -1,4 +1,4 @@
-import { Engine, MonoBehaviour } from '@synergy/engine';
+import { Engine, MonoBehaviour, nameType } from '@synergy/engine';
 import { Signal } from '@synergy/net';
 import { NetworkBehaviour } from './NetworkBehaviour';
 import { NetworkManager } from './NetworkManager';
@@ -248,3 +248,6 @@ export class NetworkObject extends MonoBehaviour {
     this.onOwnershipChanged = signal;
   }
 }
+
+// The names to print, whatever a bundler renames these classes to (see nameType).
+nameType(NetworkObject, 'NetworkObject');

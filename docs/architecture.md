@@ -12,10 +12,11 @@ PlayCanvas            rendering, scene graph, asset loading
 ```
 
 Packages are consumed as TypeScript source through Bun workspaces; there is no build step
-between them. Two parts of the engine import nothing outside themselves and are exposed
+between them. Three parts of the engine import nothing outside themselves and are exposed
 as their own entry points, so game rules and server code can use them without pulling
-in a renderer: `@synergy/engine/math` (vectors, colours, `Random`) and
-`@synergy/engine/grid` (cell layouts, hex maths, pathfinding).
+in a renderer: `@synergy/engine/math` (vectors, colours, `Random`),
+`@synergy/engine/grid` (cell layouts, hex maths, pathfinding) and
+`@synergy/engine/data` (`Catalog`, and the shapes of tile and map files).
 
 ## How the engine sits on PlayCanvas
 
@@ -93,3 +94,24 @@ input ──submit(command)──▶ session ──onCommand──▶ rules.appl
 
 Keeping that separation is what makes the game testable headlessly and playable online
 without special cases.
+
+## The netcode sample's shape
+
+`game/src/frontier/` is the other way to build a multiplayer game, for real-time play:
+
+```
+click ──soldier.moveRpc(x, y)──▶ host: check against rules.ts ──▶ NetworkVariables change
+                                                                        │
+              every machine that may see the unit ◀── replicated ───────┘
+              onValueChanged ──▶ views + HUD observables
+```
+
+- `rules.ts` is content (map, tiles, unit types from data) and pure functions over it.
+- State lives in `NetworkVariable`s on `Match` and `Soldier`. Only the host writes them,
+  in RPC handlers that check each order and can refuse it.
+- The host decides which clients receive which units (fog of war), with the same rule
+  the fog layer is drawn from.
+- `session.ts` starts a match: load the scene on every machine, spawn into it, begin
+  when all have reported in. Playing alone is hosting with no clients.
+- `FrontierPlayer` is this machine's selection and clicks; `FrontierBoard` draws the map
+  from the data files. Neither holds game state.

@@ -1,4 +1,5 @@
 import * as pc from 'playcanvas';
+import { nameType } from '../core/typeNames';
 import { Component } from '../core/Component';
 import { adopters } from '../core/hooks';
 import { Vector2 } from '../math/Vector2';
@@ -185,3 +186,6 @@ function offsets(anchoredPosition: Vector2, sizeDelta: Vector2, pivot: Vector2):
 adopters.push((gameObject, entity) => {
   if (entity.element && !gameObject.getComponent(RectTransform)) gameObject.addComponent(RectTransform);
 });
+
+// The names to print, whatever a bundler renames these classes to (see nameType).
+nameType(RectTransform, 'RectTransform');

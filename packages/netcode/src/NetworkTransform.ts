@@ -1,4 +1,4 @@
-import { Quaternion, Vector3 } from '@synergy/engine';
+import { nameType, Quaternion, Vector3 } from '@synergy/engine';
 import { NetworkBehaviour } from './NetworkBehaviour';
 import { NetworkVariable, NetworkVariableWritePermission } from './NetworkVariable';
 import type { Quat, Vec3 } from './protocol';
@@ -178,3 +178,6 @@ export class NetworkTransform extends NetworkBehaviour {
     if (this.syncScale && sample.s) this.transform.localScale = sample.s;
   }
 }
+
+// The names to print, whatever a bundler renames these classes to (see nameType).
+nameType(NetworkTransform, 'NetworkTransform');

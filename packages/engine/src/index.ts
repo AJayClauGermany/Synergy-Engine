@@ -5,6 +5,7 @@ export * from './math';
 
 export { Engine, type EngineOptions } from './core/Engine';
 export { EngineObject, isAlive } from './core/EngineObject';
+export { nameType } from './core/typeNames';
 export { GameObject, gameObjectOf } from './core/GameObject';
 export { Component, Behaviour, type ComponentClass, type ConcreteComponentClass } from './core/Component';
 export { MonoBehaviour } from './core/MonoBehaviour';
