@@ -106,7 +106,7 @@ but not yet build-verified: the Electrobun desktop shell.
 Not built yet: sprite rendering, audio, rigidbody physics, animation and particles.
 PlayCanvas provides all of them and is reachable directly (`gameObject.entity`,
 `engine.app`) until they are wrapped. [Porting notes](docs/porting-notes.md) has the
-priority order.
+priority order. Contributions are welcome; run `bun run check` before opening a pull request.
 
 ## License
 
