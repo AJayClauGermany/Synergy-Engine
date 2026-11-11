@@ -1,0 +1,20 @@
+{
+  "name": "@synergy/net",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Multiplayer for Synergy Engine: ordered command sessions over pluggable transports (loopback, PeerJS/WebRTC) plus a Convex lobby.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./peerjs": "./src/PeerJsTransport.ts",
+    "./convex": "./src/ConvexLobby.ts"
+  },
+  "peerDependencies": {
+    "convex": "^1.49.0",
+    "peerjs": "^1.5.5"
+  },
+  "peerDependenciesMeta": {
+    "convex": { "optional": true },
+    "peerjs": { "optional": true }
+  }
+}

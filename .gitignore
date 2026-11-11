@@ -1,0 +1,18 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+.dev.vars*
+.wrangler/
+*.tsbuildinfo
+.DS_Store
+
+# Electrobun / Hutch generated state
+.hutch/
+desktop/dist/
+desktop/build/
+desktop/artifacts/
+
+# Agent screenshots
+.screenshots/

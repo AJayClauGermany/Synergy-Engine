@@ -1,0 +1,20 @@
+{
+  "name": "game",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Your game. Everything in here is yours to change.",
+  "dependencies": {
+    "@synergy/engine": "workspace:*",
+    "@synergy/net": "workspace:*",
+    "@synergy/ui": "workspace:*",
+    "convex": "^1.49.0",
+    "peerjs": "^1.5.5",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0"
+  }
+}

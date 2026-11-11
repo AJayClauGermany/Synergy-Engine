@@ -1,0 +1,17 @@
+{
+  "name": "@synergy/ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "React HUD layer for Synergy Engine (the equivalent of a Screen Space - Overlay Canvas).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@synergy/engine": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  }
+}

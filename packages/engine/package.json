@@ -1,0 +1,14 @@
+{
+  "name": "@synergy/engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Unity-style runtime (GameObject, MonoBehaviour, Transform, ...) on top of PlayCanvas.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./math": "./src/math/index.ts"
+  },
+  "dependencies": {
+    "playcanvas": "^2.24.0"
+  }
+}
