@@ -1,6 +1,7 @@
 /**
  * Build-time configuration. Bun replaces `process.env.PUBLIC_*` with the value from the
- * environment (or a `.env` file) when the variable is set. When it is not set the
+ * environment when the variable is set; the scripts load it from `.env.schema` and
+ * `.env.local` through varlock (docs/environment.md). When it is not set the
  * expression is left as-is, and `process` does not exist in a browser, hence the guard.
  *
  * Only `PUBLIC_` variables reach the browser. Anything else stays on your machine.

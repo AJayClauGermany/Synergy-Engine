@@ -1,0 +1,27 @@
+{
+  "name": "@synergy/netcode",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Netcode for GameObjects for Synergy Engine: NetworkManager, NetworkObject, NetworkBehaviour, NetworkVariable and RPCs, with one player hosting and the rest connecting to them.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./lobby": "./src/lobby.ts"
+  },
+  "dependencies": {
+    "@synergy/engine": "workspace:*",
+    "@synergy/net": "workspace:*"
+  },
+  "peerDependencies": {
+    "convex": "^1.49.0",
+    "peerjs": "^1.5.5"
+  },
+  "peerDependenciesMeta": {
+    "convex": { "optional": true },
+    "peerjs": { "optional": true }
+  },
+  "devDependencies": {
+    "convex": "^1.49.0",
+    "peerjs": "^1.5.5"
+  }
+}

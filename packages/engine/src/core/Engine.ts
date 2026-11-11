@@ -115,6 +115,7 @@ export class Engine {
   inFrame = false;
   private running = false;
   private disposed = false;
+  private disposeComplete = false;
   private pendingRawDelta: number | null = null;
   private stepping = false;
   private readonly throwOnError: boolean;
@@ -213,20 +214,44 @@ export class Engine {
     if (this.running) {
       throw new Error('engine.step() cannot be used while the automatic loop is running. Call engine.stop() first.');
     }
-    this.pendingRawDelta = deltaTime;
-    this.stepping = true;
-    try {
-      this.app.update(deltaTime * this.time.timeScale);
-    } finally {
-      this.stepping = false;
-      if (this.inFrame) {
-        // A script threw part-way through the frame. Leave the engine in a usable state.
-        this.inFrame = false;
-        this.time.inFixedTimeStep = false;
-        this.input.endFrame();
+    // Scripts reach `Time`, `instantiate` and friends through the "current" engine, so
+    // make this one current while it runs (matters when several engines share a process).
+    this.run(() => {
+      this.pendingRawDelta = deltaTime;
+      this.stepping = true;
+      try {
+        this.app.update(deltaTime * this.time.timeScale);
+      } finally {
+        this.stepping = false;
+        if (this.inFrame) {
+          // A script threw part-way through the frame. Leave the engine in a usable state.
+          this.inFrame = false;
+          this.time.inFixedTimeStep = false;
+          this.input.endFrame();
+        }
       }
+      if (!this.isHeadless) this.app.render();
+    });
+  }
+
+  /**
+   * Runs `action` with this engine as the one the static APIs (`Time`, `Input`,
+   * `instantiate`, `new GameObject()`, ...) talk to, then restores the previous one.
+   *
+   * A game has one engine and never needs this. It exists for tests that simulate several
+   * machines (a host and a client) in one process, each with its own engine:
+   *
+   *   client.run(() => instantiate(Unit).getComponent(Health));
+   */
+  run<T>(action: () => T): T {
+    const previous = currentEngineOrNull();
+    setCurrentEngine(this);
+    try {
+      return action();
+    } finally {
+      // Leave things as they were, unless that engine finished disposing in the meantime.
+      setCurrentEngine(previous?.disposeComplete ? null : previous);
     }
-    if (!this.isHeadless) this.app.render();
   }
 
   /** Runs `frames` frames of `deltaTime` seconds each. */
@@ -246,13 +271,17 @@ export class Engine {
     if (this.disposed) return;
     this.disposed = true;
     this.running = false;
-    for (const scene of [...this.scenes.loaded, this.scenes.persistent]) {
-      for (const root of scene.getRootGameObjects()) this.lifecycle.destroyNow(root);
-    }
-    this.tweens.clear();
-    this.input.detachListeners();
-    this.resizeObserver?.disconnect();
-    this.app.destroy();
+    // Scripts' onDestroy runs here and may use the static APIs, so this engine must be current.
+    this.run(() => {
+      for (const scene of [...this.scenes.loaded, this.scenes.persistent]) {
+        for (const root of scene.getRootGameObjects()) this.lifecycle.destroyNow(root);
+      }
+      this.tweens.clear();
+      this.input.detachListeners();
+      this.resizeObserver?.disconnect();
+      this.app.destroy();
+    });
+    this.disposeComplete = true;
     if (currentEngineOrNull() === this) setCurrentEngine(null);
   }
 

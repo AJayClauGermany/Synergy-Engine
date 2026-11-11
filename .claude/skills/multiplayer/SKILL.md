@@ -5,6 +5,10 @@ description: Use when adding or changing player actions (commands), game rules t
 
 # Multiplayer
 
+This skill covers **command sessions**: every machine applies the same ordered commands.
+For real-time play with replicated objects, variables and RPCs (Unity's Netcode for
+GameObjects), use the `netcode` skill and `docs/netcode.md` instead.
+
 Read `docs/multiplayer.md` for the model. The short version: players exchange
 **commands**; every machine applies the same commands in the same order with a
 deterministic `apply`.

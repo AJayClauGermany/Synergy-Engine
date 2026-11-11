@@ -23,7 +23,7 @@ same engine, so there is no second renderer to integrate.
 | **Unity Test Framework** | EditMode tests | `bun test`, including whole scenes headlessly | **Covered** |
 | **Input System** | Mouse, actions, UI input | `Input` (keys, mouse, axes, named buttons via `defineAxis` / `defineButton`) | Partly: no gamepad, touch gestures or rebinding UI |
 | **Cinemachine** | Tactical camera: move, focus, confine | Sample `CameraRig` (pan, rotate, zoom, bounds). Focus moves with `Tween.move` | Partly: lives in the sample, not the engine |
-| **Netcode for GameObjects + Transport** | Authoritative actions, RPCs, replicated state | Ordered command sessions (`@synergy/net`), `startTicker` for shared world ticks | Different model, see below |
+| **Netcode for GameObjects + Transport** | Authoritative actions, RPCs, replicated state | `@synergy/netcode`: `NetworkManager`, `NetworkObject`, `NetworkVariable`, RPCs, host-authoritative. [netcode.md](netcode.md). Also command sessions (`@synergy/net`) with `startTicker` | **Built** (host-authoritative; no scene sync yet) |
 | **Unity Authentication / Multiplayer Services** | Identity for the campaign backend, sessions | Not built. Needs an auth provider on the Convex side | **To do**, see below |
 | **URP, custom shaders, post-processing** | Globe rendering and effects | PlayCanvas materials through `material.pcMaterial`; nothing Unity-specific carries over | **To rebuild** |
 | **All In 1 Sprite Shader** | Outlines, construction fade | Fade: `material.color` alpha or a `Tween`. Outline: not wrapped | **To do** |
@@ -85,8 +85,11 @@ in the game state so every player rolls the same numbers.
   provider), and every function should take the player from `ctx.auth`. This is a
   backend change, not just a client swap, and it is the main blocker for going beyond
   prototypes. The lobby in this template is likewise unauthenticated.
-- **Authoritative tactical play.** In Unity the server validated actions (Netcode). Here
-  there are three levels, in increasing strength:
+- **Authoritative tactical play.** In Unity the server validated actions (Netcode). The
+  closest match is now `@synergy/netcode`: clients send `serverRpc`s, the host validates
+  them with the pure rules and changes `NetworkVariable`s, and everyone sees the result
+  ([netcode.md](netcode.md)). The host is trusted, which is fine for prototyping. With
+  command sessions there are three levels, in increasing strength:
   1. peer-to-peer with the host validating (`CommandSession.host({ validate })`);
   2. Convex ordering commands while every client runs `check`;
   3. Convex *validating* commands, by importing the pure rules module into the `submit`

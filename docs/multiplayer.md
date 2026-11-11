@@ -1,5 +1,17 @@
 # Multiplayer
 
+There are two ways to build online play here, and they can live in one game:
+
+| | Command sessions (this page) | [Netcode for GameObjects](netcode.md) |
+|---|---|---|
+| Idea | every player applies the same ordered commands | the host owns the world; objects, variables and RPCs |
+| Fits | turn-based, asynchronous, lockstep, replays and saves | real-time play, many moving objects, hidden information |
+| Each machine | runs the whole simulation | receives the host's state |
+| Persistence | Convex can store the command log | the match lives on the host; Convex keeps the lobby |
+| Package | `@synergy/net` | `@synergy/netcode` (uses `@synergy/net`'s transports) |
+
+The rest of this page is about command sessions.
+
 `@synergy/net` is built on one idea: **every player applies the same commands in the same
 order.** Game code does not change state directly. It submits a command, and changes
 state only when a command comes back.
@@ -107,8 +119,9 @@ bun run backend
 ```
 
 That runs `convex dev`: it asks you to log in, creates a deployment, pushes the functions
-in `convex/` and keeps them in sync while it runs. Put the deployment URL it prints in
-`.env` as `PUBLIC_CONVEX_URL=...` and restart `bun run dev`.
+in `convex/` and keeps them in sync while it runs. It also writes the deployment's address
+to `.env.local`, and the game picks it up on the next `bun run dev` with nothing to copy
+(see [environment.md](environment.md)).
 
 What is in `convex/`:
 
@@ -118,7 +131,8 @@ What is in `convex/`:
 - `crons.ts`: closes rooms whose players stopped sending heartbeats
 
 You can combine the two: use Convex as the lobby (store the PeerJS code in the room's
-`peerCode`) and run the match itself peer-to-peer.
+`peerCode`) and run the match itself peer-to-peer. [netcode.md](netcode.md) does exactly
+that, with a host that plays and objects the host replicates.
 
 ## Before you launch publicly
 
@@ -132,8 +146,9 @@ You can combine the two: use Convex as the lobby (store the PeerJS code in the r
 
 ## Not included
 
-- A dedicated real-time game server. If you need one, implement `Session<C>` over it
-  (Colyseus or anything else); game code only depends on that interface.
+- A dedicated real-time game server for command sessions. If you need one, implement
+  `Session<C>` over it (Colyseus or anything else); game code only depends on that
+  interface. (Netcode can run a headless server with `startServer`.)
 - Server-driven ticks, host migration, reconnection for peer-to-peer sessions.
 
 ## Testing

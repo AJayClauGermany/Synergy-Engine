@@ -10,19 +10,20 @@
     "game"
   ],
   "scripts": {
-    "dev": "bun run scripts/dev.ts",
-    "build": "bun run scripts/build.ts",
-    "start": "bun run scripts/serve.ts",
+    "dev": "varlock run -- bun run scripts/dev.ts",
+    "build": "varlock run -- bun run scripts/build.ts",
+    "start": "varlock run -- bun run scripts/serve.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p convex/tsconfig.json && tsc --noEmit -p cloudflare/tsconfig.json",
     "check": "bun run typecheck && bun test",
-    "screenshot": "bun run scripts/screenshot.ts",
+    "screenshot": "varlock run -- bun run scripts/screenshot.ts",
     "backend": "convex dev",
-    "preview:local": "bun run build && wrangler dev",
-    "preview:deploy": "bun run build && wrangler preview",
-    "deploy": "bun run build && wrangler deploy",
-    "desktop:dev": "bun run scripts/build.ts --outdir desktop/dist && cd desktop && bun ../node_modules/electrobun/bin/electrobun.cjs dev",
-    "desktop:build": "bun run scripts/build.ts --outdir desktop/dist && cd desktop && bun ../node_modules/electrobun/bin/electrobun.cjs build --env=stable"
+    "preview:local": "bun run build && varlock run -- wrangler dev",
+    "preview:deploy": "bun run build && varlock run -- wrangler preview",
+    "deploy": "bun run build && varlock run -- wrangler deploy",
+    "desktop:dev": "varlock run -- bun run scripts/build.ts --outdir desktop/dist && cd desktop && bun ../node_modules/electrobun/bin/electrobun.cjs dev",
+    "desktop:build": "varlock run -- bun run scripts/build.ts --outdir desktop/dist && cd desktop && bun ../node_modules/electrobun/bin/electrobun.cjs build --env=stable",
+    "env": "varlock load"
   },
   "dependencies": {
     "convex": "^1.49.0"
@@ -32,6 +33,7 @@
     "@types/bun": "^1.4.4",
     "electrobun": "2.0.6",
     "typescript": "^7.0.2",
+    "varlock": "^1.24.0",
     "wrangler": "^4.160.0"
   }
 }
