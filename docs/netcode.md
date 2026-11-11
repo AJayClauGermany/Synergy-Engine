@@ -105,7 +105,7 @@ This exact example runs as a test: `packages/netcode/test/example.test.ts`.
 | `OnClientConnectedCallback += ...` | `onClientConnectedCallback.add(...)`; likewise `onClientDisconnectCallback`, `onServerStarted`, ... |
 | `NetworkConfig.PlayerPrefab`, `NetworkPrefabsList` | `networkConfig.playerPrefab`, `networkPrefabs.add(prefab)` |
 | Prefab with a `NetworkObject` | `new NetworkPrefab(name, build)` (adds the `NetworkObject` for you) |
-| `Spawn()`, `SpawnWithOwnership(id)`, `SpawnAsPlayerObject(id)`, `Despawn(destroy)` | same, camelCase |
+| `Spawn(destroyWithScene)`, `SpawnWithOwnership(id)`, `SpawnAsPlayerObject(id)`, `Despawn(destroy)` | same, camelCase |
 | `ChangeOwnership(id)`, `RemoveOwnership()`, `IsOwner`, `IsLocalPlayer`, `OwnerClientId` | same, camelCase |
 | `NetworkBehaviour`, `OnNetworkSpawn()`, `OnNetworkDespawn()`, `OnGainedOwnership()` | same, camelCase |
 | `NetworkVariable<T>` (`Value`, `OnValueChanged`, read/write permissions) | `NetworkVariable<T>` (`value`, `onValueChanged.add`, `read` / `write` options) |
@@ -119,6 +119,8 @@ This exact example runs as a test: `packages/netcode/test/example.test.ts`.
 | `NetworkTransform`, `ClientNetworkTransform` | `NetworkTransform`; `authority = 'owner'` for the client-driven one |
 | `NetworkShow` / `NetworkHide` / `CheckObjectVisibility` | same, camelCase |
 | `NetworkTickSystem` (`TickRate`, `LocalTime`, `ServerTime`) | `networkConfig.tickRate`, `localTime`, `serverTime`, `onTick` |
+| `NetworkSceneManager` (`LoadScene`, `OnLoadComplete`, `OnLoadEventCompleted`, `OnSynchronizeComplete`) | `sceneManager.loadScene(name)`, `onLoadComplete`, `onLoadEventCompleted`, `onSynchronizeComplete` (Single mode only) |
+| `NetworkConfig.ProtocolVersion`, `LoadSceneTimeOut` | `networkConfig.protocolVersion` (a string), `loadSceneTimeOut` |
 | `CustomMessagingManager` named messages | same, camelCase |
 | Unity Transport | a `Transport` from `@synergy/net`: `PeerJsTransport` online, `LoopbackHub` in tests |
 | Unity Relay + Lobby | PeerJS signalling + the Convex lobby |
@@ -144,7 +146,26 @@ Make the object with `instantiate(prefab)`, then call `spawn()` on the host. Cli
 their own copy from the same prefab, at the same transform, with the same owner and
 variable values. A `NetworkPrefab` must be registered on every machine with
 `networkManager.networkPrefabs.add(...)`; its name is its identity on the wire, and a
-client whose list differs from the host's is refused with a clear message.
+client whose list of names differs from the host's is refused with a clear message.
+
+**Keep every machine on the same build.** Three checks stand behind that, from broad to
+narrow:
+
+- `networkConfig.protocolVersion`: a client whose value differs from the host's is
+  refused, and told both values. Set it to something that changes with every build. The
+  sample game uses `buildId` (`game/src/env.ts`), a hash of the source that
+  `bun run build` works out, so two different builds never join each other. This is the
+  only check that covers everything.
+- The prefab names, as above.
+- When an object spawns, the host sends the names of the variables and RPCs on each of
+  its behaviours. A client whose copy differs disconnects, with what differs in
+  `disconnectReason`: carrying on would mean playing a different game from everyone
+  else. This catches a renamed, added or removed variable even when `protocolVersion`
+  was left unset. It cannot tell apart two behaviours whose members have the same names,
+  which is why the version matters.
+
+(Class names are not used for any of this: a release build shortens them, so they mean
+nothing across builds. Field names are kept as written.)
 
 Only the host spawns, despawns and destroys. Destroying the host's copy of a spawned
 object despawns it everywhere. If a client needs something spawned, it asks with a
@@ -253,8 +274,59 @@ blend. Set these fields in the prefab's build function, so every machine agrees.
 
 The network runs at `networkConfig.tickRate` (default 30) updates a second, on real time:
 pausing with `Time.timeScale = 0` does not stop it. The host's rate wins. `manager.onTick`
-fires once per tick just before changes are sent, `localTime` is this machine's tick and
-`serverTime` the host's (exact on the host, an estimate within a tick or two on clients).
+fires for every tick, in order, just before changes are sent (several times in a frame
+that spans several ticks), `localTime` is this machine's tick and `serverTime` the host's
+(exact on the host, an estimate within a tick or two on clients).
+
+One limit to know before timing gameplay with it: the clock adds up
+`Time.unscaledDeltaTime`, which a browser frame caps at `Time.maximumDeltaTime` (0.1 s),
+so across a stall (a hidden tab, a long load) it falls behind real time: the game pauses
+rather than skipping ahead. For a deadline that must hold through a stall, store a time
+from `Date.now()` on the host.
+
+### Scenes: starting a match together
+
+`manager.sceneManager` loads a scene on the host and on every client, and reports when
+they have all finished. That report is the moment to enable play: every machine has the
+scene, its assets and its objects.
+
+```ts
+// On the host. The scene is registered with SceneManager.register on every machine.
+const scenes = manager.sceneManager;
+scenes.onLoadComplete.add((clientId, scene) => {
+  if (clientId === 0 && scene === 'Match') spawnUnits();    // the host's own copy is loaded;
+});                                                          // spawn(true): these belong to the match
+scenes.onLoadEventCompleted.add((scene, loaded, timedOut) => {
+  if (scene === 'Match') match.phase.value = 'playing';     // everyone is in: play may begin
+});
+void scenes.loadScene('Match');
+```
+
+`loadScene` also returns a promise that resolves when the host's copy is loaded, so
+`await scenes.loadScene('Match'); spawnUnits();` reads more simply and is fine in the
+game. Prefer the events in code you test with simulated machines: after an `await`,
+another machine's engine may be the current one (wrap what follows in `machine.run`).
+`game/src/frontier/session.ts` is a complete example.
+
+- The host tells every client which scene to load, then loads it. A client loads the
+  scene **before it handles anything else the host sends**, so objects the host spawns
+  into the new scene always arrive after the scene exists.
+- A client that joins later is told the current scene with its admission, loads it, and
+  only then receives the objects. `onSynchronizeComplete(clientId)` fires on the host
+  when it has caught up.
+- `onLoadComplete(clientId, scene)` fires per machine; `onLoadEventCompleted(scene,
+  loaded, timedOut)` fires everywhere once every client has finished, left, or taken
+  longer than `networkConfig.loadSceneTimeOut` (120 s).
+- Spawned objects **outlive** the change (they move to DontDestroyOnLoad on every
+  machine, as in Unity) unless they were spawned with `spawn(true)`; those are despawned
+  with the old scene. So player objects carry over, and a match's units, spawned with
+  `spawn(true)`, are gone when the host loads the lobby scene again. The NetworkManager
+  is kept too.
+- One load at a time: `loadScene` throws while the previous one is still being answered
+  (`sceneManager.clientsLoading` is not empty), as Unity's does. Wait for
+  `onLoadEventCompleted`.
+- A plain `SceneManager.loadScene` is not synchronized: it changes the scene on that
+  machine only.
 
 ### Custom messages
 
@@ -319,7 +391,7 @@ The host is the authority. For each message the host checks that:
 - a `serverRpc` is called by the owner when it requires it, and a `clientRpc` is called
   by nobody but the host. The audience of an RPC comes from the host's own declaration,
   never from the message;
-- the client's prefab list matches the host's when it connects, so every spawn it is sent is one it can build.
+- the client's `protocolVersion` and prefab list match the host's when it connects, so every spawn it is sent is one it can build.
 
 It does not check **what a client asks for**. That is the game's job, in the handler.
 There is no authentication: client ids are handed out per connection and a player who
@@ -341,15 +413,32 @@ guest.run(() => guest.manager.startClient(guest.transport, 'host'));
 for (let i = 0; i < 6; i++) { hub.flush(); host.engine.step(1 / 30); guest.engine.step(1 / 30); }
 ```
 
-`packages/netcode/test/harness.ts` has a ready-made `TestNetwork` (`host()`, `client(id)`,
-`pump()`), and the tests next to it show how to check spawning, variables, RPCs, ownership,
-visibility and transforms. `engine.run(() => ...)` makes an engine the current one while you
+That set-up is packaged as `TestNetwork` in `@synergy/netcode/testing`, for your game's
+tests as well as the engine's:
+
+```ts
+import { TestNetwork } from '@synergy/netcode/testing';
+
+const net = new TestNetwork((manager) => manager.networkPrefabs.add(UnitPrefab));   // on every machine
+const host = net.host();
+const guest = net.client('guest');
+net.pump();                                  // frames on every machine, messages delivered between
+const unit = host.make(UnitPrefab);
+host.run(() => unit.spawn());
+net.pump();
+expect(guest.has(unit.networkObjectId)).toBe(true);
+await net.settle();                          // like pump, for anything asynchronous (scene loads)
+```
+
+The tests in `packages/netcode/test` show how to check spawning, variables, RPCs, ownership,
+visibility, transforms and scene loads; `game/test/frontier.test.ts` tests a whole match. `engine.run(() => ...)` makes an engine the current one while you
 create objects in it. The loopback copies messages through JSON, so a value that would not
 survive the real network fails in the test.
 
 ## Not built yet
 
-Scene-placed network objects and synchronized scene loading (`NetworkSceneManager`),
+A network clock that keeps real time through a stall (see [Ticks](#ticks)),
+scene-placed network objects and additive networked scene loads,
 reparenting network objects, prefab pooling handlers, `NetworkAnimator` and
 `NetworkRigidbody` (the engine has no animation or rigidbodies yet), client-side prediction
 and reconciliation, host migration, reconnecting to a running match, and distributed

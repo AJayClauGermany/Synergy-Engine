@@ -1,4 +1,5 @@
 import * as pc from 'playcanvas';
+import { nameType } from '../core/typeNames';
 import { Behaviour } from '../core/Component';
 import { isAlive } from '../core/EngineObject';
 import { adopters } from '../core/hooks';
@@ -213,3 +214,7 @@ export class CanvasScaler extends Behaviour {
 adopters.push((gameObject, entity) => {
   if (entity.screen && !gameObject.getComponent(Canvas)) gameObject.addComponent(Canvas);
 });
+
+// The names to print, whatever a bundler renames these classes to (see nameType).
+nameType(Canvas, 'Canvas');
+nameType(CanvasScaler, 'CanvasScaler');

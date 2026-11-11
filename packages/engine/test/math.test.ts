@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import * as pc from 'playcanvas';
-import { Bounds, Color, Mathf, Plane, Quaternion, Ray, Vector2, Vector3 } from '../src/math';
+import { Bounds, Color, Mathf, Plane, Quaternion, Ray, Vector2, Vector3, Vector3Int } from '../src/math';
 
 const close = (a: number, b: number, eps = 1e-5) => expect(Math.abs(a - b)).toBeLessThan(eps);
 
@@ -114,6 +114,14 @@ describe('Quaternion matches PlayCanvas conventions', () => {
 });
 
 describe('Mathf', () => {
+  test("rounding sends halfway values to the even number, as Unity's Mathf.Round does", () => {
+    const halves = [0.5, 1.5, 2.5, 3.5, -0.5, -1.5, -2.5];
+    expect(halves.map(Mathf.roundToInt)).toEqual([0, 2, 2, 4, 0, -2, -2]);
+    expect(halves.map(Mathf.round)).toEqual([0, 2, 2, 4, 0, -2, -2]);
+    expect([2.4, 2.6, -2.4, -2.6, 7].map(Mathf.roundToInt)).toEqual([2, 3, -2, -3, 7]);
+    expect(Vector3Int.roundToInt(new Vector3(0.5, 1.5, -2.5)).equals(new Vector3Int(0, 2, -2))).toBe(true);
+  });
+
   test('helpers', () => {
     expect(Mathf.clamp(5, 0, 3)).toBe(3);
     expect(Mathf.lerp(0, 10, 2)).toBe(10);

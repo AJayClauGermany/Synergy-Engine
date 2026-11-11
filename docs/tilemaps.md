@@ -32,7 +32,9 @@ unit.transform.position = grid.getCellCenterWorld({ x: 4, y: 3 });
 ```
 
 `game/src/behaviours/BoardView.ts` is a complete example with terrain, spawned trees and
-a highlight layer.
+a highlight layer, built in code. To load a map and its tiles from files instead (the
+way a map painted in Unity arrives), see [content.md](content.md) and
+`game/src/frontier/FrontierBoard.ts`.
 
 ## Cells
 
@@ -91,12 +93,16 @@ new Tile({ color: Color.white.withAlpha(0.5) });        // see-through
 new Tile({ gameObject: TreePrefab });                   // spawns an object on the cell
 ```
 
-**Game data on tiles.** Subclass `Tile`:
+**Game data on tiles.** Put it in `data`:
 
 ```ts
-class TerrainTile extends Tile { moveCost = 1; blocksSight = false; }
-terrain.getTile<TerrainTile>(cell)?.moveCost
+interface Terrain { moveCost: number; blocksSight: boolean }
+const forest = new Tile<Terrain>({ name: 'forest', color: Color.fromHex('#3c6e47'), data: { moveCost: 2, blocksSight: true } });
+terrain.getTile<Tile<Terrain>>(cell)?.data.moveCost
 ```
+
+A `TilePalette` makes such tiles from a JSON file ([content.md](content.md)).
+Subclassing `Tile` works too, and is the way to give a tile behaviour.
 
 Keep the *rules* reading plain data rather than the Tilemap if they must run without the
 engine (on a server, in fast tests): the sample keeps the map layout in
@@ -138,8 +144,13 @@ units off the grid's surface.
 `hasTile`, `containsTile`, `getUsedTilesCount`, `getUsedCells`, `cellBounds`,
 `getInstantiatedObject`.
 
-Changes are cheap to make in bulk: the mesh is rebuilt once, at the end of the frame.
-A whole layer is one draw call per texture.
+Changes are cheap. A layer is drawn in blocks of 16 x 16 cells (one mesh per block and
+texture), and at the end of the frame only the blocks whose cells changed are rebuilt.
+On a 128 x 128 map with three layers (49,152 tiles), changing one cell costs about 0.2 ms
+and lifting the fog around a moving unit about 0.5 ms; rebuilding a whole layer, which a
+change to `tilemap.color`, the grid or the renderer's settings does, costs about 12 ms.
+Blocks outside the camera's view are not drawn. `renderer.pcMeshInstances` is the
+PlayCanvas side of it.
 
 ## Hex and square maths
 
@@ -186,5 +197,6 @@ inside multiplayer rules.
 - There is no `TilemapCollider2D`. Use `grid.raycast` for picking; add ordinary
   colliders to spawned objects if you need them.
 - `tileAnchor` and per-tile transform matrices are not implemented: tiles fill their cell.
-- Not built yet: isometric layouts, animated tiles, a packaged `RuleTile`, chunked
-  culling for very large maps (one layer is currently one mesh), elevation.
+- `TilemapRenderer` always works the way Unity's "Chunk" mode does. There is no
+  "Individual" mode with a sprite per tile.
+- Not built yet: isometric layouts, animated tiles, a packaged `RuleTile`, elevation.

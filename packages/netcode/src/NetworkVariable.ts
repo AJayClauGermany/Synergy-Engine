@@ -131,6 +131,13 @@ function sameValue(a: unknown, b: unknown, serializer: Serializer<never>): boole
   return JSON.stringify(serializer.write(a as never)) === JSON.stringify(serializer.write(b as never));
 }
 
+/** A value as text, for `toString()`. */
+function printable(value: unknown): string {
+  if (value === null || typeof value !== 'object') return String(value);
+  if (Array.isArray(value) || Object.getPrototypeOf(value) === Object.prototype) return JSON.stringify(value);
+  return String(value);
+}
+
 /**
  * One value kept in step across the network. Unity: `NetworkVariable<T>`.
  *
@@ -163,6 +170,11 @@ export class NetworkVariable<T> extends NetworkVariableBase {
 
   get value(): T {
     return this.current;
+  }
+
+  /** For logs and `Debug.hierarchy()`: `NetworkVariable(100)`. */
+  toString(): string {
+    return `NetworkVariable(${printable(this.current)})`;
   }
 
   set value(next: T) {
@@ -250,6 +262,11 @@ export class NetworkList<T> extends NetworkVariableBase implements Iterable<T> {
   /** Number of items. Unity: `Count`. */
   get count(): number {
     return this.items.length;
+  }
+
+  /** For logs and `Debug.hierarchy()`: `NetworkList(3 items)`. */
+  toString(): string {
+    return `NetworkList(${this.items.length} ${this.items.length === 1 ? 'item' : 'items'})`;
   }
 
   get(index: number): T {

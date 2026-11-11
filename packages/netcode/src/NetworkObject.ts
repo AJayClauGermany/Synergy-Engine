@@ -1,4 +1,4 @@
-import { Engine, MonoBehaviour } from '@synergy/engine';
+import { Engine, MonoBehaviour, nameType } from '@synergy/engine';
 import { Signal } from '@synergy/net';
 import { NetworkBehaviour } from './NetworkBehaviour';
 import { NetworkManager } from './NetworkManager';
@@ -38,6 +38,7 @@ export class NetworkObject extends MonoBehaviour {
   /** @internal */ _id = 0;
   /** @internal */ _owner = 0;
   /** @internal */ _player = false;
+  /** @internal */ _destroyWithScene = false;
   /** @internal */ _spawned = false;
   /** @internal True while the server runs onNetworkSpawn, before clients have been told. */
   _spawning = false;
@@ -46,6 +47,15 @@ export class NetworkObject extends MonoBehaviour {
   _visibleTo = new Set<number>();
   /** @internal Sends held back until the spawn message has gone out. */
   _heldSends: (() => void)[] = [];
+
+  /** What `Debug.hierarchy()` says about this object. */
+  override _summary(): string {
+    if (!this._spawned) return 'not spawned';
+    const owner = this._owner === 0 ? 'the server' : `client ${this._owner}`;
+    const hidden = this._manager?.isServer ? `, visible to clients [${[...this._visibleTo].join(', ')}]` : '';
+    const scene = this._destroyWithScene ? ', destroyed with its scene' : '';
+    return `id ${this._id}, owned by ${owner}${this._player ? ', player object' : ''}${scene}${hidden}`;
+  }
 
   /** Unity: `NetworkObjectId`. 0 until spawned. */
   get networkObjectId(): number {
@@ -79,6 +89,16 @@ export class NetworkObject extends MonoBehaviour {
     return this._player && this.isOwner;
   }
 
+  /**
+   * Whether the object goes away when the server loads another scene with
+   * `networkManager.sceneManager.loadScene`. False by default, as in Unity: a spawned
+   * object outlives scene changes unless it was spawned with `spawn(true)`.
+   * Unity: `DestroyWithScene`.
+   */
+  get destroyWithScene(): boolean {
+    return this._destroyWithScene;
+  }
+
   /** The manager this object is spawned under. */
   get networkManager(): NetworkManager {
     if (!this._manager) throw new Error(`"${this.name}" is not spawned.`);
@@ -97,18 +117,26 @@ export class NetworkObject extends MonoBehaviour {
 
   // ---- Server actions -------------------------------------------------------------------
 
-  /** Server only. Creates this object on every client, owned by the server. Unity: `Spawn()`. */
-  spawn(): void {
+  /**
+   * Server only. Creates this object on every client, owned by the server. Unity:
+   * `Spawn(destroyWithScene)`. Pass `true` for things that belong to the current scene
+   * (a match's units): they are removed when the server loads another scene through
+   * `networkManager.sceneManager`. Left out, the object outlives scene changes.
+   */
+  spawn(destroyWithScene = false): void {
+    this._destroyWithScene = destroyWithScene;
     this.manager().spawnObject(this, 0, false);
   }
 
-  /** Server only. Spawns with a client as owner. Unity: `SpawnWithOwnership(clientId)`. */
-  spawnWithOwnership(clientId: number): void {
+  /** Server only. Spawns with a client as owner. Unity: `SpawnWithOwnership(clientId, destroyWithScene)`. */
+  spawnWithOwnership(clientId: number, destroyWithScene = false): void {
+    this._destroyWithScene = destroyWithScene;
     this.manager().spawnObject(this, clientId, false);
   }
 
-  /** Server only. Spawns as `clientId`'s player object. Unity: `SpawnAsPlayerObject(clientId)`. */
-  spawnAsPlayerObject(clientId: number): void {
+  /** Server only. Spawns as `clientId`'s player object. Unity: `SpawnAsPlayerObject(clientId, destroyWithScene)`. */
+  spawnAsPlayerObject(clientId: number, destroyWithScene = false): void {
+    this._destroyWithScene = destroyWithScene;
     this.manager().spawnObject(this, clientId, true);
   }
 
@@ -180,6 +208,20 @@ export class NetworkObject extends MonoBehaviour {
     this._behaviours.forEach((behaviour, index) => behaviour._netInit(this, index));
   }
 
+  /**
+   * @internal What this object is made of, as text: for each NetworkBehaviour, the names
+   * of its variables and RPCs. The server sends it with a spawn and the client compares
+   * it with its own copy, so builds that disagree say so instead of putting values in
+   * the wrong variables. (Field names survive minification; class names do not, which is
+   * why they are left out. Two builds that differ only in the order of behaviours with
+   * identical members are told apart by `networkConfig.protocolVersion`.)
+   */
+  _layout(): string {
+    return this._behaviours
+      .map((behaviour) => `${[...behaviour._variables.keys()].sort().join(',')}|${[...behaviour._rpcs.keys()].sort().join(',')}`)
+      .join(';');
+  }
+
   /** @internal */
   _notifySpawn(): void {
     for (const behaviour of this._behaviours) behaviour._netCall('onNetworkSpawn');
@@ -206,3 +248,6 @@ export class NetworkObject extends MonoBehaviour {
     this.onOwnershipChanged = signal;
   }
 }
+
+// The names to print, whatever a bundler renames these classes to (see nameType).
+nameType(NetworkObject, 'NetworkObject');

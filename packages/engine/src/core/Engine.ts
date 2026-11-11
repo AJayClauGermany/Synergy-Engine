@@ -183,6 +183,11 @@ export class Engine {
     return this.running;
   }
 
+  /** True once `dispose()` has been called. The engine cannot be used afterwards. */
+  get isDisposed(): boolean {
+    return this.disposed;
+  }
+
   /**
    * Resumes the automatic frame loop after `stop()`. A browser engine starts running as
    * soon as it is created, so calling this at startup is optional but harmless.

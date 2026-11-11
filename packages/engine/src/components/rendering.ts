@@ -1,4 +1,5 @@
 import * as pc from 'playcanvas';
+import { nameType } from '../core/typeNames';
 import { Behaviour, Component } from '../core/Component';
 import type { Engine } from '../core/Engine';
 import type { GameObject } from '../core/GameObject';
@@ -463,3 +464,7 @@ adopters.push((gameObject, entity) => {
   if (!gameObject.getComponent(MeshFilter)) gameObject.addComponent(MeshFilter);
   if (!gameObject.getComponent(MeshRenderer)) gameObject.addComponent(MeshRenderer);
 });
+
+// The names to print, whatever a bundler renames these classes to (see nameType).
+nameType(MeshFilter, 'MeshFilter');
+nameType(MeshRenderer, 'MeshRenderer');

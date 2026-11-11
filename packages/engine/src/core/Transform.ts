@@ -1,4 +1,5 @@
 import * as pc from 'playcanvas';
+import { nameType } from './typeNames';
 import { Quaternion } from '../math/Quaternion';
 import { Vector3 } from '../math/Vector3';
 import { Component } from './Component';
@@ -354,3 +355,6 @@ export class Transform extends Component implements Iterable<Transform> {
     this.localScale = source.localScale;
   }
 }
+
+// The names to print, whatever a bundler renames these classes to (see nameType).
+nameType(Transform, 'Transform');

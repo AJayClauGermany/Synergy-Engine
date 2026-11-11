@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { Camera, Engine, GameObject, Grid, Hex, KeyCode, SceneManager, Tilemap } from '@synergy/engine';
+import { Camera, Engine, GameObject, Grid, Hex, KeyCode, SceneManager, Tilemap, TilemapRenderer } from '@synergy/engine';
 import { BoardView } from '../src/behaviours/BoardView';
 import { GameController } from '../src/behaviours/GameController';
 import { UnitView } from '../src/behaviours/UnitView';
@@ -50,8 +50,8 @@ describe('Skirmish scene', () => {
     expect(GameObject.find('Board')?.getComponent(Grid)).not.toBeNull();
     const terrain = GameObject.find('Board/Terrain')?.getComponent(Tilemap);
     expect(terrain?.getUsedTilesCount()).toBe(COLUMNS * ROWS);
-    // One draw call for the whole map: every terrain tile is in a single mesh.
-    expect(terrain?.gameObject.entity.render?.meshInstances.length).toBe(1);
+    // One draw call for the whole map: a map this small fits in a single block of tiles.
+    expect(terrain?.getComponent(TilemapRenderer)?.pcMeshInstances.length).toBe(1);
     // Forest tiles spawned their trees.
     expect(terrain?.getInstantiatedObject({ x: 2, y: 1 })?.name).toBe('Tree');
     expect(GameController.instance).not.toBeNull();

@@ -5,9 +5,11 @@ export * from './math';
 
 export { Engine, type EngineOptions } from './core/Engine';
 export { EngineObject, isAlive } from './core/EngineObject';
+export { nameType } from './core/typeNames';
 export { GameObject, gameObjectOf } from './core/GameObject';
 export { Component, Behaviour, type ComponentClass, type ConcreteComponentClass } from './core/Component';
 export { MonoBehaviour } from './core/MonoBehaviour';
+export type { UseCamelCase } from './core/messageNames';
 export { Transform, Space } from './core/Transform';
 export { PrimitiveType } from './core/hooks';
 export {
@@ -26,6 +28,7 @@ export {
 export { Time } from './core/Time';
 export { Input, KeyCode, Screen } from './core/Input';
 export { Debug } from './core/Debug';
+export type { HierarchyOptions } from './core/hierarchy';
 export { RenderSettings } from './core/RenderSettings';
 export { UnityEvent, Observable } from './core/events';
 export { Tween, Ease, LoopType, type EaseFunction } from './core/Tween';
@@ -72,3 +75,20 @@ export {
 export { Grid, type GridHit } from './tilemap/Grid';
 export { Tilemap, TileBase, Tile, type TileData } from './tilemap/Tilemap';
 export { TilemapRenderer } from './tilemap/TilemapRenderer';
+export { TilePalette, createTilemaps, tilemapsToData, type TilePaletteLoadOptions, type BuiltTilemaps } from './tilemap/TilePalette';
+
+export {
+  Catalog,
+  type SpriteData,
+  type SpriteSheetData,
+  type TileDefinition,
+  type TilePaletteData,
+  type TilemapLayerData,
+  type TilemapData,
+  type LayerCell,
+  layerTileAt,
+  layerCells,
+  encodeLayer,
+  checkTilemapData,
+  checkTilePaletteData,
+} from './data';

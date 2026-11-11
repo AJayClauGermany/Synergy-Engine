@@ -1,4 +1,5 @@
 import * as pc from 'playcanvas';
+import { nameType } from '../core/typeNames';
 import { Behaviour } from '../core/Component';
 import { adopters } from '../core/hooks';
 import { Color } from '../math/Color';
@@ -63,6 +64,10 @@ export class Light extends Behaviour {
 
   override _destroy(): void {
     this.gameObject.entity.removeComponent('light');
+  }
+
+  override _summary(): string {
+    return `${this.type}, intensity ${this.intensity}`;
   }
 
   /** The world-space direction a directional or spot light shines in. Setting it rotates the transform. */
@@ -183,3 +188,6 @@ export class Light extends Behaviour {
 adopters.push((gameObject, entity) => {
   if (entity.light && !gameObject.getComponent(Light)) gameObject.addComponent(Light);
 });
+
+// The names to print, whatever a bundler renames these classes to (see nameType).
+nameType(Light, 'Light');

@@ -1,4 +1,5 @@
 import { Behaviour } from '../core/Component';
+import { nameType } from '../core/typeNames';
 import {
   cellCenterToLocal,
   cellCorners,
@@ -42,6 +43,12 @@ export class Grid extends Behaviour {
   readonly _shape: GridShape = defaultGridShape();
   /** @internal Bumped whenever the layout changes, so renderers know to rebuild. */
   _version = 0;
+
+  override _summary(): string {
+    const { x, y, z } = this.cellSize;
+    const size = [x, y, z].map((value) => Math.round(value * 1000) / 1000).join(', ');
+    return `${this.cellLayout} cells, swizzle ${this.cellSwizzle}, cellSize (${size})`;
+  }
 
   get cellSize(): Vector3 {
     return this._shape.cellSize;
@@ -143,3 +150,6 @@ export class Grid extends Behaviour {
     this._version++;
   }
 }
+
+// The names to print, whatever a bundler renames these classes to (see nameType).
+nameType(Grid, 'Grid');

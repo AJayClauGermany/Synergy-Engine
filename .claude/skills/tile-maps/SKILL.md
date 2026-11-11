@@ -23,6 +23,25 @@ Board            Grid                         cellLayout, cellSwizzle, cellSize
   after, either works. `tilemap.layoutGrid` throws if there is none.
 - Tiles are created once (module-level constants) and reused across cells.
 
+## A map from files
+
+When the map and its tiles are data (exported from Unity with `tools/unity`, or written
+by hand), do not paint them in code. Read `docs/content.md`; the short of it:
+
+```ts
+const palette = await TilePalette.load<Terrain>(tiles, { images: { 'terrain.png': terrainUrl } });
+const { grid, layer } = createTilemaps(map, palette, { name: 'Map' });
+layer('Terrain').getTile<Tile<Terrain>>(cell)?.data.moveCost
+```
+
+- `tiles.json` (the palette): sprite sheets, and tiles with an `id`, a `sprite`, and
+  `data` for whatever the game needs to know about that terrain.
+- `map.json`: the grid's shape and layers of cells, each an index into the layer's `tiles`.
+- Load in a scene's `preload`; in a headless test use `TilePalette.create(tiles)` (no
+  images). Rules read the same files with `layerTileAt` and a `Catalog`, without a Tilemap.
+- Add layers that change during play (highlights, fog) in code, as below.
+- Worked example: `game/src/frontier/` (`data/`, `rules.ts`, `FrontierBoard.ts`, `scene.ts`).
+
 ## Decisions to make up front
 
 1. **Plane.** 3D game with units standing on the map: `grid.cellSwizzle = CellSwizzle.XZY`.
@@ -31,8 +50,9 @@ Board            Grid                         cellLayout, cellSwizzle, cellSize
    (odd rows shifted right). For regular hexagons set `grid.cellSize = hexCellSize(width)`.
    Flat-top hexes: swizzle `YXZ` (2D) or `YZX` (ground).
 3. **Where the map data lives.** If rules must run without the engine (multiplayer,
-   server validation, fast tests), keep the layout as plain data in `game/src/rules/` and
-   paint the Tilemap from it. Do not make `apply()` read a Tilemap.
+   server validation, fast tests), keep the layout as plain data (a map file, or an
+   array in `game/src/rules/`) and paint the Tilemap from it. Do not make `apply()` or
+   an RPC's checks read a Tilemap.
 
 ## Recipes
 
@@ -75,8 +95,12 @@ Hex.range(center, 2); Hex.ring(center, 2); Hex.line(from, to); Hex.distance(a, b
   set `renderer.transparent = true`.
 - **Unlit overlays**: set `renderer.lit = false` for highlight colours that should not
   be shaded by the sun.
-- The mesh rebuilds at the end of the frame. In a headless test, call `engine.step()`
-  (or `renderer.rebuild()`) before inspecting what is drawn; tile *data* is immediate.
+- The meshes update at the end of the frame, block by block (16 x 16 cells), so editing
+  cells every frame is fine on maps of tens of thousands of tiles. Setting
+  `tilemap.color` or a renderer field redoes the whole layer: tint cells with
+  `setColor(cell, ...)` for things that change often. In a headless test, call
+  `engine.step()` (or `renderer.rebuild()`) before inspecting what is drawn
+  (`renderer.pcMeshInstances`); tile *data* is immediate.
 - Not available yet: isometric layout, animated tiles, tile colliders, elevation.
   Say so rather than faking it.
 

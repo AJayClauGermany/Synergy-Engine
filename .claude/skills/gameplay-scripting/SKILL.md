@@ -11,9 +11,14 @@ in camelCase. Skim `docs/unity-to-synergy.md` if you have not this session.
 ## Checklist before writing
 
 - Behaviours: one class per file in `game/src/behaviours/`, extending `MonoBehaviour`.
-- State that must stay in sync across players does not belong in a behaviour. Put it in
-  `game/src/rules/` and change it only through commands (see the `multiplayer` skill).
+- State that must stay in sync across players: check which model the game uses (AGENTS.md,
+  "Decide how shared state works"). With commands it does not belong in a behaviour: put
+  it in `game/src/rules/` and change it only through commands (`multiplayer` skill). With
+  netcode it lives in `NetworkVariable`s on a `NetworkBehaviour` and only the host
+  changes it (`netcode` skill).
 - Behaviours that only show state ("views") should not contain rules.
+- Numbers that describe content (a unit's health, a tile's movement cost) go in data, not
+  in a behaviour's fields: a `Catalog` or a tile's `data` (`docs/content.md`).
 
 ## Patterns
 
@@ -93,9 +98,11 @@ labels that follow objects.
 
 ## Gotchas
 
-- A message with the wrong name or case (`Update`, `onStart`) is never called and nothing
-  warns you. The valid names are: awake, onEnable, start, update, lateUpdate, fixedUpdate,
+- The valid message names are: awake, onEnable, start, update, lateUpdate, fixedUpdate,
   onDisable, onDestroy, onMouseDown, onMouseUp, onMouseEnter, onMouseOver, onMouseExit.
+  Unity's spelling (`Update`) fails the type-check and throws in tests. A near miss
+  (`onStart`) or a Unity message that is not sent (`onTriggerEnter`) logs a warning once
+  and is never called. Any other name is just a method: nothing calls it for you.
 - `this.startCoroutine(this.run())`: call the generator. Passing `this.run` throws.
 - `Vector3.forward` is `(0, 0, -1)`. Do not hard-code axes.
 - Lights aim along -Y; set `light.direction`.
@@ -106,6 +113,13 @@ labels that follow objects.
   `translate(v, Space.World)` along world axes.
 - `instantiate` copies a script's public fields (deep-copying arrays and object
   literals) but not functions, events or `_private` fields.
+
+## When something does not show up or does not move
+
+Print the scene before changing code: `console.log(Debug.hierarchy())` in a test, or
+`bun run screenshot --hierarchy`. It answers the usual questions at a glance: was the
+object created, is it inactive, where is it, is the script on it, is the reference field
+still `null`, what value does the field really have.
 
 ## Finish
 

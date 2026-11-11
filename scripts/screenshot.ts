@@ -6,10 +6,14 @@
  *   bun run screenshot --out shots/turn2.png --click 640,400 --key Space --wait 500
  *   bun run screenshot --url http://localhost:3000      # capture an already running dev server
  *   bun run screenshot --scene MyScene --eval "synergy.GameObject.find('Board') !== null"
+ *   bun run screenshot --hierarchy                      # also print the scene as text (Debug.hierarchy())
  *
  * Size: --width, --height (CSS pixels) and --scale (device pixel ratio; use 2 for a sharp image to share).
- * Actions (--click x,y / --key Code / --wait ms / --eval js) run in the order given.
+ * The build keeps class names so messages are readable; --release tests the minified build that ships.
+ * Actions (--click x,y / --key Code / --wait ms / --eval js / --hierarchy) run in the order given.
  * `--eval` prints the expression's JSON result; `synergy` is the engine API plus `engine`.
+ * `--hierarchy` prints every GameObject with its components, position and script fields:
+ * often quicker to check than the image, and it can be repeated between other actions.
  * Exits with code 1 if the page logs an error, so it doubles as a smoke test.
  *
  * Needs Playwright with Chromium: `bun add -d playwright && bunx playwright install chromium`
@@ -18,10 +22,15 @@
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 
-type Action = { kind: 'click'; x: number; y: number } | { kind: 'key'; code: string } | { kind: 'wait'; ms: number } | { kind: 'eval'; source: string };
+type Action =
+  | { kind: 'click'; x: number; y: number }
+  | { kind: 'key'; code: string }
+  | { kind: 'wait'; ms: number }
+  | { kind: 'eval'; source: string }
+  | { kind: 'hierarchy' };
 
 const root = path.resolve(import.meta.dir, '..');
-const options = { url: '', out: '.screenshots/game.png', width: 1280, height: 720, scale: 1, scene: '', settle: 600, build: true };
+const options = { url: '', out: '.screenshots/game.png', width: 1280, height: 720, scale: 1, scene: '', settle: 600, build: true, release: false };
 const actions: Action[] = [];
 
 const args = Bun.argv.slice(2);
@@ -41,6 +50,7 @@ for (let i = 0; i < args.length; i++) {
     case '--scene': options.scene = value(); break;
     case '--settle': options.settle = Number(value()); break;
     case '--no-build': options.build = false; break;
+    case '--release': options.release = true; break;
     case '--click': {
       const [x, y] = value().split(',').map(Number);
       actions.push({ kind: 'click', x: x ?? 0, y: y ?? 0 });
@@ -49,6 +59,7 @@ for (let i = 0; i < args.length; i++) {
     case '--key': actions.push({ kind: 'key', code: value() }); break;
     case '--wait': actions.push({ kind: 'wait', ms: Number(value()) }); break;
     case '--eval': actions.push({ kind: 'eval', source: value() }); break;
+    case '--hierarchy': actions.push({ kind: 'hierarchy' }); break;
     default: throw new Error(`Unknown option ${flag}. See the comment at the top of scripts/screenshot.ts.`);
   }
 }
@@ -88,7 +99,9 @@ let server: ReturnType<typeof Bun.serve> | null = null;
 let url = options.url;
 if (!url) {
   if (options.build) {
-    const build = Bun.spawnSync(['bun', 'run', 'scripts/build.ts'], { cwd: root, stdout: 'inherit', stderr: 'inherit' });
+    // Class names are kept so that errors and --hierarchy can be read; --release builds exactly what ships.
+    const buildArgs = options.release ? [] : ['--keep-names'];
+    const build = Bun.spawnSync(['bun', 'run', 'scripts/build.ts', ...buildArgs], { cwd: root, stdout: 'inherit', stderr: 'inherit' });
     if (build.exitCode !== 0) process.exit(build.exitCode ?? 1);
   }
   const dist = path.join(root, 'dist');
@@ -129,6 +142,7 @@ try {
     if (action.kind === 'click') await page.mouse.click(action.x, action.y);
     else if (action.kind === 'key') await page.keyboard.press(action.code);
     else if (action.kind === 'wait') await page.waitForTimeout(action.ms);
+    else if (action.kind === 'hierarchy') console.log(await page.evaluate('synergy.Debug.hierarchy()'));
     else console.log(`${action.source} => ${JSON.stringify(await page.evaluate(action.source))}`);
     // Give the game a couple of frames to react before the next step.
     if (action.kind !== 'wait') await page.waitForTimeout(100);

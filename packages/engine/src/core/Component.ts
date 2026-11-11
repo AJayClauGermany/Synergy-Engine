@@ -123,6 +123,11 @@ export abstract class Component extends EngineObject {
   }
   /** @internal Copies state from the component this one was cloned from. */
   _copyFrom(_source: this, _remap: <V>(value: V) => V): void {}
+  /**
+   * @internal A few words for `Debug.hierarchy()` about state that is not held in public
+   * fields (a camera's field of view, how many tiles a tilemap has).
+   */
+  _summary?(): string;
 }
 
 /** A component that can be switched on and off with `enabled`. */

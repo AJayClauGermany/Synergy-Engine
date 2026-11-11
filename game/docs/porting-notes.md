@@ -1,5 +1,10 @@
 # Porting notes: what the original Unity game used
 
+> This file is about **one game**: the Unity project this template was first set up to
+> receive. It lives in `game/` with the rest of that game. The engine's own, generic
+> guide to porting is [docs/porting-from-unity.md](../../docs/porting-from-unity.md);
+> replace or delete this file when you start a different game.
+
 An inventory of the original Unity project (packages, imported assets, custom systems),
 mapped onto this engine: what exists today, what was added because of it, and what is
 still to build. It was produced from a static inspection of that project, so "used"
@@ -12,7 +17,7 @@ same engine, so there is no second renderer to integrate.
 
 | Unity package / feature | Used for | Here | Status |
 |---|---|---|---|
-| **2D Tilemap** (hex) | Tactical terrain, selection overlays, fog layers | `Grid`, `Tilemap`, `Tile`, `TilemapRenderer`, same hex coordinates. [tilemaps.md](tilemaps.md) | **Built in** |
+| **2D Tilemap** (hex) | Tactical terrain, selection overlays, fog layers | `Grid`, `Tilemap`, `Tile`, `TilemapRenderer`, same hex coordinates. [tilemaps.md](../../docs/tilemaps.md) | **Built in** |
 | Custom hex maths, weighted pathfinding | Movement, weapon patterns | `Hex`, `findPath`, `findReachable` in `@synergy/engine/grid` (pure, usable server-side) | **Built in** |
 | **DOTween / DOTween Pro** | UI transitions, fades, health-bar effects, camera tweens | `Tween` (`to`, `move`, `rotate`, `scale`, eases, loops, delay, `yield` in coroutines). CSS transitions for the React HUD | **Built in** (core subset) |
 | Unity `Random` in rules and generation | Combat rolls, map generation | Seeded `Random` class. Same seed gives the same sequence everywhere, but **not** Unity's sequence | **Built in**, see caveat below |
@@ -23,7 +28,7 @@ same engine, so there is no second renderer to integrate.
 | **Unity Test Framework** | EditMode tests | `bun test`, including whole scenes headlessly | **Covered** |
 | **Input System** | Mouse, actions, UI input | `Input` (keys, mouse, axes, named buttons via `defineAxis` / `defineButton`) | Partly: no gamepad, touch gestures or rebinding UI |
 | **Cinemachine** | Tactical camera: move, focus, confine | Sample `CameraRig` (pan, rotate, zoom, bounds). Focus moves with `Tween.move` | Partly: lives in the sample, not the engine |
-| **Netcode for GameObjects + Transport** | Authoritative actions, RPCs, replicated state | `@synergy/netcode`: `NetworkManager`, `NetworkObject`, `NetworkVariable`, RPCs, host-authoritative. [netcode.md](netcode.md). Also command sessions (`@synergy/net`) with `startTicker` | **Built** (host-authoritative; no scene sync yet) |
+| **Netcode for GameObjects + Transport** | Authoritative actions, RPCs, replicated state | `@synergy/netcode`: `NetworkManager`, `NetworkObject`, `NetworkVariable`, RPCs, host-authoritative. [netcode.md](../../docs/netcode.md). Also command sessions (`@synergy/net`) with `startTicker` | **Built** (host-authoritative; no scene sync yet) |
 | **Unity Authentication / Multiplayer Services** | Identity for the campaign backend, sessions | Not built. Needs an auth provider on the Convex side | **To do**, see below |
 | **URP, custom shaders, post-processing** | Globe rendering and effects | PlayCanvas materials through `material.pcMaterial`; nothing Unity-specific carries over | **To rebuild** |
 | **All In 1 Sprite Shader** | Outlines, construction fade | Fade: `material.color` alpha or a `Tween`. Outline: not wrapped | **To do** |
@@ -32,7 +37,7 @@ same engine, so there is no second renderer to integrate.
 | 2D Animation, Aseprite/PSD importers, SpriteShape, Tilemap Extras | Authoring pipeline | Export images and data; no runtime equivalent needed unless sprite animation is required | Later, if needed |
 | Timeline, Visual Scripting, Vivox | Installed; no clear use found | Nothing planned | Not needed |
 | Burst, Collections, Mathematics, Jobs | Runtime performance infrastructure | Plain TypeScript; Web Workers if profiling calls for it | Not needed yet |
-| Recorder, IDE integrations, vFolders/vHierarchy/..., Unity MCP | Editor workflow | No runtime equivalent. Agent tooling is described in [agent-skills.md](agent-skills.md) | Not applicable |
+| Recorder, IDE integrations, vFolders/vHierarchy/..., Unity MCP | Editor workflow | No runtime equivalent. Agent tooling is described in [agent-skills.md](../../docs/agent-skills.md) | Not applicable |
 
 ## The tactical simulation is the real work
 
@@ -40,8 +45,13 @@ The package list is the small part. The original's custom simulation (weighted h
 pathfinding, combat patterns, fog of war, supply lines, construction, AI, map editing,
 authoritative action handling) has to be ported from C# by hand. How it fits here:
 
-- **Put it in pure rules modules** like `game/src/rules/`: state, commands, `check`,
-  `apply`. No engine imports beyond `@synergy/engine/grid`, so the same code runs in the
+- **Choose where the state lives before porting it.** If the Unity code keeps it in
+  `NetworkBehaviour`s (`NetworkVariable`s changed by server RPCs), the direct port keeps
+  that shape with `@synergy/netcode`, script by script ([netcode.md](../../docs/netcode.md)). The
+  alternative is to pull it out into pure rules modules like `game/src/rules/` (state,
+  commands, `check`, `apply`), which is more work up front and gives replays, saves and
+  server-side validation. Either way, keep calculations (costs, ranges, damage) in pure
+  functions with no engine imports beyond `@synergy/engine/grid`, so they run in the
   browser, in tests, and on a server.
 - **Use the existing Unity EditMode tests as the specification.** Port each as a
   `bun test` and make it pass. Add fixtures exported from Unity (maps, saves, combat
@@ -56,8 +66,9 @@ authoritative action handling) has to be ported from C# by hand. How it fits her
 ### Simultaneous control, cooldowns and world ticks
 
 The original ruleset is not turn-based: players act at the same time, each action has a
-cooldown, and the world advances on a shared two-second tick. The command model handles
-this without special support for "turns":
+cooldown, and the world advances on a shared two-second tick. With netcode the host runs
+that tick and stores each cooldown as a "ready at" time in a `NetworkVariable`. The
+command model handles it too, without special support for "turns":
 
 - `startTicker(session, 2000, { type: 'tick' })` makes the host submit a tick command
   every two seconds, in the same ordered stream as player actions.
@@ -65,7 +76,7 @@ this without special support for "turns":
 - Any player may submit at any time; `check` refuses an action whose cooldown has not
   expired *as of that point in the stream*. Every machine evaluates it identically.
 
-See "Simultaneous play" in [multiplayer.md](multiplayer.md).
+See "Simultaneous play" in [multiplayer.md](../../docs/multiplayer.md).
 
 ### Random numbers and generated maps
 
@@ -88,7 +99,7 @@ in the game state so every player rolls the same numbers.
 - **Authoritative tactical play.** In Unity the server validated actions (Netcode). The
   closest match is now `@synergy/netcode`: clients send `serverRpc`s, the host validates
   them with the pure rules and changes `NetworkVariable`s, and everyone sees the result
-  ([netcode.md](netcode.md)). The host is trusted, which is fine for prototyping. With
+  ([netcode.md](../../docs/netcode.md)). The host is trusted, which is fine for prototyping. With
   command sessions there are three levels, in increasing strength:
   1. peer-to-peer with the host validating (`CommandSession.host({ validate })`);
   2. Convex ordering commands while every client runs `check`;
@@ -99,7 +110,9 @@ in the game state so every player rolls the same numbers.
   implement the `Session<C>` interface over it; game code does not change. Server-driven
   ticks can also come from Convex's scheduler instead of the host player's machine.
 - **Hidden information.** Fog of war that must be secret from the other player cannot be
-  enforced with a shared command log. It needs per-player views computed on the server.
+  enforced with a shared command log. With netcode the host decides what each client
+  receives (`checkObjectVisibility`, `networkShow` / `networkHide`, `read: Owner`
+  variables), which is enough while the host is trusted.
 - **Voice chat** (Vivox) was installed but disabled. Nothing is planned.
 
 ## Rendering and presentation
@@ -111,9 +124,9 @@ in the game state so every player rolls the same numbers.
   PlayCanvas and is not wrapped yet.
 - **Switching between globe and tactical map** is `SceneManager.loadScene`, or both
   loaded additively with one deactivated.
-- **Sprites.** Tiles can be textured today. Free-standing sprites (units, props) need a
-  `SpriteRenderer` component, which is the most valuable missing piece for a 2D-looking
-  game; PlayCanvas has a sprite system to wrap.
+- **Sprites.** Tiles can be textured, and free-standing sprites (units, props) use
+  `SpriteRenderer`, which shares the scene and depth buffer with 3D meshes. Sprite
+  animation and sorting layers are not built.
 - **Camera.** Promote `CameraRig` from the sample into the engine once its behaviour is
   settled (focus on a target, follow, confinement to the map bounds).
 
@@ -122,8 +135,12 @@ in the game state so every player rolls the same numbers.
 - **Art and audio** files can be reused. Preserve sprite slicing, pivots and
   pixels-per-unit when exporting sheets; convert models to glTF/GLB.
 - **ScriptableObject data** (units, buildings, weapons, rulesets, map configuration)
-  becomes TypeScript or JSON records. Keep the existing `SO_name` identifiers as stable
-  ids so saves and scenarios still refer to the same things.
+  becomes records in a `Catalog`, exported with `tools/unity` (Tools > Synergy > Export
+  Selected Assets As Data). Keep the existing `SO_name` identifiers as the ids so saves
+  and scenarios still refer to the same things.
+- **Tile assets and painted Tilemaps** (terrain with climate, elevation and the rest)
+  export the same way (Export Tilemaps In Open Scenes) to a palette file and a map file:
+  see [content.md](../../docs/content.md).
 - **Save, scenario and defense-layout formats** should be read by importers that accept
   the existing versions.
 - **Licences.** DOTween Pro, All In 1 Sprite Shader and the Kamgam blur are Unity Asset
@@ -144,10 +161,10 @@ in the game state so every player rolls the same numbers.
 
 In rough priority order for this game:
 
-1. `SpriteRenderer` (+ sprite animation if units are animated sheets)
+1. Sprite animation, if units are animated sheets (`SpriteRenderer` itself is built)
 2. `AudioSource` / `AudioClip`
 3. Camera helper in the engine (focus, follow, confine)
 4. Outline and other per-object effects; post-processing wrappers
-5. Isometric layout, animated tiles, chunked tilemaps for large maps, elevation
+5. Isometric layout, animated tiles, elevation (large maps are handled: tilemaps draw in blocks)
 6. Gamepad and touch gestures; input rebinding
 7. Rigidbody physics and animation, if a future game needs them

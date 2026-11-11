@@ -22,6 +22,10 @@ export interface SpawnData {
   pos: Vec3;
   rot: Quat;
   sc: Vec3;
+  /** Dies with the scene it is in when the server loads another (see `NetworkSceneManager`). */
+  ds?: 1;
+  /** What the object is made of on the server, to compare with the client's own copy: see `layoutOf`. */
+  sig: string;
   /** Full variable state the receiving client may read: `[behaviour, name, state]`. */
   vars: [behaviour: number, name: string, state: unknown][];
 }
@@ -29,16 +33,25 @@ export interface SpawnData {
 /** One changed variable: `[object, behaviour, name, data, full?]`. `full` marks a complete state rather than a delta. */
 export type VarUpdate = [object: number, behaviour: number, name: string, data: unknown, full?: 1];
 
+/** A scene the server has loaded for everyone, and the number of the load that did it. */
+export interface SceneRef {
+  n: string;
+  e: number;
+}
+
 /** Client to server. */
 export type ClientMessage =
-  | { t: 'connect'; proto: number; cfg: string; payload?: unknown }
+  | { t: 'connect'; proto: number; cfg: string; ver?: string; payload?: unknown }
+  | { t: 'sceneLoaded'; e: number }
   | { t: 'vars'; u: VarUpdate[] }
   | { t: 'rpc'; o: number; b: number; n: string; ids?: number[]; a: unknown[] }
   | { t: 'msg'; n: string; d: unknown };
 
 /** Server to client. */
 export type ServerMessage =
-  | { t: 'approved'; id: number; tick: number; rate: number; objs: SpawnData[] }
+  | { t: 'approved'; id: number; tick: number; rate: number; objs: SpawnData[]; scene?: SceneRef }
+  | { t: 'scene'; n: string; e: number }
+  | { t: 'sceneDone'; n: string; ok: number[]; late: number[] }
   | { t: 'disconnect'; reason: string }
   | { t: 'spawn'; obj: SpawnData }
   | { t: 'despawn'; o: number }

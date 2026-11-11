@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { Engine, GameObject, instantiate, MonoBehaviour, Prefab, Time } from '../src';
+import { Engine, GameObject, instantiate, LoadSceneMode, MonoBehaviour, Prefab, SceneManager, Time } from '../src';
 
 class Clock extends MonoBehaviour {
   elapsed = 0;
@@ -82,6 +82,63 @@ describe('several engines in one process', () => {
     a.dispose();
     expect(seen).toEqual([a]);
     expect(Engine.current).toBe(b); // b was current before, and is again
+  });
+
+  test('a scene that finishes loading after an await is built in the engine that asked for it', async () => {
+    const woke: (Engine | null)[] = [];
+    class Marker extends MonoBehaviour {
+      awake() {
+        woke.push(Engine.current);
+      }
+    }
+    let assetsReady: (value: string) => void = () => {};
+    SceneManager.register('LoadedLater', {
+      preload: () => new Promise<string>((resolve) => (assetsReady = resolve)),
+      build: (_scene, name) => {
+        new GameObject(name).addComponent(Marker);
+      },
+    });
+    let queuedBuilt: Engine | null = null;
+    SceneManager.register('QueuedBehind', () => {
+      queuedBuilt = Engine.current;
+      new GameObject('Second');
+    });
+
+    const a = create();
+    const loading = a.run(() => SceneManager.loadScene('LoadedLater'));
+    const queued = a.run(() => SceneManager.loadScene('QueuedBehind', LoadSceneMode.Additive));
+    const b = create(); // by the time the assets arrive, another engine is the current one
+    assetsReady('Late');
+    const scene = await loading;
+
+    expect(scene.getRootGameObjects().map((go) => go.name)).toEqual(['Late']);
+    expect(woke).toEqual([a]);
+    expect(b.run(() => GameObject.find('Late'))).toBeNull();
+    // The load that was waiting behind it starts from the same promise, also in A.
+    await queued;
+    expect(queuedBuilt === a).toBe(true);
+    expect(a.run(() => GameObject.find('Second'))).not.toBeNull();
+    expect(b.run(() => GameObject.find('Second'))).toBeNull();
+    expect(Engine.current).toBe(b);
+  });
+
+  test('a scene whose engine was disposed while it loaded is dropped quietly', async () => {
+    let built = false;
+    let assetsReady: () => void = () => {};
+    SceneManager.register('NeverBuilt', {
+      preload: () => new Promise<void>((resolve) => (assetsReady = resolve)),
+      build: () => {
+        built = true;
+      },
+    });
+    const a = create();
+    const loading = a.run(() => SceneManager.loadScene('NeverBuilt'));
+    const b = create();
+    a.dispose();
+    assetsReady();
+    await loading;
+    expect(built).toBe(false);
+    expect(Engine.current).toBe(b);
   });
 
   test('a disposed engine is not left behind as the current one', () => {

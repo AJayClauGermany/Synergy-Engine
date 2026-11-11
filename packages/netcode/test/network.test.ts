@@ -63,6 +63,22 @@ describe('the network clock', () => {
     expect(host.manager.localTime.time).toBe(1);
   });
 
+  test('a frame that spans several ticks reports each of them, in order', () => {
+    net = new TestNetwork();
+    const host = net.host('host', { configure: (m) => (m.networkConfig.tickRate = 20) });
+    const ticks: number[] = [];
+    host.manager.onTick.add((tick) => ticks.push(tick));
+    host.step(1, 0.25); // one slow frame: five ticks' worth
+    expect(ticks).toEqual([1, 2, 3, 4, 5]);
+    expect(host.manager.localTime.tick).toBe(5);
+    // A listener that stops the network ends the run of ticks there.
+    host.manager.onTick.add((tick) => {
+      if (tick === 7) host.manager.shutdown();
+    });
+    host.step(1, 0.25);
+    expect(ticks).toEqual([1, 2, 3, 4, 5, 6, 7]);
+  });
+
   test('clients take the server tick rate and keep a close estimate of its time', () => {
     net = new TestNetwork();
     const host = net.host('host', { configure: (m) => (m.networkConfig.tickRate = 20) });

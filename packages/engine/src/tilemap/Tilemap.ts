@@ -1,7 +1,9 @@
 import { Behaviour } from '../core/Component';
+import { nameType } from '../core/typeNames';
 import { isAlive } from '../core/EngineObject';
 import { GameObject } from '../core/GameObject';
 import { destroy, instantiate, type Prefab } from '../core/Object';
+import { encodeLayer, type TilemapLayerData } from '../data/tiles';
 import { Hex, Square } from '../grid/hex';
 import {
   CellLayout,
@@ -44,30 +46,49 @@ export abstract class TileBase {
  * A simple tile: a colour, optional artwork, optional spawned object. Unity: `Tile`.
  * It plays the role of a ScriptableObject asset: create each kind once and reuse it.
  *
- * Subclass it to attach game data to terrain:
+ * Game data rides along in `data`, which stands in for the fields of a custom Tile class
+ * in Unity (climate, elevation, movement cost):
  *
- *   class TerrainTile extends Tile { moveCost = 1; }
- *   const forest = new TerrainTile({ name: 'Forest', color: Color.fromHex('#3c6e47') });
- *   forest.moveCost = 2;
- *   terrain.getTile<TerrainTile>(cell)?.moveCost
+ *   interface Terrain { moveCost: number; elevation: number }
+ *   const forest = new Tile<Terrain>({ name: 'forest', color: Color.fromHex('#3c6e47'), data: { moveCost: 2, elevation: 1 } });
+ *   terrain.getTile<Tile<Terrain>>(cell)?.data.moveCost
+ *
+ * A `TilePalette` makes these from a data file. Subclassing works too, when a tile needs
+ * behaviour (see `getTileData`).
  */
-export class Tile extends TileBase {
+export class Tile<Data = unknown> extends TileBase {
   sprite: Sprite | null = null;
   color: Color = Color.white;
   gameObject: Prefab | GameObject | null = null;
+  /** Whatever the game attaches to this kind of tile. */
+  data: Data;
 
-  constructor(init: { name?: string; sprite?: Sprite | null; color?: Color; gameObject?: Prefab | GameObject | null } = {}) {
+  constructor(
+    init: { name?: string; sprite?: Sprite | null; color?: Color; gameObject?: Prefab | GameObject | null; data?: Data } = {},
+  ) {
     super();
     if (init.name !== undefined) this.name = init.name;
     if (init.sprite !== undefined) this.sprite = init.sprite;
     if (init.color !== undefined) this.color = init.color;
     if (init.gameObject !== undefined) this.gameObject = init.gameObject;
+    this.data = init.data as Data;
   }
 
   /** Override to vary the look per cell; call `super.getTileData(cell, tilemap)` for the defaults. */
   getTileData(_cell: Vector3Int, _tilemap: Tilemap): TileData {
     return { sprite: this.sprite, color: this.color, gameObject: this.gameObject };
   }
+}
+
+/**
+ * @internal Cells are grouped into square blocks of this many cells a side. A renderer
+ * keeps one mesh per block, so changing a cell redoes its block rather than the map.
+ */
+export const TILEMAP_CHUNK_SIZE = 16;
+
+/** @internal The block a cell belongs to. Every `z` of a cell shares its block. */
+export function chunkKeyOf(cell: CellLike): string {
+  return `${Math.floor(cell.x / TILEMAP_CHUNK_SIZE)},${Math.floor(cell.y / TILEMAP_CHUNK_SIZE)}`;
 }
 
 /** @internal One painted cell. */
@@ -100,9 +121,46 @@ export class Tilemap extends Behaviour {
 
   /** @internal */
   readonly _entries = new Map<string, TilemapEntry>();
-  /** @internal Bumped on every change, so the renderer knows to rebuild. */
+  /** @internal The same entries by block (see `TILEMAP_CHUNK_SIZE`). */
+  readonly _chunks = new Map<string, Set<TilemapEntry>>();
+  /** @internal Bumped on every change. */
   _version = 0;
+  /** @internal Blocks changed since a renderer last asked. `null` means all of them. */
+  private dirtyChunks: Set<string> | null = null;
   private tint = Color.white;
+
+  /**
+   * @internal Hands over the blocks that changed since the last call (`null` for all of
+   * them) and starts a fresh list.
+   */
+  _takeDirtyChunks(): Set<string> | null {
+    const dirty = this.dirtyChunks;
+    this.dirtyChunks = new Set();
+    return dirty;
+  }
+
+  private touch(cell: CellLike): void {
+    this.dirtyChunks?.add(chunkKeyOf(cell));
+    this._version++;
+  }
+
+  private touchAll(): void {
+    this.dirtyChunks = null;
+    this._version++;
+  }
+
+  private index(entry: TilemapEntry): void {
+    const key = chunkKeyOf(entry.cell);
+    const chunk = this._chunks.get(key);
+    if (chunk) chunk.add(entry);
+    else this._chunks.set(key, new Set([entry]));
+  }
+
+  private unindex(entry: TilemapEntry): void {
+    const key = chunkKeyOf(entry.cell);
+    const chunk = this._chunks.get(key);
+    if (chunk?.delete(entry) && chunk.size === 0) this._chunks.delete(key);
+  }
 
   /**
    * The Grid this tilemap is laid out on: the nearest one on this object or its parents.
@@ -137,7 +195,7 @@ export class Tilemap extends Behaviour {
 
   set color(value: Color) {
     this.tint = value;
-    this._version++;
+    this.touchAll();
   }
 
   // ---- Tiles --------------------------------------------------------------------------
@@ -148,14 +206,16 @@ export class Tilemap extends Behaviour {
     const existing = this._entries.get(key);
     if (existing?.tile === tile || (!existing && !tile)) return;
     if (existing?.instance) destroy(existing.instance);
+    if (existing) this.unindex(existing);
     if (!tile) {
       this._entries.delete(key);
     } else {
       const entry: TilemapEntry = { cell: Vector3Int.from(cell), tile, color: existing?.color ?? null, instance: null };
       this._entries.set(key, entry);
+      this.index(entry);
       this.spawn(entry);
     }
-    this._version++;
+    this.touch(cell);
   }
 
   /** Paints several cells at once. `tiles` may be one tile for all of them. */
@@ -217,7 +277,45 @@ export class Tilemap extends Behaviour {
       if (entry.instance) destroy(entry.instance);
     }
     this._entries.clear();
-    this._version++;
+    this._chunks.clear();
+    this.touchAll();
+  }
+
+  // ---- Data in and out ------------------------------------------------------------------
+
+  /**
+   * Paints a layer from data (a JSON file, a Unity export, a saved game). `tiles` turns
+   * each tile id into a tile: usually a `TilePalette`. Cells already painted outside the
+   * layer's rectangle are left alone; call `clearAllTiles()` first to replace the lot.
+   * The layer's tint, when it has one, becomes this tilemap's `color`.
+   */
+  loadLayer(layer: TilemapLayerData, tiles: { get(id: string): TileBase }): void {
+    const resolved = layer.tiles.map((id) => tiles.get(id));
+    const z = layer.z ?? 0;
+    const [originX, originY] = layer.origin;
+    for (let row = 0; row < layer.height; row++) {
+      for (let column = 0; column < layer.width; column++) {
+        const index = layer.cells[row * layer.width + column];
+        const tile = index === undefined || index < 0 ? null : (resolved[index] ?? null);
+        this.setTile({ x: originX + column, y: originY + row, z }, tile);
+      }
+    }
+    if (layer.color !== undefined) this.color = Color.fromHex(layer.color);
+  }
+
+  /**
+   * This layer as data, for saving or sending: the opposite of `loadLayer`. Tiles are
+   * written by `name`, so each kind of tile needs a name of its own (a `TilePalette`
+   * gives its tiles their ids). One z at a time: a tilemap painted on several z levels
+   * is saved with one call per level.
+   */
+  toLayerData(name: string = this.name, z = 0): TilemapLayerData {
+    const cells = [...this._entries.values()]
+      .filter((entry) => entry.cell.z === z)
+      .map((entry) => ({ x: entry.cell.x, y: entry.cell.y, z, tile: entry.tile.name }));
+    const layer = encodeLayer(name, cells);
+    if (!this.tint.equals(Color.white)) layer.color = this.tint.toHex();
+    return layer;
   }
 
   /** Number of painted cells. */
@@ -228,6 +326,13 @@ export class Tilemap extends Behaviour {
   /** Every painted cell. (Unity: iterate `cellBounds.allPositionsWithin` and test `HasTile`.) */
   getUsedCells(): Vector3Int[] {
     return [...this._entries.values()].map((entry) => entry.cell);
+  }
+
+  override _summary(): string {
+    const count = this._entries.size;
+    if (count === 0) return 'no tiles';
+    const { min, max } = this.cellBounds;
+    return `${count} tiles, cells (${min.x}, ${min.y}) to (${max.x - 1}, ${max.y - 1})`;
   }
 
   /** The smallest box containing every painted cell. */
@@ -249,7 +354,7 @@ export class Tilemap extends Behaviour {
     const entry = this._entries.get(cellKey(cell));
     if (!entry) return;
     entry.color = color;
-    this._version++;
+    this.touch(entry.cell);
   }
 
   getColor(cell: CellLike): Color {
@@ -269,12 +374,12 @@ export class Tilemap extends Behaviour {
     if (entry.instance) destroy(entry.instance);
     entry.instance = null;
     this.spawn(entry);
-    this._version++;
+    this.touch(entry.cell);
   }
 
   refreshAllTiles(): void {
     for (const entry of this._entries.values()) this.refreshTile(entry.cell);
-    this._version++;
+    this.touchAll();
   }
 
   // ---- Positions (relative to this tilemap's own transform) -----------------------------
@@ -318,6 +423,7 @@ export class Tilemap extends Behaviour {
 
   override _destroy(): void {
     this._entries.clear();
+    this._chunks.clear();
   }
 
   override _copyFrom(source: this, remap: <V>(value: V) => V): void {
@@ -325,8 +431,13 @@ export class Tilemap extends Behaviour {
     this.tint = source.tint;
     for (const [key, entry] of source._entries) {
       // Spawned objects are children, so they were cloned with the hierarchy.
-      this._entries.set(key, { ...entry, instance: entry.instance ? remap(entry.instance) : null });
+      const copy = { ...entry, instance: entry.instance ? remap(entry.instance) : null };
+      this._entries.set(key, copy);
+      this.index(copy);
     }
-    this._version++;
+    this.touchAll();
   }
 }
+
+// The names to print, whatever a bundler renames these classes to (see nameType).
+nameType(Tilemap, 'Tilemap');

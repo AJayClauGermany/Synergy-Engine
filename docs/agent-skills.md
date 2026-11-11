@@ -27,9 +27,17 @@ Project skills:
 
 - `bun run check` type-checks everything and runs every test without a browser.
 - `Engine.createHeadless()` runs real scenes in tests, with simulated input.
+- `TestNetwork` (`@synergy/netcode/testing`) runs a host and clients as simulated
+  machines in one test, so networked code is checked without a browser or a connection.
+- `checkTilePaletteData` / `checkTilemapData` turn a mistake in a content file into a
+  sentence; `Catalog.get` names the ids that exist when given one that does not.
 - `bun run screenshot` opens the built game in headless Chromium, can click and press
   keys, evaluates expressions against the live engine (`--eval`), saves a PNG, and fails
   if the page logged an error.
+- `Debug.hierarchy()` returns the scene as text (objects, components, positions, script
+  fields); `bun run screenshot --hierarchy` prints it from the running game.
+- A script with a Unity-cased message (`Update`) fails the type-check and throws when it
+  is added; near misses are warned about once.
 - In a running game, `window.synergy` exposes the engine API and the `engine` instance.
 
 ## Optional: the vendors' own skills

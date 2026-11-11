@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import * as pc from 'playcanvas';
 import {
   Camera,
   CellLayout,
   CellSwizzle,
   Color,
+  destroyImmediate,
   Ease,
   Engine,
   GameObject,
@@ -191,33 +193,130 @@ describe('Tilemap', () => {
 describe('TilemapRenderer', () => {
   test('builds one mesh per texture and rebuilds only when something changed', () => {
     const { grid, terrain, renderer } = makeGrid();
-    const render = () => terrain.gameObject.entity.render as NonNullable<typeof terrain.gameObject.entity.render>;
-    expect(render().meshInstances.length).toBe(0);
+    const drawn = () => renderer.pcMeshInstances;
+    // What PlayCanvas is actually asked to draw: the instances in its world layer.
+    const inScene = () => {
+      const world = engine.app.scene.layers.getLayerById(pc.LAYERID_WORLD);
+      return drawn().filter((instance) => world?.meshInstances.includes(instance)).length;
+    };
+    expect(drawn().length).toBe(0);
 
     terrain.boxFill(grass, { x: 0, y: 0 }, { x: 4, y: 4 });
     engine.step();
-    expect(render().meshInstances.length).toBe(1);
-    const mesh = render().meshInstances[0]?.mesh;
+    expect(drawn().length).toBe(1);
+    expect(inScene()).toBe(1);
+    const mesh = drawn()[0]?.mesh;
     expect(mesh?.vertexBuffer.numVertices).toBe(25 * 4);
     expect(mesh?.primitive[0]?.count).toBe(25 * 6);
 
     // Nothing changed: the same mesh is kept.
     engine.step();
-    expect(render().meshInstances[0]?.mesh).toBe(mesh as never);
+    expect(drawn()[0]?.mesh).toBe(mesh as never);
 
     // Changing a tile, a colour or the grid layout triggers a rebuild.
     terrain.setColor({ x: 0, y: 0 }, Color.red);
     engine.step();
-    expect(render().meshInstances[0]?.mesh).not.toBe(mesh as never);
+    expect(drawn()[0]?.mesh).not.toBe(mesh as never);
     grid.cellLayout = CellLayout.Hexagon;
     engine.step();
-    expect(render().meshInstances[0]?.mesh?.vertexBuffer.numVertices).toBe(25 * 6);
-    expect(render().meshInstances[0]?.mesh?.primitive[0]?.count).toBe(25 * 12);
+    expect(drawn()[0]?.mesh?.vertexBuffer.numVertices).toBe(25 * 6);
+    expect(drawn()[0]?.mesh?.primitive[0]?.count).toBe(25 * 12);
 
+    // Switched off, or on an inactive object, nothing is left in the scene to draw.
     renderer.enabled = false;
-    expect(render().enabled).toBe(false);
+    expect(inScene()).toBe(0);
     renderer.enabled = true;
-    expect(render().enabled).toBe(true);
+    expect(inScene()).toBe(1);
+    terrain.gameObject.setActive(false);
+    expect(inScene()).toBe(0);
+    terrain.gameObject.setActive(true);
+    expect(inScene()).toBe(1);
+    // The instance follows the tilemap's transform, and destroying the object frees it.
+    expect(drawn()[0]?.node).toBe(terrain.gameObject.entity);
+    const last = drawn()[0];
+    destroyImmediate(terrain.gameObject);
+    const world = engine.app.scene.layers.getLayerById(pc.LAYERID_WORLD);
+    expect(last && world?.meshInstances.includes(last)).toBe(false);
+  });
+
+  test('a large map is drawn in blocks, and changing a cell rebuilds only its block', () => {
+    // Above 10,000 tiles: the size a strategy map with fog and overlays reaches.
+    const SIZE = 128;
+    const { terrain, renderer } = makeGrid((g) => {
+      g.cellLayout = CellLayout.Hexagon;
+      g.cellSwizzle = CellSwizzle.XZY;
+      g.cellSize = hexCellSize(1);
+    });
+    terrain.boxFill(grass, { x: 0, y: 0 }, { x: SIZE - 1, y: SIZE - 1 });
+    expect(terrain.getUsedTilesCount()).toBe(16_384);
+    engine.step();
+
+    const instances = () => renderer.pcMeshInstances;
+    const before = instances();
+    expect(before.length).toBe((SIZE / 16) ** 2); // 64 blocks of 16 x 16 cells
+    const vertices = (list: typeof before) => list.reduce((total, instance) => total + (instance.mesh?.vertexBuffer.numVertices ?? 0), 0);
+    expect(vertices(before)).toBe(16_384 * 6);
+    // Every block shares one material, so the map sorts and draws as one batch per texture.
+    expect(new Set(before.map((instance) => instance.material)).size).toBe(1);
+
+    // One cell tinted: one block has a new mesh, the other 63 are untouched and still usable.
+    terrain.setColor({ x: 40, y: 70 }, Color.red);
+    engine.step();
+    const after = instances();
+    const kept = after.filter((instance) => before.includes(instance));
+    expect(after.length).toBe(64);
+    expect(kept.length).toBe(63);
+    expect(kept.every((instance) => instance.mesh?.vertexBuffer != null)).toBe(true);
+    expect(vertices(after)).toBe(16_384 * 6);
+
+    // A change that straddles a corner where four blocks meet touches exactly those four.
+    terrain.boxFill(null, { x: 15, y: 15 }, { x: 16, y: 16 });
+    engine.step();
+    const carved = instances();
+    expect(carved.filter((instance) => after.includes(instance)).length).toBe(60);
+    expect(vertices(carved)).toBe((16_384 - 4) * 6);
+
+    // Emptying a block removes its mesh; a tint on the whole layer redoes everything.
+    terrain.boxFill(null, { x: 0, y: 0 }, { x: 15, y: 15 });
+    engine.step();
+    expect(instances().length).toBe(63);
+    const beforeTint = instances();
+    terrain.color = Color.white.withAlpha(0.5);
+    engine.step();
+    expect(instances().some((instance) => beforeTint.includes(instance))).toBe(false);
+    expect(instances().length).toBe(63);
+  });
+
+  test('blocks put every cell where the grid says it is, on either side of zero', () => {
+    for (const layout of [CellLayout.Rectangle, CellLayout.Hexagon]) {
+      for (const swizzle of [CellSwizzle.XYZ, CellSwizzle.XZY, CellSwizzle.YXZ]) {
+        const { grid, terrain, renderer } = makeGrid((g) => {
+          g.cellLayout = layout;
+          g.cellSwizzle = swizzle;
+          g.cellSize = new Vector3(1.5, 1.25, 1);
+          g.cellGap = new Vector3(0.1, 0.2, 0);
+        });
+        // Odd and even rows, negative cells, a second z layer, and a block boundary.
+        const cells = [new Vector3Int(-17, -3, 0), new Vector3Int(15, 16, 0), new Vector3Int(16, 15, 0), new Vector3Int(2, 5, 1)];
+        for (const cell of cells) terrain.setTile(cell, grass);
+        renderer.rebuild();
+
+        const drawn: Vector3[] = [];
+        for (const instance of renderer.pcMeshInstances) {
+          const positions: number[] = [];
+          instance.mesh?.getPositions(positions);
+          for (let i = 0; i < positions.length; i += 3) {
+            drawn.push(new Vector3(positions[i] ?? 0, positions[i + 1] ?? 0, positions[i + 2] ?? 0));
+          }
+        }
+        const expected = cells.flatMap((cell) => grid.getCellCornersWorld(cell));
+        expect(drawn.length).toBe(expected.length);
+        for (const corner of expected) {
+          expect(drawn.some((point) => point.sub(corner).magnitude < 1e-4)).toBe(true);
+        }
+        destroyImmediate(grid.gameObject);
+      }
+    }
   });
 
   test('tile bounds follow the grid plane and sortingOrder lifts a layer off it', () => {
@@ -227,7 +326,7 @@ describe('TilemapRenderer', () => {
     terrain.boxFill(grass, { x: 0, y: 0 }, { x: 1, y: 1 });
     renderer.rebuild();
     const bounds = () => {
-      const aabb = terrain.gameObject.entity.render?.meshInstances[0]?.mesh?.aabb;
+      const aabb = renderer.pcMeshInstances[0]?.mesh?.aabb;
       if (!aabb) throw new Error('the tilemap has no mesh');
       return { min: Vector3.from(aabb.getMin()), max: Vector3.from(aabb.getMax()) };
     };
@@ -248,7 +347,7 @@ describe('TilemapRenderer', () => {
     const { terrain, renderer } = makeGrid();
     terrain.boxFill(new Checker(), { x: 0, y: 0 }, { x: 1, y: 0 });
     renderer.rebuild();
-    const material = terrain.gameObject.entity.render?.meshInstances[0]?.material as { blendType: number; depthWrite: boolean };
+    const material = renderer.pcMeshInstances[0]?.material as { blendType: number; depthWrite: boolean };
     expect(material.depthWrite).toBe(false);
   });
 
@@ -262,8 +361,12 @@ describe('TilemapRenderer', () => {
     expect(copied.getUsedTilesCount()).toBe(3);
     expect(copied.layoutGrid).toBe(copy.getComponent(Grid) as Grid);
     engine.step();
-    expect(copied.gameObject.entity.render?.meshInstances.length).toBe(1);
-    expect(copied.gameObject.entity.render?.enabled).toBe(true);
+    const copiedRenderer = copied.getComponent(TilemapRenderer) as TilemapRenderer;
+    expect(copiedRenderer.pcMeshInstances.length).toBe(1);
+    // It has meshes of its own, not the original's.
+    const original = terrain.getComponent(TilemapRenderer) as TilemapRenderer;
+    expect(copiedRenderer.pcMeshInstances[0]).not.toBe(original.pcMeshInstances[0] as never);
+    expect(copiedRenderer.pcMeshInstances[0]?.node).toBe(copied.gameObject.entity);
     // The clone is independent of the original.
     copied.clearAllTiles();
     expect(terrain.getUsedTilesCount()).toBe(3);

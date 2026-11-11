@@ -1,6 +1,10 @@
 /**
- * Builds the game into a static site: `bun run build [--outdir dist]`.
+ * Builds the game into a static site: `bun run build [--outdir dist] [--keep-names]`.
  * The output can be hosted anywhere, wrapped by Electrobun, or served by the Cloudflare Worker.
+ *
+ * `--keep-names` leaves class and function names as written, so error messages
+ * ("Exception in UnitView.update") and `Debug.hierarchy()` are readable. The screenshot
+ * tool builds this way. It makes the download about a sixth larger, so releases do without.
  */
 import { cp, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -10,11 +14,29 @@ import { parseArgs } from 'node:util';
 const root = path.resolve(import.meta.dir, '..');
 const { values } = parseArgs({
   args: Bun.argv.slice(2),
-  options: { outdir: { type: 'string', default: 'dist' } },
+  options: { outdir: { type: 'string', default: 'dist' }, 'keep-names': { type: 'boolean', default: false } },
 });
 const outdir = path.resolve(root, values.outdir);
 
 await rm(outdir, { recursive: true, force: true });
+
+// A fingerprint of the source this build is made from, readable in the game as
+// `buildId` (game/src/env.ts). Netcode refuses to connect two different builds, so the
+// same source must give the same id on every machine: it is a hash of the files, not a
+// timestamp. Set PUBLIC_BUILD_ID yourself to use a release number instead.
+if (!process.env.PUBLIC_BUILD_ID) {
+  const hasher = new Bun.CryptoHasher('sha256');
+  const files: string[] = [];
+  for (const pattern of ['game/src/**/*', 'game/index.html', 'packages/*/src/**/*', 'bun.lock']) {
+    for await (const file of new Bun.Glob(pattern).scan({ cwd: root, onlyFiles: true })) files.push(file);
+  }
+  for (const file of files.sort()) {
+    hasher.update(file);
+    hasher.update(await Bun.file(path.join(root, file)).arrayBuffer());
+  }
+  process.env.PUBLIC_BUILD_ID = hasher.digest('hex').slice(0, 12);
+}
+const buildId = process.env.PUBLIC_BUILD_ID;
 
 const started = performance.now();
 const result = await Bun.build({
@@ -23,11 +45,11 @@ const result = await Bun.build({
   target: 'browser',
   // Dynamic `import()`s become separate files, so optional code (e.g. networking) loads on demand.
   splitting: true,
-  minify: true,
+  minify: values['keep-names'] ? { whitespace: true, syntax: true, identifiers: false } : true,
   sourcemap: 'linked',
   // Only variables starting with PUBLIC_ are inlined into the bundle. Never put secrets in them.
   env: 'PUBLIC_*',
-  define: { 'process.env.NODE_ENV': '"production"' },
+  define: { 'process.env.NODE_ENV': '"production"', 'process.env.PUBLIC_BUILD_ID': JSON.stringify(buildId) },
 });
 
 if (!result.success) {
@@ -44,6 +66,6 @@ const script = result.outputs
   .filter((output) => output.path.endsWith('.js'))
   .reduce((total, output) => total + output.size, 0);
 console.log(
-  `Built ${path.relative(root, outdir)}/ in ${Math.round(performance.now() - started)} ms ` +
+  `Built ${path.relative(root, outdir)}/ (build ${buildId}) in ${Math.round(performance.now() - started)} ms ` +
     `(${result.outputs.length} files, ${(bytes / 1024).toFixed(0)} kB total, ${(script / 1024).toFixed(0)} kB of JavaScript)`,
 );

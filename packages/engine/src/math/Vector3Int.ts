@@ -1,3 +1,4 @@
+import { Mathf } from './Mathf';
 import { Vector3, type Vector3Like } from './Vector3';
 
 /** Anything usable as a grid cell: `{ x, y }` or `{ x, y, z }`. Plain objects work. */
@@ -35,7 +36,7 @@ export class Vector3Int implements CellLike {
   }
 
   static roundToInt(v: Vector3Like): Vector3Int {
-    return new Vector3Int(Math.round(v.x), Math.round(v.y), Math.round(v.z));
+    return new Vector3Int(Mathf.roundToInt(v.x), Mathf.roundToInt(v.y), Mathf.roundToInt(v.z));
   }
 
   static ceilToInt(v: Vector3Like): Vector3Int {
