@@ -7,6 +7,7 @@
  *   bun run screenshot --url http://localhost:3000      # capture an already running dev server
  *   bun run screenshot --scene MyScene --eval "synergy.GameObject.find('Board') !== null"
  *
+ * Size: --width, --height (CSS pixels) and --scale (device pixel ratio; use 2 for a sharp image to share).
  * Actions (--click x,y / --key Code / --wait ms / --eval js) run in the order given.
  * `--eval` prints the expression's JSON result; `synergy` is the engine API plus `engine`.
  * Exits with code 1 if the page logs an error, so it doubles as a smoke test.
@@ -20,7 +21,7 @@ import path from 'node:path';
 type Action = { kind: 'click'; x: number; y: number } | { kind: 'key'; code: string } | { kind: 'wait'; ms: number } | { kind: 'eval'; source: string };
 
 const root = path.resolve(import.meta.dir, '..');
-const options = { url: '', out: '.screenshots/game.png', width: 1280, height: 720, scene: '', settle: 600, build: true };
+const options = { url: '', out: '.screenshots/game.png', width: 1280, height: 720, scale: 1, scene: '', settle: 600, build: true };
 const actions: Action[] = [];
 
 const args = Bun.argv.slice(2);
@@ -36,6 +37,7 @@ for (let i = 0; i < args.length; i++) {
     case '--out': options.out = value(); break;
     case '--width': options.width = Number(value()); break;
     case '--height': options.height = Number(value()); break;
+    case '--scale': options.scale = Number(value()); break;
     case '--scene': options.scene = value(); break;
     case '--settle': options.settle = Number(value()); break;
     case '--no-build': options.build = false; break;
@@ -113,7 +115,7 @@ const browser = await playwright.chromium.launch({
 const errors: string[] = [];
 let exitCode = 0;
 try {
-  const page = await browser.newPage({ viewport: { width: options.width, height: options.height }, deviceScaleFactor: 1 });
+  const page = await browser.newPage({ viewport: { width: options.width, height: options.height }, deviceScaleFactor: options.scale });
   page.on('console', (message) => {
     if (message.type() === 'error') errors.push(message.text());
   });
@@ -135,7 +137,7 @@ try {
   const out = path.resolve(root, options.out);
   await mkdir(path.dirname(out), { recursive: true });
   await page.screenshot({ path: out });
-  console.log(`Saved ${path.relative(process.cwd(), out)} (${options.width}x${options.height})`);
+  console.log(`Saved ${path.relative(process.cwd(), out)} (${options.width}x${options.height} at ${options.scale}x)`);
 } catch (error) {
   errors.push(String(error));
 } finally {

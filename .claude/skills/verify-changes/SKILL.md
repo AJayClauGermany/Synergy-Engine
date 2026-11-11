@@ -67,7 +67,7 @@ bun run screenshot --click 603,466 --click 606,365 --wait 700 --out .screenshots
 ```
 
 Options: `--click x,y` · `--key Space` · `--wait ms` · `--eval "<js>"` · `--scene Name` ·
-`--width/--height` · `--out file` · `--url http://localhost:3000` (use a running dev
+`--width/--height` · `--scale 2` · `--out file` · `--url http://localhost:3000` (use a running dev
 server) · `--no-build`.
 
 `--eval` runs in the page and prints JSON. `synergy` is the engine API plus `engine`:
