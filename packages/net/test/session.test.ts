@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
-import { type CommandEntry, CommandSession, LoopbackHub } from '../src';
+import { type CommandEntry, CommandSession, LoopbackHub, startTicker } from '../src';
 
-type Command = { type: 'move'; to: number } | { type: 'endTurn' };
+type Command = { type: 'move'; to: number } | { type: 'endTurn' } | { type: 'tick' };
 
 function record(session: CommandSession<Command>): CommandEntry<Command>[] {
   const seen: CommandEntry<Command>[] = [];
@@ -166,5 +166,36 @@ describe('CommandSession', () => {
     await Promise.resolve();
     expect(received).toEqual([{ nested: { value: 1 } }]);
     expect(a.peers).toEqual(['b']);
+  });
+
+  test('a ticker gives simultaneous play a shared clock that only the host drives', async () => {
+    const hub = new LoopbackHub();
+    const host = CommandSession.host<Command>(hub.connect('host'));
+    const guest = CommandSession.join<Command>(hub.connect('guest'), 'host');
+    // Each machine keeps its own state: how many ticks have passed, and when a move landed.
+    const worlds = [host, guest].map((session) => {
+      const world = { tick: 0, movedAtTick: -1 };
+      session.onCommand.add(({ command }) => {
+        if (command.type === 'tick') world.tick++;
+        else if (command.type === 'move') world.movedAtTick = world.tick;
+      });
+      return world;
+    });
+    const stops = [startTicker(host, 5, { type: 'tick' }), startTicker(guest, 5, { type: 'tick' })];
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    guest.submit({ type: 'move', to: 1 });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    for (const stop of stops) stop();
+    await new Promise((resolve) => setTimeout(resolve, 15));
+
+    expect(worlds[0]?.tick).toBeGreaterThanOrEqual(3);
+    // The guest never sent ticks, yet both sides agree on the clock and on when the move happened.
+    expect(host.log.filter((entry) => entry.command.type === 'tick').every((entry) => entry.playerId === 'host')).toBe(true);
+    expect(worlds[1]).toEqual(worlds[0] as (typeof worlds)[0]);
+    expect(worlds[0]?.movedAtTick).toBeGreaterThan(0);
+
+    const ticks = worlds[0]?.tick;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(worlds[0]?.tick).toBe(ticks as number);
   });
 });

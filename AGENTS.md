@@ -40,13 +40,15 @@ game/                    THE GAME. Most work happens here.
   src/online.ts          host/join helpers (PeerJS, Convex)
   test/                  rule tests and headless scene tests
 packages/engine/         Unity-style runtime on PlayCanvas   (@synergy/engine)
+                         src/grid + src/math are pure: import as @synergy/engine/grid, /math
 packages/ui/             React helpers: mountUI, useObservable, WorldAnchor   (@synergy/ui)
 packages/net/            command sessions, transports, Convex lobby   (@synergy/net)
 convex/                  backend functions; _generated/ is generated, never edit it
 cloudflare/worker.ts     password gate in front of the static build
 desktop/                 Electrobun shell
 scripts/                 dev server, build, screenshot tool
-docs/                    unity-to-synergy.md, architecture.md, multiplayer.md, deploying.md, desktop.md
+docs/                    unity-to-synergy.md, architecture.md, tilemaps.md, multiplayer.md,
+                         deploying.md, desktop.md, porting-notes.md (roadmap from the Unity original)
 ```
 
 ## Unity knowledge transfers, with these differences
@@ -67,8 +69,9 @@ Read `docs/unity-to-synergy.md` for the full map. The ones that cause bugs:
 7. **Coroutines are generators**: `*run(): IEnumerator { yield new WaitForSeconds(1); }`, started
    with `this.startCoroutine(this.run())` (call it).
 8. **Lights aim along -Y.** Use `light.direction = ...`.
-9. **No rigidbody physics, animation, audio or particles yet.** Colliders are for raycasts only.
-   Reach PlayCanvas directly via `gameObject.entity` / `engine.app` when needed.
+9. **No rigidbody physics, animation, audio, sprites or particles yet.** Colliders are for
+   raycasts only. Reach PlayCanvas directly via `gameObject.entity` / `engine.app` when needed.
+   `docs/porting-notes.md` lists what is missing and in what order to build it.
 
 ## How to do common things
 
@@ -94,6 +97,15 @@ Attach it in a scene or prefab: `gameObject.addComponent(Thing).speed = 5;`
 
 **Add a prefab.** `export const X = new Prefab('X', (go) => { ...addComponent... })`, then
 `instantiate(X, position)`.
+
+**Build a map.** Use the tile system (`docs/tilemaps.md`): a `Grid` (set `cellLayout`,
+and `cellSwizzle = CellSwizzle.XZY` for a ground map), child GameObjects with `Tilemap` +
+`TilemapRenderer` per layer, `tilemap.setTile({ x, y }, tile)`. Place things with
+`grid.getCellCenterWorld(cell)`; turn the mouse into a cell with `grid.raycast(ray)`.
+For movement ranges and routes use `findReachable` / `findPath` with `Hex.neighbors`.
+
+**Animate something.** Short one-off motion: `Tween.move(transform, target, 0.3)`.
+Multi-step sequences: a coroutine (which can `yield` a tween).
 
 **Show something in the HUD.** Add an `Observable` to `game/src/hud.ts`, set `.value` from
 game code, read it in a component with `useObservable`. Replace objects/arrays rather than
@@ -127,7 +139,8 @@ A passing type-check does not mean a script runs: a misspelled message name
 - One exported behaviour per file, named like the class.
 - Comments explain why, or map a concept to Unity. Public engine APIs get a doc comment.
 - Game rules are pure and deterministic: no `Math.random()`, `Date.now()` or scene access
-  inside `apply()`.
+  inside `apply()`. Use `new Random(state.seed)` for randomness and
+  `@synergy/engine/grid` for grid maths.
 - Tests sit next to what they test: `packages/*/test`, `game/test`, `cloudflare/*.test.ts`.
 
 ## Boundaries
@@ -144,5 +157,5 @@ A passing type-check does not mean a script runs: a misspelled message name
 ## Skills
 
 Task playbooks live in `.claude/skills/<name>/SKILL.md`: `gameplay-scripting`,
-`port-from-unity`, `verify-changes`, `multiplayer`, `ship-it`, `extend-engine`.
+`tile-maps`, `port-from-unity`, `verify-changes`, `multiplayer`, `ship-it`, `extend-engine`.
 See `docs/agent-skills.md` for these and for the vendors' optional skills.

@@ -62,6 +62,15 @@ Mouse to ground point without a collider:
 Moving things: `transform.position = Vector3.moveTowards(a, b, speed * Time.deltaTime)`.
 Vectors are immutable; assign the result back.
 
+One-off animation without writing an update loop:
+
+```ts
+Tween.move(this.transform, target, 0.3).setEase(Ease.OutCubic).onComplete(() => this.arrived());
+yield Tween.scale(this.transform, Vector3.one.mul(1.2), 0.1).setLoops(2, LoopType.Yoyo);  // in a coroutine
+```
+
+Maps, grids, hex tiles, cell picking and pathfinding have their own skill: `tile-maps`.
+
 ## Scenes and prefabs
 
 A scene is a `SceneBuilder` function registered in `game/src/main.tsx`. Inside it (and
@@ -93,6 +102,10 @@ labels that follow objects.
 - An object needs a Collider to be hit by `Physics.raycast` or to get `onMouse*`.
 - `GameObject.find` and `findObjectOfType` walk the scene: call them in `start`, cache
   the result.
+- `transform.translate(v)` moves in world units along the object's own axes;
+  `translate(v, Space.World)` along world axes.
+- `instantiate` copies a script's public fields (deep-copying arrays and object
+  literals) but not functions, events or `_private` fields.
 
 ## Finish
 

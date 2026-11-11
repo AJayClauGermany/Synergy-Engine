@@ -11,8 +11,10 @@ PlayCanvas            rendering, scene graph, asset loading
 ```
 
 Packages are consumed as TypeScript source through Bun workspaces; there is no build step
-between them. `packages/engine/src/math` imports nothing, so game rules and server code
-can use `Vector3` and friends without pulling in a renderer.
+between them. Two parts of the engine import nothing outside themselves and are exposed
+as their own entry points, so game rules and server code can use them without pulling
+in a renderer: `@synergy/engine/math` (vectors, colours, `Random`) and
+`@synergy/engine/grid` (cell layouts, hex maths, pathfinding).
 
 ## How the engine sits on PlayCanvas
 
@@ -25,6 +27,7 @@ can use `Vector3` and friends without pulling in a renderer.
 | `Camera`, `Light` | wrap the entity's `camera` / `light` component |
 | `MeshFilter` + `MeshRenderer` | share the entity's `render` component |
 | `Material` | wraps a `pc.StandardMaterial` |
+| `Grid`, `Tilemap` | Synergy data structures over `grid/`; `TilemapRenderer` builds one `pc.Mesh` per texture |
 | `MonoBehaviour`, coroutines, `Time`, `Input`, `Physics` | implemented by Synergy, not PlayCanvas scripts |
 
 Wrapping is lazy in the other direction too: any `pc.Entity` (for example the nodes of a
@@ -51,6 +54,10 @@ then PlayCanvas renders. `packages/engine/src/core/Engine.ts` is the whole loop.
 - While a scene builder, a `Prefab` build or an `instantiate` clone is running, those
   callbacks are **deferred** until it finishes, then run in creation order. A script's
   `awake` therefore sees the complete hierarchy and the values assigned during the build.
+  For scenes the deferral applies only to objects in the scene being built: the rest of
+  the game keeps running normally while an asynchronous load is in progress.
+- Scene loads run one at a time, never in the middle of a frame or of another load.
+  Calling `loadScene` from `awake`, `onDestroy` or twice in a row simply queues it.
 - `destroy` is deferred to the end of the frame. `onDisable` runs before `onDestroy`.
 - Coroutines stop when their GameObject is deactivated or destroyed (not when the
   behaviour is merely disabled), as in Unity.
@@ -62,8 +69,8 @@ then PlayCanvas renders. `packages/engine/src/core/Engine.ts` is the whole loop.
 `Engine.createHeadless()` builds the same app on PlayCanvas's null graphics device with a
 stub canvas: no DOM, no GPU, no frame loop. You advance it with `engine.step(dt)` and feed
 input through `engine.input` (`pressKey`, `moveMouse`, `pressMouseButton`, ...). Camera
-projection and raycasts work, so a test can click on things. See
-`game/test/scene.test.ts`.
+projection, raycasts and grid picking work (they are computed from transforms, not from
+rendered frames), so a test can click on things. See `game/test/scene.test.ts`.
 
 ## The sample game's shape
 
@@ -73,7 +80,9 @@ input ──submit(command)──▶ session ──onCommand──▶ rules.appl
               local │ PeerJS (WebRTC) │ Convex
 ```
 
-- `game/src/rules/` is pure data and functions: no engine, DOM or network.
+- `game/src/rules/` is pure data and functions: no scene, DOM or network (it uses only
+  `@synergy/engine/grid` for hex maths and pathfinding).
+- The map is a hexagonal `Grid` with two `Tilemap` layers (terrain and highlights).
 - `GameController` is the only place state changes, and only in response to a command
   coming back from the session.
 - Views (`BoardView`, `UnitView`) render state and know nothing about rules.

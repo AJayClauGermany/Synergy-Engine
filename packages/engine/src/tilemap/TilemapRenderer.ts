@@ -162,7 +162,7 @@ export class TilemapRenderer extends MonoBehaviour {
         minV = Math.min(minV, v);
         maxV = Math.max(maxV, v);
       }
-      const [u0, v0, u1, v1] = data.sprite?.uv ?? [0, 0, 1, 1];
+      const [u0, v0, u1, v1] = data.sprite?.uv ?? [0, 1, 1, 0];
       corners.forEach((corner, index) => {
         const point = corner.add(lift);
         batch.positions.push(point.x, point.y, point.z);
@@ -196,9 +196,20 @@ export class TilemapRenderer extends MonoBehaviour {
 
   private materialFor(batch: Batch): pc.StandardMaterial {
     const material = this.material.pcMaterial.clone() as pc.StandardMaterial;
-    material.diffuseVertexColor = true;
-    material.diffuseMap = batch.texture;
+    // Tile colours are authored like every other colour (sRGB), so have the shader
+    // convert them; otherwise they come out washed-out next to ordinary materials.
+    material.vertexColorGamma = true;
     material.useLighting = this.lit;
+    if (this.lit) {
+      material.diffuseVertexColor = true;
+      material.diffuseMap = batch.texture;
+    } else {
+      // Without lighting the diffuse colour contributes nothing; emission is what shows.
+      material.diffuse.set(0, 0, 0);
+      material.emissive.set(1, 1, 1);
+      material.emissiveVertexColor = true;
+      material.emissiveMap = batch.texture;
+    }
     // Flat maps are often seen from both sides (and from below in 2D set-ups).
     material.cull = pc.CULLFACE_NONE;
     material.twoSidedLighting = true;

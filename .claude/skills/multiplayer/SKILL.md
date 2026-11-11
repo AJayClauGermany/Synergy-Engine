@@ -22,9 +22,19 @@ deterministic `apply`.
 
 - Deterministic: no `Math.random()`, `Date.now()`, iteration over `Set`/`Map` insertion
   quirks you do not control, or floating-point paths that differ between machines.
-  Random outcomes come from a seed stored in the state.
+  Random outcomes come from a seed stored in the state:
+  `const random = new Random(state.seed); ...; return { ...state, seed: random.state }`.
+- Import grid maths, pathfinding and `Random` from `@synergy/engine/grid` (pure), never
+  from `@synergy/engine` (which brings the renderer).
 - Pure: no engine, DOM or network access. State is plain JSON-serialisable data.
 - Never change synced state anywhere else (not in `update`, not in a click handler).
+
+## Real-time and simultaneous play
+
+Players acting at once need a shared clock. `startTicker(session, 2000, { type: 'tick' })`
+makes the host submit a tick command on an interval; `apply` advances the world on it and
+stores cooldowns as "ready at tick N". Never use a local clock for game time. See
+"Simultaneous play" in `docs/multiplayer.md`.
 
 ## Session types
 

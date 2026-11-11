@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { Hex } from '@synergy/engine/grid';
 import { CommandSession, LoopbackHub } from '@synergy/net';
 import {
   apply,
@@ -8,8 +9,12 @@ import {
   createGame,
   type GameState,
   MAX_HP,
+  MOVE_POINTS,
+  movement,
+  pathFor,
   reachable,
   teamOf,
+  terrainAt,
   unitAt,
   unitById,
 } from '../src/rules/skirmish';
@@ -23,30 +28,51 @@ function play(state: GameState, ...commands: Command[]): GameState {
   return state;
 }
 
+/** Puts a unit somewhere directly, to set up a situation without playing it out. */
+function place(state: GameState, id: number, x: number, y: number): GameState {
+  return { ...state, units: state.units.map((unit) => (unit.id === id ? { ...unit, x, y } : unit)) };
+}
+
 describe('skirmish rules', () => {
-  test('a new game has two teams of four facing each other', () => {
+  test('a new game has two teams of four on a map with forests and a lake', () => {
     const state = createGame();
     expect(state.units.filter((unit) => unit.team === 0).length).toBe(4);
     expect(state.units.filter((unit) => unit.team === 1).length).toBe(4);
     expect(state.turn).toBe(0);
     expect(unitAt(state, 1, 0)?.team).toBe(0);
     expect(unitAt(state, 1, 7)?.team).toBe(1);
+    expect(terrainAt({ x: 0, y: 0 })).toBe('plain');
+    expect(terrainAt({ x: 2, y: 1 })).toBe('forest');
+    expect(terrainAt({ x: 4, y: 3 })).toBe('water');
+    expect(terrainAt({ x: 9, y: 0 })).toBeNull();
   });
 
-  test('units move up to three steps and not through others', () => {
+  test('movement spends points: forests cost two, water and other units block', () => {
     const state = createGame();
     const unit = unitAt(state, 3, 0);
     if (!unit) throw new Error('missing unit');
-    const cells = reachable(state, unit);
-    expect(cells).toContainEqual({ x: 3, y: 3 });
-    expect(cells).toContainEqual({ x: 2, y: 1 });
-    expect(cells).not.toContainEqual({ x: 3, y: 4 });
-    // (4, 0) is occupied by a friendly unit.
-    expect(cells).not.toContainEqual({ x: 4, y: 0 });
-    expect(check(state, { type: 'move', unit: unit.id, x: 3, y: 4 }, 0)).toMatch(/cannot move/);
+    const range = movement(state, unit);
 
-    const moved = play(state, { type: 'move', unit: unit.id, x: 3, y: 3 });
-    expect(unitById(moved, unit.id)).toMatchObject({ x: 3, y: 3, moved: true });
+    // Straight ahead over open ground: three steps.
+    expect(range.has({ x: 4, y: 3 })).toBe(false); // water
+    expect(range.costTo({ x: 3, y: 2 })).toBe(2);
+    // The forest at (2, 1) is adjacent but costs two points to enter.
+    expect(Hex.distance(unit, { x: 2, y: 1 })).toBe(1);
+    expect(range.costTo({ x: 2, y: 1 })).toBe(2);
+    // Nothing costs more than the unit has, and occupied cells are never destinations.
+    for (const { cost } of range.cells) expect(cost).toBeLessThanOrEqual(MOVE_POINTS);
+    expect(range.has({ x: 5, y: 0 })).toBe(false);
+    expect(reachable(state, unit).length).toBe(range.cells.length);
+
+    expect(check(state, { type: 'move', unit: unit.id, x: 3, y: 5 }, 0)).toMatch(/cannot move/);
+    const path = pathFor(state, unit, { x: 3, y: 2 });
+    expect(path?.[0]).toEqual({ x: 3, y: 0 });
+    expect(path?.at(-1)).toEqual({ x: 3, y: 2 });
+    expect(path?.length).toBe(3);
+    expect(pathFor(state, unit, { x: 4, y: 3 })).toBeNull();
+
+    const moved = play(state, { type: 'move', unit: unit.id, x: 3, y: 2 });
+    expect(unitById(moved, unit.id)).toMatchObject({ x: 3, y: 2, moved: true });
     expect(reachable(moved, unitById(moved, unit.id) as never)).toEqual([]);
     // The original state is untouched.
     expect(unitById(state, unit.id)).toMatchObject({ x: 3, y: 0, moved: false });
@@ -58,27 +84,23 @@ describe('skirmish rules', () => {
     if (!red) throw new Error('missing unit');
     expect(check(state, { type: 'move', unit: red.id, x: 3, y: 6 }, 1)).toMatch(/Blue's turn/);
     expect(check(state, { type: 'move', unit: red.id, x: 3, y: 6 }, 0)).toMatch(/not your unit/);
-    const next = play(state, { type: 'move', unit: 0, x: 1, y: 2 }, { type: 'endTurn' });
+    const next = play(state, { type: 'move', unit: 0, x: 1, y: 1 }, { type: 'endTurn' });
     expect(next.turn).toBe(1);
     expect(next.turnNumber).toBe(2);
     expect(unitById(next, 0)?.moved).toBe(false);
   });
 
-  test('adjacent enemies can be attacked until one side is gone', () => {
-    // Walk a blue unit (id 1, column 3) up to the red unit in the same column (id 5).
-    let state = play(
-      createGame(),
-      { type: 'move', unit: 1, x: 3, y: 3 },
-      { type: 'endTurn' },
-      { type: 'endTurn' },
-      { type: 'move', unit: 1, x: 3, y: 6 },
-    );
+  test('adjacent enemies (all six sides) can be attacked until one side is gone', () => {
+    // Blue unit 1 next to red unit 5, which starts at (3, 7).
+    let state = place(createGame(), 1, 3, 6);
     const attacker = unitById(state, 1);
     if (!attacker) throw new Error('missing unit');
     expect(attackable(state, attacker).map((unit) => unit.id)).toEqual([5]);
     state = play(state, { type: 'attack', unit: 1, target: 5 });
     expect(unitById(state, 5)?.hp).toBe(MAX_HP - 2);
     expect(check(state, { type: 'attack', unit: 1, target: 5 }, 0)).toMatch(/cannot attack/);
+    // Not adjacent: two cells away.
+    expect(check(place(createGame(), 1, 3, 5), { type: 'attack', unit: 1, target: 5 }, 0)).toMatch(/cannot attack/);
 
     // Remove everything red but the wounded unit, then finish it off.
     state = { ...state, units: state.units.filter((unit) => unit.team === 0 || unit.id === 5) };
@@ -120,15 +142,15 @@ describe('two players stay in sync through a session', () => {
     hub.flush();
     const [host, guest] = sessions as [CommandSession<Command>, CommandSession<Command>];
 
-    guest.submit({ type: 'move', unit: 5, x: 3, y: 5 }); // Not Red's turn: ignored everywhere.
+    guest.submit({ type: 'move', unit: 5, x: 3, y: 6 }); // Not Red's turn: ignored everywhere.
     host.submit({ type: 'move', unit: 1, x: 3, y: 2 });
     host.submit({ type: 'endTurn' });
-    guest.submit({ type: 'move', unit: 5, x: 3, y: 5 });
+    guest.submit({ type: 'move', unit: 5, x: 3, y: 6 });
     hub.flush();
 
     expect(states[0]?.state).toEqual(states[1]?.state as GameState);
     expect(unitById(states[1]?.state as GameState, 1)).toMatchObject({ x: 3, y: 2 });
-    expect(unitById(states[0]?.state as GameState, 5)).toMatchObject({ x: 3, y: 5 });
+    expect(unitById(states[0]?.state as GameState, 5)).toMatchObject({ x: 3, y: 6 });
     expect(states[0]?.state.turn).toBe(1);
   });
 });

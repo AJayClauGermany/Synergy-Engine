@@ -16,6 +16,7 @@ import {
   MonoBehaviour,
   Prefab,
   Ray,
+  Sprite,
   Tile,
   TileBase,
   type TileData,
@@ -143,6 +144,16 @@ describe('Tilemap', () => {
     const { terrain } = makeGrid();
     terrain.setTile({ x: 1, y: 1 }, forest);
     expect(terrain.getTile<TerrainTile>({ x: 1, y: 1 })?.moveCost).toBe(2);
+  });
+
+  test('sprites cut a sheet into texture rectangles (top-left pixel origin)', () => {
+    const sheet = { width: 128, height: 64 } as never;
+    const sprites = Sprite.slice(sheet, 2, 2);
+    expect(sprites.length).toBe(4);
+    // PlayCanvas texture coordinates put v = 0 at the top row of the image.
+    expect(sprites[0]?.uv).toEqual([0, 0.5, 0.5, 0]); // top-left quarter
+    expect(sprites[3]?.uv).toEqual([0.5, 1, 1, 0.5]); // bottom-right quarter
+    expect(new Sprite(sheet).uv).toEqual([0, 1, 1, 0]);
   });
 
   test('a tile can spawn a GameObject on its cell and removes it with the tile', () => {

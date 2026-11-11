@@ -19,7 +19,9 @@ import { GameController } from '../behaviours/GameController';
  *   Camera Rig (CameraRig)
  *     Main Camera (Camera)       tag: MainCamera
  *   Sun (Light)
- *   Board (BoardView, BoxCollider)
+ *   Board (Grid, BoardView)
+ *     Terrain (Tilemap, TilemapRenderer)
+ *     Highlight (Tilemap, TilemapRenderer)
  *   Game Controller (GameController)
  */
 export const buildSkirmishScene: SceneBuilder = () => {
@@ -27,8 +29,8 @@ export const buildSkirmishScene: SceneBuilder = () => {
 
   const rig = new GameObject('Camera Rig').addComponent(CameraRig);
   // Look at a point slightly in front of the board's centre, leaving room for the HUD at the bottom.
-  rig.transform.position = new Vector3(0, 0, 0.9);
-  rig.distance = 14;
+  rig.transform.position = new Vector3(0, 0, 0.8);
+  rig.distance = 15;
   const camera = new GameObject('Main Camera');
   camera.tag = 'MainCamera';
   camera.transform.setParent(rig.transform, false);

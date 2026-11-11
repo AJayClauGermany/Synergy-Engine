@@ -11,9 +11,12 @@ procedure and the traps.
 ## Procedure
 
 1. **Check the feature exists.** Not available yet: Rigidbody and collision/trigger
-   messages, Animator, AudioSource, ParticleSystem, NavMesh, uGUI. Say so up front and
-   propose the substitute (kinematic movement with raycasts, PlayCanvas directly through
-   `gameObject.entity`, React for UI) instead of inventing an API.
+   messages, Animator, AudioSource, SpriteRenderer, ParticleSystem, NavMesh, uGUI. Say so
+   up front and propose the substitute (kinematic movement with raycasts, PlayCanvas
+   directly through `gameObject.entity`, React for UI) instead of inventing an API.
+   Available and easy to miss: `Grid`/`Tilemap`/`Tile` (including Unity's hex layout),
+   `Tween` for DOTween calls, seeded `Random`, grid pathfinding. `docs/porting-notes.md`
+   maps the original Unity project's packages one by one.
 2. **Translate mechanically:**
    - `class X : MonoBehaviour` → `export class X extends MonoBehaviour`
    - `void Update()` → `update()`; all members camelCase
@@ -34,6 +37,12 @@ procedure and the traps.
    - `Physics.Raycast(ray, out var hit)` → `const hit = Physics.raycast(ray); if (hit)`.
    - `if (x != null)` on an engine object → `if (isAlive(x))`.
    - `Invoke("Name", t)` → `this.invoke(this.name, t)`.
+   - `Random.Range(a, b)` → a `Random` instance you own: `random.rangeInt(a, b)`. In
+     synced rules, seed it from the game state and store `random.state` back. Results
+     will not match Unity's for the same seed.
+   - `transform.DOMove(p, t).SetEase(Ease.OutQuad)` → `Tween.move(transform, p, t).setEase(Ease.OutQuad)`.
+   - `tilemap.SetTile(new Vector3Int(x, y, 0), tile)` → `tilemap.setTile({ x, y }, tile)`.
+     Hex cell coordinates are the same as Unity's.
    - Mouse buttons keep Unity's numbering (1 is right).
    - Rotation signs: positive rotation about Y turns counter-clockwise seen from above
      (right-handed), the opposite of Unity. Prefer `lookAt` / `Quaternion.lookRotation`

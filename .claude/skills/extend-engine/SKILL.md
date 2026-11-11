@@ -12,6 +12,10 @@ headlessly.
 ## Where things go
 
 - `src/math/`: pure TypeScript, immutable values, **no imports from outside the folder**.
+- `src/grid/`: pure grid maths (layouts, hex, pathfinding). May import `../math` only.
+  Both are public entry points (`@synergy/engine/math`, `/grid`) used by game rules and
+  servers, so they must never import PlayCanvas or anything from `core/`.
+- `src/tilemap/`: the `Grid`/`Tilemap`/`TilemapRenderer` components built on `grid/`.
 - `src/core/`: GameObject, Component, lifecycle, Time, Input, scenes. No specific
   component types (they plug in through `core/hooks.ts`).
 - `src/components/`, `src/physics/`, `src/assets/`: built-in components and services.
@@ -83,7 +87,12 @@ afterEach(() => { engine.dispose(); });
   `gameObject.entity` that PlayCanvas ended up in the right state.
 - Cloning: add a case proving `instantiate` copies the new component correctly.
 - Rendering output cannot be asserted headlessly. Add the feature to a scene and run
-  `bun run screenshot`.
+  `bun run screenshot`. Texture orientation, colour space (vertex colours need
+  `vertexColorGamma`) and unlit materials (colour must go through emission) have all
+  needed a screenshot to get right.
+- Do not read PlayCanvas state that is only refreshed when a frame renders (camera view
+  matrices, for example). Compute from transforms so headless mode and same-frame
+  queries are correct.
 
 ## Then update the docs
 

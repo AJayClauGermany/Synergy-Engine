@@ -19,8 +19,8 @@ export class Spinner extends MonoBehaviour {
 ```
 
 `GameObject`, `Transform`, `MonoBehaviour` with the real lifecycle order, coroutines,
-`Time`, `Input`, `Physics.raycast`, `SceneManager`, `instantiate`/`destroy`, prefabs: same
-names, same behaviour, camelCase. [docs/unity-to-synergy.md](docs/unity-to-synergy.md)
+`Time`, `Input`, `Physics.raycast`, `SceneManager`, `instantiate`/`destroy`, prefabs,
+`Grid`/`Tilemap`: same names, same behaviour, camelCase. [docs/unity-to-synergy.md](docs/unity-to-synergy.md)
 has the full map and the handful of deliberate differences.
 
 ## What is in the box
@@ -28,12 +28,14 @@ has the full map and the handful of deliberate differences.
 | | |
 |---|---|
 | **Engine** (`packages/engine`) | Unity-style runtime. Its only dependency is PlayCanvas. |
+| **Tile maps** | Unity's `Grid`/`Tilemap`/`Tile` with square and hex cells, layers, mouse picking, hex maths and weighted pathfinding. |
+| **Tweens** | DOTween-style `Tween.move(...)`, eases, loops; usable from coroutines. |
 | **HUD** (`packages/ui`) | React over the canvas: `mountUI`, `useObservable`, `<WorldAnchor>` for health bars and labels. |
 | **Multiplayer** (`packages/net`) | Ordered command sessions: local, peer-to-peer over WebRTC (PeerJS), or persistent through Convex. |
 | **Backend** (`convex/`) | Room lobby and a server-ordered command log. |
 | **Previews** (`cloudflare/`) | Deploy to Cloudflare Workers behind a password. |
 | **Desktop** (`desktop/`) | Package with Electrobun; runs offline. |
-| **Sample game** (`game/`) | A small turn-based skirmish that uses all of the above. |
+| **Sample game** (`game/`) | A small turn-based hex skirmish that uses all of the above. |
 | **Agent support** | `AGENTS.md`, task skills, a headless test mode and a screenshot tool, so AI agents can build and verify changes on their own. |
 
 It is aimed at strategy games (turn-based and real-time), but the engine is generic.
@@ -50,8 +52,8 @@ bun install
 bun run dev
 ```
 
-Open http://localhost:3000. Click a blue unit, then a highlighted tile; `Space` ends the
-turn. Edit anything under `game/src` and the page reloads.
+Open http://localhost:3000. Click a blue unit, then a highlighted hex; `Space` ends the
+turn. Forests cost extra movement and water blocks it. Edit anything under `game/src` and the page reloads.
 
 ```bash
 bun run check
@@ -87,21 +89,24 @@ type-checks everything and runs the tests, with no browser needed.
 
 - [Unity to Synergy](docs/unity-to-synergy.md): the API map and the differences
 - [Architecture](docs/architecture.md): how it sits on PlayCanvas, the frame loop, headless mode
+- [Tile maps](docs/tilemaps.md): grids, hex maps, layers, picking, pathfinding
 - [Multiplayer](docs/multiplayer.md): commands, sessions, PeerJS, Convex
 - [Deploying](docs/deploying.md): password-protected Cloudflare previews
 - [Desktop](docs/desktop.md): Electrobun packaging
 - [Agent skills](docs/agent-skills.md): what agents get, and optional vendor skills
+- [Porting notes](docs/porting-notes.md): what the original Unity game used, and what is still to build
 
 ## Status
 
-This is an early foundation (v0.1). Working and tested: the engine core, React HUD,
-command sessions, the Cloudflare gate and the sample game. Type-checked but not tested
+This is an early foundation (v0.1). Working and tested: the engine core, tile maps and
+pathfinding, tweens, React HUD, command sessions, the Cloudflare gate and the sample game. Type-checked but not tested
 against live services: PeerJS transport, Convex backend. Written from official templates
 but not yet build-verified: the Electrobun desktop shell.
 
-Not built yet: rigidbody physics, animation, audio, particles and pathfinding. PlayCanvas
-provides all of them and is reachable directly (`gameObject.entity`, `engine.app`) until
-they are wrapped.
+Not built yet: sprite rendering, audio, rigidbody physics, animation and particles.
+PlayCanvas provides all of them and is reachable directly (`gameObject.entity`,
+`engine.app`) until they are wrapped. [Porting notes](docs/porting-notes.md) has the
+priority order.
 
 ## License
 

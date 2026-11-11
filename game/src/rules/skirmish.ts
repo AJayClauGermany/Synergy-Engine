@@ -1,7 +1,8 @@
 /**
  * The rules of the sample game, as plain data and pure functions. Nothing here touches
- * the engine, the DOM or the network, so the same code can run in the browser, in
- * `bun test`, and on a server to validate moves.
+ * the scene, the DOM or the network, so the same code can run in the browser, in
+ * `bun test`, and on a server to validate moves. (`@synergy/engine/grid` is the
+ * engine's pure grid maths: no renderer comes with it.)
  *
  * The pattern to copy for your own game:
  *   state    - a plain serialisable object
@@ -9,15 +10,51 @@
  *   check()  - is this command legal right now?
  *   apply()  - the next state. Deterministic: same state + command => same result.
  */
+import { findReachable, Hex, type Reachable } from '@synergy/engine/grid';
 
-export const BOARD_SIZE = 8;
+export const COLUMNS = 9;
+export const ROWS = 8;
 export const MAX_HP = 5;
-export const MOVE_RANGE = 3;
+/** Movement points a unit may spend per turn. */
+export const MOVE_POINTS = 3;
 export const ATTACK_DAMAGE = 2;
 
 /** 0 = Blue (moves first), 1 = Red. */
 export type Team = 0 | 1;
 export const TEAM_NAMES = ['Blue', 'Red'] as const;
+
+/** A hex cell in the map's offset coordinates (odd rows sit half a cell to the right). */
+export interface Cell {
+  x: number;
+  y: number;
+}
+
+export type Terrain = 'plain' | 'forest' | 'water';
+
+/** Movement points needed to enter each kind of terrain. */
+export const MOVE_COST: Record<Terrain, number> = { plain: 1, forest: 2, water: Number.POSITIVE_INFINITY };
+
+// The map, row 0 (Blue's side) first. `.` plain, `f` forest, `~` water.
+const MAP = [
+  '.........',
+  '..f...f..',
+  '.f.....f.',
+  '...f~~...',
+  '...~~f...',
+  '.f.....f.',
+  '..f...f..',
+  '.........',
+] as const;
+
+const TERRAIN_BY_SYMBOL: Record<string, Terrain> = { '.': 'plain', f: 'forest', '~': 'water' };
+
+export const inBounds = (cell: Cell) => cell.x >= 0 && cell.y >= 0 && cell.x < COLUMNS && cell.y < ROWS;
+
+/** The terrain of a cell, or `null` outside the map. */
+export function terrainAt(cell: Cell): Terrain | null {
+  const symbol = MAP[cell.y]?.[cell.x];
+  return symbol ? (TERRAIN_BY_SYMBOL[symbol] ?? null) : null;
+}
 
 export interface Unit {
   id: number;
@@ -44,17 +81,12 @@ export type Command =
   | { type: 'endTurn' }
   | { type: 'restart' };
 
-export interface Cell {
-  x: number;
-  y: number;
-}
-
 export function createGame(): GameState {
   const units: Unit[] = [];
-  const columns = [1, 3, 4, 6];
+  const columns = [1, 3, 5, 7];
   columns.forEach((x, index) => {
     units.push({ id: index, team: 0, x, y: 0, hp: MAX_HP, moved: false, attacked: false });
-    units.push({ id: index + columns.length, team: 1, x, y: BOARD_SIZE - 1, hp: MAX_HP, moved: false, attacked: false });
+    units.push({ id: index + columns.length, team: 1, x, y: ROWS - 1, hp: MAX_HP, moved: false, attacked: false });
   });
   return { units, turn: 0, turnNumber: 1, winner: null };
 }
@@ -67,45 +99,34 @@ export function unitById(state: GameState, id: number): Unit | undefined {
   return state.units.find((unit) => unit.id === id);
 }
 
-const NEIGHBOURS: readonly Cell[] = [
-  { x: 1, y: 0 },
-  { x: -1, y: 0 },
-  { x: 0, y: 1 },
-  { x: 0, y: -1 },
-];
+/**
+ * Where the unit can walk this turn and by which route: forests cost 2 points, water and
+ * occupied cells cannot be entered. Ask the result with `.has(cell)` / `.pathTo(cell)`.
+ */
+export function movement(state: GameState, unit: Unit): Reachable {
+  if (unit.moved || unit.attacked) return findReachable(unit, 0, { neighbors: () => [] });
+  return findReachable(unit, MOVE_POINTS, {
+    neighbors: (cell) => Hex.neighbors(cell).filter(inBounds),
+    cost: (_from, to) => (unitAt(state, to.x, to.y) ? Number.POSITIVE_INFINITY : MOVE_COST[terrainAt(to) ?? 'water']),
+  });
+}
 
-const inBounds = (x: number, y: number) => x >= 0 && y >= 0 && x < BOARD_SIZE && y < BOARD_SIZE;
-
-/** Cells the unit can walk to this turn: up to MOVE_RANGE steps, not through other units. */
+/** Cells the unit can walk to this turn. */
 export function reachable(state: GameState, unit: Unit): Cell[] {
-  if (unit.moved || unit.attacked) return [];
-  const visited = new Set<string>([`${unit.x},${unit.y}`]);
-  const result: Cell[] = [];
-  let frontier: Cell[] = [{ x: unit.x, y: unit.y }];
-  for (let step = 0; step < MOVE_RANGE; step++) {
-    const next: Cell[] = [];
-    for (const cell of frontier) {
-      for (const offset of NEIGHBOURS) {
-        const x = cell.x + offset.x;
-        const y = cell.y + offset.y;
-        const key = `${x},${y}`;
-        if (!inBounds(x, y) || visited.has(key) || unitAt(state, x, y)) continue;
-        visited.add(key);
-        next.push({ x, y });
-        result.push({ x, y });
-      }
-    }
-    frontier = next;
-  }
-  return result;
+  return movement(state, unit).cells.map(({ cell }) => ({ x: cell.x, y: cell.y }));
+}
+
+/** The cells a move passes through, from the unit's cell to `target`, or `null` if it cannot get there. */
+export function pathFor(state: GameState, unit: Unit, target: Cell): Cell[] | null {
+  const route = movement(state, unit);
+  if (!route.has(target)) return null;
+  return route.pathTo(target)?.map((cell) => ({ x: cell.x, y: cell.y })) ?? null;
 }
 
 /** Enemy units next to this unit that it may attack this turn. */
 export function attackable(state: GameState, unit: Unit): Unit[] {
   if (unit.attacked) return [];
-  return state.units.filter(
-    (other) => other.team !== unit.team && Math.abs(other.x - unit.x) + Math.abs(other.y - unit.y) === 1,
-  );
+  return state.units.filter((other) => other.team !== unit.team && Hex.distance(other, unit) === 1);
 }
 
 /**
@@ -122,8 +143,7 @@ export function check(state: GameState, command: Command, team: Team): string | 
   if (!unit) return 'That unit does not exist.';
   if (unit.team !== team) return 'That is not your unit.';
   if (command.type === 'move') {
-    const allowed = reachable(state, unit).some((cell) => cell.x === command.x && cell.y === command.y);
-    return allowed ? null : 'That unit cannot move there.';
+    return movement(state, unit).has(command) ? null : 'That unit cannot move there.';
   }
   const allowed = attackable(state, unit).some((target) => target.id === command.target);
   return allowed ? null : 'That unit cannot attack that target.';

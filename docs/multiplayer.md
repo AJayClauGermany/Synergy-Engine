@@ -16,8 +16,49 @@ replays the log. This fits turn-based games directly. For lockstep real-time str
 stamp each command with the simulation tick it takes effect on and advance the simulation
 in `fixedUpdate`.
 
-Rules for deterministic `apply`: no `Math.random()` (carry a seed in the state), no
-`Date.now()`, no reading from the scene; plain data in, plain data out.
+Rules for deterministic `apply`: no `Math.random()`, no `Date.now()`, no reading from the
+scene; plain data in, plain data out. For randomness, keep a seed in the state:
+
+```ts
+const random = new Random(state.seed);
+const damage = random.rangeInt(2, 5);
+return { ...state, seed: random.state };
+```
+
+`Random`, the hex helpers and pathfinding come from `@synergy/engine/grid`, which has no
+renderer attached and is safe to import in rules and on a server.
+
+## Simultaneous play: shared world ticks
+
+When players act at the same time (real-time strategy, per-action cooldowns), game time
+must be something everyone agrees on. Make it a command:
+
+```ts
+const stop = startTicker(session, 2000, { type: 'tick' });   // only the host's machine sends
+```
+
+```ts
+function apply(state: State, command: Command): State {
+  if (command.type === 'tick') return { ...state, tick: state.tick + 1 /* income, regen, ... */ };
+  if (command.type === 'fire') {
+    return { ...state, units: update(state.units, command.unit, { readyAtTick: state.tick + 3 }) };
+  }
+  ...
+}
+
+function check(state: State, command: Command, team: Team): string | null {
+  if (command.type === 'fire' && unit.readyAtTick > state.tick) return 'Still cooling down.';
+  ...
+}
+```
+
+Ticks and actions travel in one ordered stream, so every machine sees each action land
+between the same two ticks. Measure time in ticks stored in the state, never with a
+local clock. Views can still animate smoothly between ticks.
+
+If the host leaves, the clock stops with the session. For a clock that does not depend
+on a player's machine, drive ticks from the server (a Convex scheduled function that
+appends tick commands); that is not built yet.
 
 ## Three ways to run a session
 
@@ -88,6 +129,12 @@ You can combine the two: use Convex as the lobby (store the PeerJS code in the r
   server authoritative, import your pure rules module into the mutation and reject there.
 - **Hidden information.** A shared command log shows everything to everyone. Games with
   fog of war or hidden hands need per-player views computed on the server.
+
+## Not included
+
+- A dedicated real-time game server. If you need one, implement `Session<C>` over it
+  (Colyseus or anything else); game code only depends on that interface.
+- Server-driven ticks, host migration, reconnection for peer-to-peer sessions.
 
 ## Testing
 

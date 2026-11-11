@@ -15,6 +15,7 @@ Project skills:
 | Skill | Use it when |
 |-------|-------------|
 | `gameplay-scripting` | writing or changing behaviours, scenes, prefabs, input, coroutines |
+| `tile-maps` | building maps and boards: hex or square tiles, layers, cell picking, pathfinding |
 | `port-from-unity` | translating Unity C# or a Unity tutorial into this engine |
 | `verify-changes` | checking a change: type-check, headless tests, screenshots |
 | `multiplayer` | adding commands, sessions, online play or Convex functions |

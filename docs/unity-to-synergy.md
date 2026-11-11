@@ -49,7 +49,9 @@ export class Spinner extends MonoBehaviour {
 | 13 | Rigidbody physics, collisions, triggers | **Not available yet.** Colliders exist for raycasts and overlap queries only | Kept out of the core to stay small. |
 | 14 | UI: uGUI / UI Toolkit | React, via `@synergy/ui` | See below. |
 | 15 | `Invoke("Method", 2f)` | `this.invoke(this.method, 2)` | Pass the function, not its name. |
-| 16 | `[SerializeField] private` vs `private` | `instantiate` copies a script's fields except those starting with `_`, functions, and `UnityEvent`/`Observable`/`Map`/`Set` instances | There is no serializer; this is the stand-in. |
+| 16 | `[SerializeField] private` vs `private` | `instantiate` copies a script's fields except those starting with `_`, functions, and `UnityEvent`/`Observable`/`Map`/`Set` instances. Arrays and object literals are deep-copied | There is no serializer; this is the stand-in. |
+| 17 | `Random` is one global generator | `new Random(seed)` is an object you own | Deterministic rules need an explicit, seedable generator. Its numbers do not match Unity's. |
+| 18 | `TilemapRenderer.sortingOrder` sorts 2D layers | It lifts the layer off the grid by a small step | Avoids flicker between layers on the same plane in 3D. |
 
 ### Operators
 
@@ -114,8 +116,11 @@ this.startCoroutine(this.fadeOut());  // note the call: pass the generator objec
 ```
 
 `yield return x` becomes `yield x`. Also available: `WaitForSecondsRealtime`,
-`WaitForEndOfFrame`, `WaitForFixedUpdate`, `WaitWhile`, `stopCoroutine`,
-`stopAllCoroutines`, `invoke`, `invokeRepeating`, `cancelInvoke`.
+`WaitForEndOfFrame`, `WaitForFixedUpdate`, `WaitWhile`, `CustomYieldInstruction`,
+`stopCoroutine`, `stopAllCoroutines`, `invoke`, `invokeRepeating`, `cancelInvoke`.
+
+A coroutine may stop itself (deactivate or destroy its own object, call
+`stopAllCoroutines`); it ends at its next `yield`, and its `finally` blocks run.
 
 ### Transform
 
@@ -140,7 +145,8 @@ Iterate children with `for (const child of transform)`.
 | `Screen.width`, `Screen.height` | same (CSS pixels) |
 | `Debug.Log`, `LogWarning`, `LogError`, `DrawLine`, `DrawRay` | `Debug.log`, `logWarning`, `logError`, `drawLine`, `drawRay` |
 | `Mathf.*` | `Mathf.*` in camelCase; `Mathf.SmoothDamp(..., ref v, ...)` returns `[value, velocity]` |
-| `SceneManager.LoadScene("Main")` | `await SceneManager.loadScene('Main')` after `SceneManager.register('Main', build)` |
+| `SceneManager.LoadScene("Main")` | `await SceneManager.loadScene('Main')` after `SceneManager.register('Main', build)`. For scenes that need assets, register `{ preload, build }` |
+| `Random.Range`, `Random.value` | `new Random(seed)`: `range`, `rangeInt`, `value`, `pick`, `shuffle`, `state` |
 | `RenderSettings.ambientLight` | same |
 | `Camera.main`, `ScreenPointToRay`, `WorldToScreenPoint`, `ScreenToWorldPoint` | same in camelCase |
 | `LayerMask.GetMask("Units")`, `NameToLayer` | `LayerMask.getMask('Units')`, `nameToLayer`; name layers with `LayerMask.define(8, 'Units')` |
@@ -155,6 +161,35 @@ Iterate children with `for (const child of transform)`.
 | `new Mesh { vertices, triangles }`, `RecalculateNormals()` | `new Mesh()`, `vertices`, `triangles`, `recalculateNormals()` |
 | `Light` (type, color, intensity, range, spotAngle, shadows) | same, plus `direction` |
 | `Resources.Load` / Addressables | `await Assets.loadModel(url)`, `Assets.loadTexture(url)` |
+
+### Tile maps
+
+| Unity | Synergy |
+|-------|---------|
+| `Grid` (`cellSize`, `cellGap`, `cellLayout`, `cellSwizzle`) | same. Layouts: `Rectangle`, `Hexagon` (Unity's offset coordinates) |
+| `CellToWorld`, `WorldToCell`, `GetCellCenterWorld` | same in camelCase |
+| `Tilemap.SetTile`, `GetTile<T>`, `HasTile`, `SetTiles`, `BoxFill`, `FloodFill`, `SwapTile`, `ClearAllTiles`, `cellBounds`, `SetColor` | same in camelCase |
+| `Tile`, `TileBase.GetTileData`, `Tile.gameObject` | `Tile`, `TileBase.getTileData`, `tile.gameObject` (a `Prefab` or GameObject) |
+| `TilemapRenderer` (`sortingOrder`) | same |
+| `Vector3Int`, `Vector2Int`, `BoundsInt` | same; any `{ x, y }` is accepted as a cell |
+| `Sprite` | `new Sprite(texture, rect)`, `Sprite.slice(texture, columns, rows)` |
+| Mouse to cell (usually `ScreenToWorldPoint` + `WorldToCell`) | `grid.raycast(ray)` |
+| (custom code) hex neighbours, distance, pathfinding | `Hex`, `Square`, `findPath`, `findReachable` |
+
+Details and examples: [tilemaps.md](tilemaps.md).
+
+### Tweening
+
+Unity has none built in; this covers the common DOTween calls.
+
+| DOTween | Synergy |
+|---------|---------|
+| `transform.DOMove(target, 0.4f)` | `Tween.move(transform, target, 0.4)` |
+| `DOLocalMove`, `DORotateQuaternion`, `DOScale` | `Tween.moveLocal`, `Tween.rotate`, `Tween.scale` |
+| `DOTween.To(getter, setter, end, duration)` | `Tween.to(from, to, duration, (value) => ...)` for numbers, vectors, colours, quaternions |
+| `.SetEase(Ease.OutCubic)`, `.SetDelay`, `.SetLoops(2, LoopType.Yoyo)`, `.OnComplete`, `.SetUpdate(true)` | `.setEase(Ease.OutCubic)`, `.setDelay`, `.setLoops(2, LoopType.Yoyo)`, `.onComplete`, `.setUpdate(true)` |
+| `yield return tween.WaitForCompletion()` | `yield tween` |
+| `tween.Kill()`, `DOTween.Kill(target)` | `tween.kill()`, `Tween.kill(target)` |
 
 ### UI
 
@@ -177,7 +212,9 @@ See [multiplayer.md](multiplayer.md).
 ## Not implemented yet
 
 Rigidbodies and collision/trigger messages, animation (Animator), audio (AudioSource),
-particles, NavMesh/pathfinding, skyboxes, post-processing wrappers, touch gestures.
+SpriteRenderer, particles, NavMesh (grid pathfinding exists), skyboxes, post-processing
+wrappers, gamepad and touch gestures. [porting-notes.md](porting-notes.md) lists these
+in priority order.
 
 PlayCanvas has all of these. Until they are wrapped you can reach them directly through
 the escape hatches: `gameObject.entity` (the `pc.Entity`), `engine.app` (the

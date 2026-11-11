@@ -34,7 +34,8 @@ function buildPrimitive(device: pc.GraphicsDevice, type: PrimitiveType): pc.Mesh
       const geometry = new pc.Geometry();
       geometry.positions = [-0.5, -0.5, 0, 0.5, -0.5, 0, 0.5, 0.5, 0, -0.5, 0.5, 0];
       geometry.normals = [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1];
-      geometry.uvs = [0, 0, 1, 0, 1, 1, 0, 1];
+      // PlayCanvas texture coordinates have v = 0 at the top of the image.
+      geometry.uvs = [0, 1, 1, 1, 1, 0, 0, 0];
       geometry.indices = [0, 1, 2, 0, 2, 3];
       return pc.Mesh.fromGeometry(device, geometry);
     }

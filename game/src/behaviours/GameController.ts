@@ -17,6 +17,7 @@ import {
   type Command,
   createGame,
   type GameState,
+  pathFor,
   reachable,
   type Team,
   teamOf,
@@ -24,7 +25,7 @@ import {
   unitAt,
   unitById,
 } from '../rules/skirmish';
-import { BoardView, worldToCell } from './BoardView';
+import type { BoardView } from './BoardView';
 import { UnitPrefab, UnitView } from './UnitView';
 
 /**
@@ -129,12 +130,22 @@ export class GameController extends MonoBehaviour {
     // Every machine runs the same check, so an illegal command is ignored everywhere.
     if (this.judge(entry.playerId, entry.command) !== null) return;
     const before = this.state;
-    this.state = apply(before, entry.command);
-    if (entry.command.type === 'attack') {
-      const target = unitById(before, entry.command.target);
-      if (target) this.views.get(entry.command.unit)?.playAttack(target);
+    const command = entry.command;
+    this.state = apply(before, command);
+    // Animate from what the state was: the route walked, the blow struck.
+    if (command.type === 'move') {
+      const unit = unitById(before, command.unit);
+      const path = unit ? pathFor(before, unit, command) : null;
+      if (path) this.views.get(command.unit)?.moveAlong(path);
+    } else if (command.type === 'attack') {
+      const target = unitById(before, command.target);
+      if (target) {
+        this.views.get(command.unit)?.playAttack(target);
+        this.views.get(command.target)?.playHit();
+      }
+    } else {
+      this.selectedId = null;
     }
-    if (entry.command.type !== 'move' && entry.command.type !== 'attack') this.selectedId = null;
     this.refresh();
   }
 
@@ -185,12 +196,12 @@ export class GameController extends MonoBehaviour {
     if (!Input.getMouseButtonDown(0)) return;
     const camera = Camera.main;
     if (!camera) return;
-    const hit = Physics.raycast(camera.screenPointToRay(Input.mousePosition));
-    if (!hit) return;
-    // Clicking a unit means clicking the cell it stands on.
-    const unit = hit.gameObject.getComponent(UnitView);
-    const state = unit ? unitById(this.state, unit.unitId) : undefined;
-    const cell = state ? { x: state.x, y: state.y } : worldToCell(hit.point);
+    const ray = camera.screenPointToRay(Input.mousePosition);
+    // Units have colliders: clicking one means clicking the cell it stands on.
+    // Anything else is resolved by the grid itself, which needs no colliders.
+    const unit = Physics.raycast(ray)?.gameObject.getComponent(UnitView);
+    const standing = unit ? unitById(this.state, unit.unitId) : undefined;
+    const cell = standing ? { x: standing.x, y: standing.y } : this.board?.rayToCell(ray);
     if (cell) this.clickCell(cell);
   }
 
@@ -210,14 +221,16 @@ export class GameController extends MonoBehaviour {
       destroy(view.gameObject);
       this.views.delete(id);
     }
+    if (!this.board) return;
     for (const unit of state.units) {
       let view = this.views.get(unit.id);
       if (!view) {
         view = instantiate(UnitPrefab, this.transform).getComponent(UnitView) as UnitView;
-        view.setup(unit.id, unit.team, unit);
+        view.setup(unit.id, unit.team, unit, this.board);
         this.views.set(unit.id, view);
       }
-      view.moveTo(unit);
+      // Moves are animated in `receive`; this only corrects a view that is out of place.
+      view.snapTo(unit);
       view.selected = unit.id === this.selectedId;
     }
 
@@ -225,8 +238,8 @@ export class GameController extends MonoBehaviour {
     if (this.selectedId !== null) selected = unitById(state, this.selectedId) ?? null;
     if (!selected) this.selectedId = null;
 
-    this.board?.clearHighlights();
-    if (selected && this.board) {
+    this.board.clearHighlights();
+    if (selected) {
       this.board.highlight([selected], 'selected');
       this.board.highlight(reachable(state, selected), 'move');
       this.board.highlight(attackable(state, selected), 'attack');

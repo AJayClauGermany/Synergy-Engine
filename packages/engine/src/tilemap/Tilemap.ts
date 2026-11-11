@@ -26,8 +26,11 @@ const DEFAULT_SHAPE: Readonly<GridShape> = Object.freeze(defaultGridShape());
  *   const [grass, sand, water] = Sprite.slice(sheet, 3, 1);
  */
 export class Sprite {
-  /** UV coordinates of the rectangle's edges: left, bottom, right, top. */
-  readonly uv: readonly [u0: number, v0: number, u1: number, v1: number];
+  /**
+   * Texture coordinates of the rectangle's edges: left, bottom, right, top. In PlayCanvas
+   * `v` is 0 at the TOP row of an image, so the bottom edge has the larger `v`.
+   */
+  readonly uv: readonly [left: number, bottom: number, right: number, top: number];
 
   /**
    * `rect` is in pixels with the origin at the image's TOP-left, as in image editors.
@@ -38,15 +41,15 @@ export class Sprite {
     readonly rect?: { x: number; y: number; width: number; height: number },
   ) {
     if (!rect) {
-      this.uv = [0, 0, 1, 1];
+      this.uv = [0, 1, 1, 0];
     } else {
       const width = texture.width || 1;
       const height = texture.height || 1;
       this.uv = [
         rect.x / width,
-        1 - (rect.y + rect.height) / height,
+        (rect.y + rect.height) / height,
         (rect.x + rect.width) / width,
-        1 - rect.y / height,
+        rect.y / height,
       ];
     }
   }
@@ -110,7 +113,8 @@ export class Tile extends TileBase {
     if (init.gameObject !== undefined) this.gameObject = init.gameObject;
   }
 
-  getTileData(): TileData {
+  /** Override to vary the look per cell; call `super.getTileData(cell, tilemap)` for the defaults. */
+  getTileData(_cell: Vector3Int, _tilemap: Tilemap): TileData {
     return { sprite: this.sprite, color: this.color, gameObject: this.gameObject };
   }
 }
