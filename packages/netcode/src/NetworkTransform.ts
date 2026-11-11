@@ -13,6 +13,7 @@ interface TransformState {
 
 interface Sample {
   time: number;
+  applied?: true;
   p?: Vector3;
   r?: Quaternion;
   s?: Vector3;
@@ -142,7 +143,12 @@ export class NetworkTransform extends NetworkBehaviour {
   }
 
   update(): void {
-    if (!this.isSpawned || this.hasAuthority || this.samples.length === 0) return;
+    if (!this.isSpawned) return;
+    if (this.hasAuthority) {
+      this.samples = []; // authority may have just moved here (ownership change): old updates are stale
+      return;
+    }
+    if (this.samples.length === 0) return;
     const manager = this.networkManager;
     const renderTime = manager.networkClock - this.interpolationTicks / manager.networkConfig.tickRate;
     // Drop samples we have fully passed, keeping the last one before renderTime.
@@ -151,9 +157,9 @@ export class NetworkTransform extends NetworkBehaviour {
     const to = this.samples[1];
     if (!to || renderTime <= from.time) {
       // Only one sample, or none old enough yet: hold the closest we have.
-      if (!to) {
+      if (!to && !from.applied) {
+        from.applied = true; // once: afterwards the object is free to be moved locally
         this.apply(from);
-        this.samples = [from];
       }
       return;
     }

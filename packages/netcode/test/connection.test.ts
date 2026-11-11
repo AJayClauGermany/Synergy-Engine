@@ -100,7 +100,8 @@ describe('connecting', () => {
     expect(intruder.manager.disconnectReason).toBe('Wrong password.');
     expect(stopped).toEqual(['intruder stopped']);
     expect(friend.manager.isConnectedClient).toBe(true);
-    expect(host.manager.connectedClientsIds).toEqual([0, 1]);
+    // The refused intruder had id 1 reserved, and ids are never reused.
+    expect(host.manager.connectedClientsIds).toEqual([0, 2]);
   });
 
   test('without a player prefab the server spawns players itself when a client connects', () => {

@@ -106,6 +106,11 @@ export class ConvexLobby {
     return this.client.query(api.rooms.get, { code });
   }
 
+  /** Tells the server you are still in the room. Rooms with no heartbeat for two minutes are closed. */
+  async heartbeat(code: string): Promise<void> {
+    await this.client.mutation(api.rooms.heartbeat, { code, playerId: this.playerId });
+  }
+
   /** Host only. Mark a room 'playing' to hide it from the open list. */
   async setStatus(code: string, status: RoomInfo['status']): Promise<void> {
     await this.client.mutation(api.rooms.setStatus, { code, playerId: this.playerId, status });

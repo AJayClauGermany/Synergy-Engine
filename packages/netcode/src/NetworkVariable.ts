@@ -351,6 +351,7 @@ export class NetworkList<T> extends NetworkVariableBase implements Iterable<T> {
 
   /** @internal */
   _readDelta(data: unknown, relayFrom: number | null): void {
+    if (relayFrom !== null) this.validateOps(data);
     for (const op of data as ListOp[]) {
       // The initial state and later changes can overlap; an operation we already have is skipped.
       if (op.n <= this.version) continue;
@@ -359,6 +360,26 @@ export class NetworkList<T> extends NetworkVariableBase implements Iterable<T> {
       if (relayFrom !== null) this.pending.push(op);
     }
     if (relayFrom !== null && this.pending.length > 0) this.markDirty(true, relayFrom);
+  }
+
+  /** The server checks what a client sends before applying and passing it on. */
+  private validateOps(data: unknown): void {
+    if (!Array.isArray(data)) throw new Error(`Malformed NetworkList update for "${this._name}".`);
+    let version = this.version;
+    let length = this.items.length;
+    for (const op of data as ListOp[]) {
+      const index = op.i ?? -1;
+      const ok =
+        Number.isInteger(op.n) && op.n === version + 1 &&
+        (op.k === 'clear' ||
+          (op.k === 'add' && (length++, true)) ||
+          (op.k === 'insert' && Number.isInteger(index) && index >= 0 && index <= length++) ||
+          (op.k === 'removeAt' && Number.isInteger(index) && index >= 0 && index < length--) ||
+          (op.k === 'set' && Number.isInteger(index) && index >= 0 && index < length));
+      if (!ok) throw new Error(`Rejected an invalid NetworkList operation on "${this._name}".`);
+      if (op.k === 'clear') length = 0;
+      version = op.n;
+    }
   }
 
   private applyRemote(op: ListOp): void {

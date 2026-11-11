@@ -82,3 +82,23 @@ describe('ownership', () => {
     expect(again.manager.localClientId).toBe(3);
   });
 });
+
+describe('review fixes', () => {
+  test('a player object cannot be handed to someone else', () => {
+    const { host } = setup();
+    expect(() => host.player(1).networkObject.changeOwnership(2)).toThrow(/player object/);
+  });
+
+  test('the host refuses a forged list operation instead of corrupting the list', () => {
+    const { host, alice } = setup();
+    const crate = host.make(CratePrefab);
+    crate.spawnWithOwnership(1);
+    net.pump();
+    const id = crate.networkObjectId;
+    alice.transport.send('host', { t: 'vars', u: [[id, 0, 'notes', [{ n: 1e15, k: 'add', v: 'x' }]]] });
+    expect(() => net.pump()).toThrow(/invalid NetworkList operation/);
+    alice.unit(id).notes.add('real');
+    net.pump();
+    expect(host.unit(id).notes.toArray()).toEqual(['real']);
+  });
+});

@@ -13,6 +13,12 @@ import type { NetworkManager } from './NetworkManager';
 // These helpers import PeerJS and Convex on demand, so a game that never goes online does
 // not download them. They are not covered by automated tests (they need live services).
 
+/** Rooms with no heartbeat for two minutes are closed by a Convex cron job, so keep beating. Returns the stop function. */
+function keepAlive(lobby: ConvexLobby, code: string): () => void {
+  const timer = setInterval(() => void lobby.heartbeat(code).catch(() => {}), 25_000);
+  return () => clearInterval(timer);
+}
+
 export interface HostGameOptions extends PeerJsOptions {
   /**
    * Publish the game to this Convex lobby so others can browse or join it by lobby code.
@@ -60,8 +66,10 @@ export async function hostGame(manager: NetworkManager, options: HostGameOptions
       throw error;
     }
     const published = room;
+    const beat = keepAlive(lobby.client, published.code);
     const off = manager.onServerStopped.add(() => {
       off();
+      beat();
       void lobby.client.leaveRoom(published.code).catch(() => {});
     });
   }
@@ -108,8 +116,10 @@ export async function joinGame(manager: NetworkManager, code: string, options: J
   }
   if (lobby && lobbyCode) {
     const joined = lobbyCode;
+    const beat = keepAlive(lobby, joined);
     const off = manager.onClientStopped.add(() => {
       off();
+      beat();
       void lobby.leaveRoom(joined).catch(() => {});
     });
   }

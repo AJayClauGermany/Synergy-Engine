@@ -431,8 +431,10 @@ export class NetworkManager extends MonoBehaviour {
       this.stop();
       return;
     }
-    while (this.inbox.length > 0 && this.role !== 'none') {
-      const item = this.inbox.shift() as InboxItem;
+    const queue = this.inbox;
+    this.inbox = [];
+    for (let i = 0; i < queue.length && this.role !== 'none'; i++) {
+      const item = queue[i] as InboxItem;
       try {
         this.process(item);
       } catch (error) {
@@ -647,18 +649,20 @@ export class NetworkManager extends MonoBehaviour {
     }
 
     const response: ConnectionApprovalResponse = { approved: true, createPlayerObject: true, reason: '' };
+    // Reserve the id now, so requests being approved at the same time each see their own.
+    const clientId = this.nextClientId++;
     const finish = () => {
       this.pendingPeers.delete(peer);
       // The player may have left while the callback was thinking.
       if (this.role === 'none' || !this.isServer || !this.transport?.peers.includes(peer)) return;
       if (!response.approved) refuse(response.reason || 'The server did not approve the connection.');
-      else this.admit(peer, response);
+      else this.admit(peer, clientId, response);
     };
 
     const callback = this.connectionApprovalCallback;
     if (this.networkConfig.connectionApproval && callback) {
       response.approved = false;
-      const approvalRequest: ConnectionApprovalRequest = { clientNetworkId: this.nextClientId, payload: request.payload };
+      const approvalRequest: ConnectionApprovalRequest = { clientNetworkId: clientId, payload: request.payload };
       const result = callback(approvalRequest, response);
       if (result instanceof Promise) {
         this.pendingPeers.add(peer);
@@ -677,8 +681,7 @@ export class NetworkManager extends MonoBehaviour {
     finish();
   }
 
-  private admit(peer: string, response: ConnectionApprovalResponse): void {
-    const id = this.nextClientId++;
+  private admit(peer: string, id: number, response: ConnectionApprovalResponse): void {
     this.clientsByPeer.set(peer, id);
     this.peerOfClient.set(id, peer);
     this.clientRecords.set(id, new NetworkClient(id, this));
@@ -691,7 +694,16 @@ export class NetworkManager extends MonoBehaviour {
     }
     this.sendTo(id, { t: 'approved', id, tick: this.tick, rate: this.networkConfig.tickRate, objs: objects });
 
-    if (response.createPlayerObject) this.createPlayerObject(id, response.position, response.rotation);
+    if (response.createPlayerObject) {
+      try {
+        this.createPlayerObject(id, response.position, response.rotation);
+      } catch (error) {
+        // Do not leave a client admitted without the player it was promised.
+        this.sendTo(id, { t: 'disconnect', reason: 'The server could not create your player.' });
+        this.removeClient(id);
+        throw error;
+      }
+    }
     this.onClientConnectedCallback.emit(id);
   }
 
@@ -859,6 +871,7 @@ export class NetworkManager extends MonoBehaviour {
   changeOwnership(object: NetworkObject, newOwner: number): void {
     this.requireServer('change ownership');
     if (!object._spawned) throw new Error(`"${object.name}" is not spawned.`);
+    if (object._player) throw new Error(`"${object.name}" is a player object, so its owner cannot change. Despawn it and spawn another.`);
     if (newOwner !== SERVER_CLIENT_ID && !this.clientRecords.has(newOwner)) {
       throw new Error(`Cannot give "${object.name}" to client ${newOwner}: that client is not connected.`);
     }
