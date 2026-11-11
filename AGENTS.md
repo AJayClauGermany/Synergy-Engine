@@ -23,7 +23,7 @@ Cloudflare Workers (preview deploys) · Electrobun (desktop).
 | `bun run screenshot` | Build, open in headless Chromium, save `.screenshots/game.png`; fails on page errors. `--hierarchy` prints the scene as text; `--renderer webgl2` forces WebGL2 (the game prefers WebGPU) |
 | `bun run backend` | Convex dev deployment (interactive login the first time); writes its URL to `.env.local` |
 | `bun run env` | Check environment variables against `.env.schema` (secrets masked) |
-| `bun run preview:local` / `preview:deploy` / `deploy` | Cloudflare: local gate, branch preview, main deployment |
+| `bun run preview:local` / `preview:deploy` / `deploy` | Cloudflare: local gate, branch preview, main deployment. The deploys move hashed assets to R2 and set up Cloudflare Access (`docs/deploying.md`) |
 | `bun run desktop:dev` / `desktop:build` | Electrobun desktop app |
 
 Use Bun, not Node/npm/Vite/Jest: `bun <file>`, `bun test`, `bun install`, `bunx <tool>`.
@@ -53,9 +53,9 @@ packages/ui/             Preact helpers: mountUI, useObservable, WorldAnchor   (
 packages/net/            command sessions, transports, Convex lobby   (@synergy/net)
 packages/netcode/        Netcode for GameObjects on those transports  (@synergy/netcode)
 convex/                  backend functions; _generated/ is generated, never edit it
-cloudflare/worker.ts     password gate in front of the static build
+cloudflare/worker.ts     gate in front of the static build (Cloudflare Access or a password); serves assets from R2
 desktop/                 Electrobun shell
-scripts/                 dev server, build, screenshot tool, the check runner
+scripts/                 dev server, build, deploy, screenshot tool, the check runner
 tools/unity/             editor script that exports Unity tiles, tilemaps and ScriptableObjects
 tools/lint/              lint rules for the mistakes a Unity port makes (loaded by oxlint)
 .env.schema              every environment variable: type, comment, secret or not (varlock)

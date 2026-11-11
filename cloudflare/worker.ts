@@ -1,24 +1,55 @@
 /**
- * Cloudflare Worker that serves the built game (dist/) behind a password.
+ * Cloudflare Worker that serves the built game (dist/) to the people allowed to see it.
  *
- * Every request reaches this Worker first (`run_worker_first` in wrangler.jsonc). Visitors
- * without a valid session get a login page; everyone else gets the static files.
+ * Every request reaches this Worker first (`run_worker_first` in wrangler.jsonc), so the
+ * page, its scripts and its assets are all behind the same gate. A request is served when
+ * one of these holds, tried in this order:
+ *
+ *   1. PUBLIC_ACCESS is "true": the gate is off (a public launch).
+ *   2. Cloudflare Access let the request through. Access asks each visitor to sign in and
+ *      admits only the emails on your list; `bun run preview:deploy` sets it up.
+ *   3. The visitor knows PREVIEW_PASSWORD (a login page, or HTTP Basic auth).
+ *
+ * It fails closed: when none of the three is configured, nothing is served.
+ *
+ * Files under /assets/ (images, models, sounds: what the build names by content hash) are
+ * read from the R2 bucket bound as ASSET_BUCKET when a deploy put them there, and from the
+ * Worker's own static files otherwise. The bucket is private; this Worker is the only way in.
  *
  * Configuration (see docs/deploying.md):
  *   PREVIEW_PASSWORD  secret   The password. Use a long random one.
- *   PUBLIC_ACCESS     var      Set to "true" to switch the gate off (a public launch).
- *
- * It fails closed: with no password and no PUBLIC_ACCESS, nothing is served.
- *
- * This is a shared-password gate for prototypes. To restrict by identity (your team's
- * email domain, single sign-on), put Cloudflare Access in front instead.
+ *   PUBLIC_ACCESS     var      Set to "true" to switch the gate off.
+ *   ASSET_BUCKET      R2       Optional. Where deploys keep the hashed assets.
  */
+
+/** The part of an R2 object this Worker reads. With `onlyIf` unmet there is no `body`. */
+interface StoredAsset {
+  readonly body?: ReadableStream | null;
+  readonly httpEtag: string;
+  readonly size: number;
+  readonly range?: { offset?: number; length?: number; suffix?: number };
+  writeHttpMetadata(headers: Headers): void;
+}
 
 export interface Env {
   ASSETS: { fetch(request: Request): Promise<Response> };
+  ASSET_BUCKET?: { get(key: string, options: { onlyIf: Headers; range: Headers }): Promise<StoredAsset | null> };
   PREVIEW_PASSWORD?: string;
   PUBLIC_ACCESS?: string;
 }
+
+/**
+ * What the Worker reads of its execution context. `access` is set by Cloudflare, and only
+ * when Cloudflare Access authenticated the request; a visitor cannot forge it with a header.
+ */
+export interface Context {
+  readonly access?: unknown;
+}
+
+/** Where the build puts content-hashed files (`naming.asset` in scripts/build.ts). */
+const ASSET_PREFIX = '/assets/';
+/** A hashed file never changes under its name, so a browser may keep it for good. */
+const FOREVER = 'max-age=31536000, immutable';
 
 const COOKIE = 'synergy_preview';
 const LOGIN_PATH = '/__auth';
@@ -121,21 +152,71 @@ ${failed ? '<p class="error" role="alert">That password is not correct.</p>' : '
 /** Marks gated responses as private so no shared cache or search engine keeps a copy. */
 function privately(response: Response): Response {
   const copy = new Response(response.body, response);
-  copy.headers.set('Cache-Control', 'private, no-cache');
+  const forever = copy.headers.get('Cache-Control') === `public, ${FOREVER}`;
+  copy.headers.set('Cache-Control', forever ? `private, ${FOREVER}` : 'private, no-cache');
   copy.headers.set('X-Robots-Tag', 'noindex');
   return copy;
 }
 
-export async function handleRequest(request: Request, env: Env): Promise<Response> {
-  if (env.PUBLIC_ACCESS === 'true') return env.ASSETS.fetch(request);
+/** Reads a hashed asset from R2, honouring `If-None-Match` and `Range` (seeking in audio and video). */
+async function fromBucket(
+  request: Request,
+  bucket: NonNullable<Env['ASSET_BUCKET']>,
+  key: string,
+): Promise<Response | null> {
+  const stored = await bucket.get(key, { onlyIf: request.headers, range: request.headers });
+  if (!stored) return null;
+  const headers = new Headers();
+  stored.writeHttpMetadata(headers);
+  headers.set('ETag', stored.httpEtag);
+  headers.set('Accept-Ranges', 'bytes');
+  if (!stored.body) return new Response(null, { status: 304, headers });
+  if (!request.headers.has('Range') || !stored.range) return new Response(stored.body, { headers });
+  const offset = stored.range.offset ?? stored.size - (stored.range.suffix ?? stored.size);
+  const length = stored.range.length ?? stored.size - offset;
+  headers.set('Content-Range', `bytes ${offset}-${offset + length - 1}/${stored.size}`);
+  return new Response(stored.body, { status: 206, headers });
+}
+
+/** The file a request asks for, once the visitor is allowed to have it. */
+async function serve(request: Request, env: Env): Promise<Response> {
+  const { pathname } = new URL(request.url);
+  if (!pathname.startsWith(ASSET_PREFIX)) return env.ASSETS.fetch(request);
+
+  let stored: Response | null = null;
+  if (env.ASSET_BUCKET && (request.method === 'GET' || request.method === 'HEAD')) {
+    try {
+      stored = await fromBucket(request, env.ASSET_BUCKET, decodeURIComponent(pathname.slice(1)));
+    } catch (error) {
+      // A malformed path is not a file. Anything else (R2 unreachable) is worth a log line;
+      // the Worker's own files below still get a chance to answer.
+      if (!(error instanceof URIError)) console.error('Could not read the asset bucket:', error);
+    }
+  }
+  const found = stored ?? (await env.ASSETS.fetch(request));
+  // Unknown paths fall back to index.html (wrangler.jsonc). For an asset that would hand an
+  // image loader a web page with status 200, so say what happened instead.
+  if (!stored && (found.headers.get('Content-Type') ?? '').startsWith('text/html')) {
+    return new Response('No such asset.', { status: 404, headers: { 'Cache-Control': 'no-store' } });
+  }
+  const response = new Response(found.body, found);
+  if (response.ok) response.headers.set('Cache-Control', `public, ${FOREVER}`);
+  return response;
+}
+
+export async function handleRequest(request: Request, env: Env, context?: Context): Promise<Response> {
+  if (env.PUBLIC_ACCESS === 'true') return serve(request, env);
+  // Cloudflare Access already checked who this is against the list of allowed emails.
+  if (context?.access !== undefined) return privately(await serve(request, env));
 
   const password = env.PREVIEW_PASSWORD;
   if (!password) {
     return page(
       'Preview locked',
       `<h1>Preview locked</h1>
-<p>No password has been configured for this deployment, so nothing is being served.
-Set the <code>PREVIEW_PASSWORD</code> secret (see docs/deploying.md).</p>`,
+<p>Nobody has been given access to this deployment yet, so nothing is being served.
+Set <code>PREVIEW_ALLOWED_EMAILS</code> and deploy again, or set the
+<code>PREVIEW_PASSWORD</code> secret (see docs/deploying.md).</p>`,
       503,
     );
   }
@@ -164,7 +245,7 @@ Set the <code>PREVIEW_PASSWORD</code> secret (see docs/deploying.md).</p>`,
     (cookie !== null && (await safeEqual(cookie, expected))) || (basic !== null && (await safeEqual(basic, password)));
   if (!allowed) return loginPage(false, 401);
 
-  return privately(await env.ASSETS.fetch(request));
+  return privately(await serve(request, env));
 }
 
 export default {

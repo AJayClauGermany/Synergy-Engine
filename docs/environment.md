@@ -98,5 +98,6 @@ To opt out everywhere, run `bunx varlock telemetry disable` once, or set `DO_NOT
 
 CI needs no values to type-check, test and build. To deploy, give the job
 `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (and `CONVEX_DEPLOY_KEY` if it pushes
-Convex functions) as secrets. See [deploying.md](deploying.md) for the password gate, which
-is separate: it is a Worker secret, not a build variable.
+Convex functions) as secrets, and `PREVIEW_ALLOWED_EMAILS` as a repository variable: the
+people Cloudflare Access admits. See [deploying.md](deploying.md). The optional password
+gate is separate: it is a Worker secret, not a build variable.

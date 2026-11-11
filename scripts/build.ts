@@ -45,6 +45,10 @@ const result = await Bun.build({
   target: 'browser',
   // Dynamic `import()`s become separate files, so optional code (e.g. networking) loads on demand.
   splitting: true,
+  // Imported files (images, models, sounds) go to assets/ under a name that holds a hash
+  // of their content. A deploy can then keep them in R2 and upload only the ones that
+  // changed (scripts/deploy.ts); a desktop build ships the folder as it is.
+  naming: { asset: 'assets/[name]-[hash].[ext]' },
   minify: values['keep-names'] ? { whitespace: true, syntax: true, identifiers: false } : true,
   sourcemap: 'linked',
   // Only variables starting with PUBLIC_ are inlined into the bundle. Never put secrets in them.
