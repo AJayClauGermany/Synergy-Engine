@@ -39,6 +39,15 @@ export class WaitWhile extends YieldInstruction {
 }
 
 /**
+ * Base class for your own wait conditions: the coroutine resumes on the first frame
+ * `keepWaiting` is false. Unity: `CustomYieldInstruction`. `Tween` is one of these, so
+ * `yield Tween.move(...)` waits for the tween to finish.
+ */
+export abstract class CustomYieldInstruction extends YieldInstruction {
+  abstract get keepWaiting(): boolean;
+}
+
+/**
  * Everything a coroutine may yield:
  * - `null` / `undefined`: wait one frame
  * - a `YieldInstruction` (WaitForSeconds, WaitUntil, ...)
@@ -75,6 +84,8 @@ export class Coroutine {
   _ready: (phase: Phase) => boolean = () => false;
   /** @internal */
   _done = false;
+  /** @internal True while this coroutine's generator is executing. */
+  _running = false;
 
   /** @internal */
   constructor(
@@ -127,14 +138,22 @@ export class CoroutineScheduler {
   stop(coroutine: Coroutine): void {
     if (coroutine._done) return;
     coroutine._done = true;
-    for (const iterator of coroutine._stack) {
+    // A coroutine may stop itself (setActive(false), stopAllCoroutines, destroy...). A
+    // running generator cannot be closed from inside, so `step` closes it once it yields.
+    if (!coroutine._running) this.close(coroutine);
+  }
+
+  /** Runs the generators' `finally` blocks and drops them. */
+  private close(coroutine: Coroutine): void {
+    const stack = coroutine._stack;
+    coroutine._stack = [];
+    for (const iterator of stack.reverse()) {
       try {
         iterator.return?.(undefined);
       } catch (error) {
         this.reportError(error, `stopping a coroutine on ${coroutine._owner}`);
       }
     }
-    coroutine._stack = [];
   }
 
   stopAll(owner: MonoBehaviour): void {
@@ -149,7 +168,20 @@ export class CoroutineScheduler {
     for (let i = 0; i < count; i++) {
       const coroutine = this.active[i];
       if (!coroutine || coroutine._done) continue;
-      if (coroutine._ready(phase)) this.step(coroutine);
+      if (coroutine._owner._destroyed) {
+        this.stop(coroutine);
+        continue;
+      }
+      let ready: boolean;
+      try {
+        ready = coroutine._ready(phase);
+      } catch (error) {
+        // A wait condition (WaitUntil, keepWaiting, ...) threw: end this coroutine only.
+        this.stop(coroutine);
+        this.reportError(error, `a wait condition of a coroutine on ${coroutine._owner}`);
+        continue;
+      }
+      if (ready) this.step(coroutine);
     }
     if (phase === 'endOfFrame') {
       this.active = this.active.filter((coroutine) => !coroutine._done);
@@ -164,12 +196,21 @@ export class CoroutineScheduler {
         return;
       }
       let result: IteratorResult<Yieldable, unknown>;
+      coroutine._running = true;
       try {
         result = iterator.next();
       } catch (error) {
+        coroutine._running = false;
         coroutine._done = true;
-        coroutine._stack = [];
+        coroutine._stack.pop(); // this generator is finished; close any it was nested in
+        this.close(coroutine);
         this.reportError(error, `a coroutine on ${coroutine._owner}`);
+        return;
+      }
+      coroutine._running = false;
+      if (coroutine._done) {
+        // It stopped itself while running.
+        this.close(coroutine);
         return;
       }
       if (result.done) {
@@ -205,6 +246,7 @@ export class CoroutineScheduler {
     if (value instanceof WaitForFixedUpdate) return (phase) => phase === 'fixed';
     if (value instanceof WaitUntil) return (phase) => nextUpdate(phase) && value.predicate();
     if (value instanceof WaitWhile) return (phase) => nextUpdate(phase) && !value.predicate();
+    if (value instanceof CustomYieldInstruction) return (phase) => nextUpdate(phase) && !value.keepWaiting;
     if (value instanceof Coroutine) return (phase) => phase === 'update' && value._done;
     if (isThenable(value)) {
       let settled = false;

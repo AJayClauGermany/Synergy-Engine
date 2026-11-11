@@ -96,6 +96,56 @@ describe('CommandSession', () => {
     expect(() => guest.submit({ type: 'endTurn' })).toThrow(/closed/);
   });
 
+  test('a listener that submits does not reorder what other listeners see', () => {
+    const hub = new LoopbackHub({ manual: true });
+    const host = CommandSession.host<Command>(hub.connect('host'));
+    const guest = CommandSession.join<Command>(hub.connect('guest'), 'host');
+    hub.flush();
+    // An "AI" on the host replies to every endTurn from inside the listener.
+    host.onCommand.add((entry) => {
+      if (entry.command.type === 'endTurn') host.submit({ type: 'move', to: 9 });
+    });
+    const hostSeen = record(host);
+    const guestSeen = record(guest);
+    guest.submit({ type: 'endTurn' });
+    hub.flush();
+    expect(hostSeen.map((entry) => entry.seq)).toEqual([0, 1]);
+    expect(hostSeen).toEqual(guestSeen);
+
+    const solo = CommandSession.local<Command>();
+    solo.onCommand.add((entry) => {
+      if (entry.command.type === 'endTurn') solo.submit({ type: 'move', to: 1 });
+    });
+    const soloSeen = record(solo);
+    solo.submit({ type: 'endTurn' });
+    expect(soloSeen.map((entry) => entry.command.type)).toEqual(['endTurn', 'move']);
+  });
+
+  test('malformed submissions are ignored and a failing listener loses no messages', () => {
+    const hub = new LoopbackHub({ manual: true });
+    const host = CommandSession.host<Command>(hub.connect('host'));
+    const guestTransport = hub.connect('guest');
+    const guest = CommandSession.join<Command>(guestTransport, 'host');
+    hub.flush();
+    guestTransport.send('host', { t: 'submit' });
+    hub.flush();
+    expect(host.log.length).toBe(0);
+
+    let fail = true;
+    const seen = record(guest);
+    guest.onCommand.add(() => {
+      if (fail) {
+        fail = false;
+        throw new Error('listener bug');
+      }
+    });
+    host.submit({ type: 'move', to: 1 });
+    host.submit({ type: 'move', to: 2 });
+    expect(() => hub.flush()).toThrow(/listener bug/);
+    hub.flush();
+    expect(seen.map((entry) => entry.seq)).toEqual([0, 1]);
+  });
+
   test('a local session works with no network at all', async () => {
     const session = CommandSession.local<Command>();
     const seen = record(session);

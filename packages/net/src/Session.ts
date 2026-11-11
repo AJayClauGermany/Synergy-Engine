@@ -73,6 +73,8 @@ export class CommandSession<C> implements Session<C> {
 
   private playerList: string[] = [];
   private entries: CommandEntry<C>[] = [];
+  private undelivered: CommandEntry<C>[] = [];
+  private delivering = false;
   private closed = false;
   private readonly unsubscribe: (() => void)[] = [];
 
@@ -155,7 +157,25 @@ export class CommandSession<C> implements Session<C> {
     const entry: CommandEntry<C> = { seq: this.entries.length, playerId, command };
     this.entries.push(entry);
     this.broadcast({ t: 'command', entry });
-    this.onCommand.emit(entry);
+    this.announce(entry);
+  }
+
+  /**
+   * Hands entries to `onCommand` listeners strictly in order. A listener may submit
+   * another command (an AI reply, say); that one is announced after every listener has
+   * seen the current one, so all listeners on all machines observe the same sequence.
+   */
+  private announce(entry: CommandEntry<C>): void {
+    this.undelivered.push(entry);
+    if (this.delivering) return;
+    this.delivering = true;
+    try {
+      for (let next = this.undelivered.shift(); next; next = this.undelivered.shift()) {
+        this.onCommand.emit(next);
+      }
+    } finally {
+      this.delivering = false;
+    }
   }
 
   private receive(peerId: string, message: Wire<C>): void {
@@ -172,7 +192,7 @@ export class CommandSession<C> implements Session<C> {
         this.send(peerId, { t: 'welcome', players: this.playerList, log: this.entries });
         this.broadcast({ t: 'players', players: this.playerList });
         this.onPlayersChanged.emit(this.playerList);
-      } else if (message.t === 'submit' && this.playerList.includes(peerId)) {
+      } else if (message.t === 'submit' && message.command !== undefined && this.playerList.includes(peerId)) {
         this.accept(peerId, message.command);
       }
       return;
@@ -205,7 +225,7 @@ export class CommandSession<C> implements Session<C> {
     // The transport is ordered, so anything else is a duplicate (e.g. sent just before the welcome).
     if (entry.seq !== this.entries.length) return;
     this.entries.push(entry);
-    this.onCommand.emit(entry);
+    this.announce(entry);
   }
 
   private peerLeft(peerId: string): void {

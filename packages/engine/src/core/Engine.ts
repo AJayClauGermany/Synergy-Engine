@@ -8,6 +8,7 @@ import { Lifecycle } from './Lifecycle';
 import { currentEngineOrNull, setCurrentEngine } from './runtime';
 import { SceneState } from './SceneManager';
 import { TimeState } from './Time';
+import { TweenRunner } from './Tween';
 
 export interface EngineOptions {
   /** The canvas to render into. Omit (or set `headless`) to run without graphics. */
@@ -101,6 +102,7 @@ export class Engine {
   /** @internal */ readonly input = new InputState();
   /** @internal */ readonly lifecycle = new Lifecycle(this.time);
   /** @internal */ readonly coroutines: CoroutineScheduler;
+  /** @internal */ readonly tweens = new TweenRunner((error, context) => this.reportError(error, context));
   /** @internal */ readonly scenes: SceneState;
   /** @internal Enabled colliders, for `Physics` queries. */
   readonly colliders = new Set<Collider>();
@@ -114,6 +116,7 @@ export class Engine {
   private running = false;
   private disposed = false;
   private pendingRawDelta: number | null = null;
+  private stepping = false;
   private readonly throwOnError: boolean;
   private resizeObserver: ResizeObserver | null = null;
 
@@ -202,6 +205,8 @@ export class Engine {
   /**
    * Advances the game by exactly one frame of `deltaTime` seconds. This is how headless
    * engines run, and it also works on a stopped browser engine for deterministic stepping.
+   * The delta is used as given (`Time.maximumDeltaTime` only limits real frames), though
+   * at most 8 fixed updates run per frame, so keep steps small when testing `fixedUpdate`.
    */
   step(deltaTime = 1 / 60): void {
     if (this.disposed) throw new Error('This engine has been disposed.');
@@ -209,7 +214,18 @@ export class Engine {
       throw new Error('engine.step() cannot be used while the automatic loop is running. Call engine.stop() first.');
     }
     this.pendingRawDelta = deltaTime;
-    this.app.update(deltaTime * this.time.timeScale);
+    this.stepping = true;
+    try {
+      this.app.update(deltaTime * this.time.timeScale);
+    } finally {
+      this.stepping = false;
+      if (this.inFrame) {
+        // A script threw part-way through the frame. Leave the engine in a usable state.
+        this.inFrame = false;
+        this.time.inFixedTimeStep = false;
+        this.input.endFrame();
+      }
+    }
     if (!this.isHeadless) this.app.render();
   }
 
@@ -233,6 +249,7 @@ export class Engine {
     for (const scene of [...this.scenes.loaded, this.scenes.persistent]) {
       for (const root of scene.getRootGameObjects()) this.lifecycle.destroyNow(root);
     }
+    this.tweens.clear();
     this.input.detachListeners();
     this.resizeObserver?.disconnect();
     this.app.destroy();
@@ -257,7 +274,7 @@ export class Engine {
     const raw = this.pendingRawDelta ?? (time.timeScale > 0 ? scaledDelta / time.timeScale : 0);
     this.pendingRawDelta = null;
     this.inFrame = true;
-    time.beginFrame(raw);
+    time.beginFrame(raw, !this.stepping);
     this.input.beginFrame(time.unscaledDeltaTime);
     this.lifecycle.runStarts();
 
@@ -279,6 +296,7 @@ export class Engine {
 
     dispatchMouseMessages(this);
     this.lifecycle.runUpdates();
+    this.tweens.tick(time.deltaTime, time.unscaledDeltaTime);
     this.coroutines.tick('update');
   }
 
@@ -296,7 +314,7 @@ export class Engine {
       this.app.timeScale = this.time.timeScale;
       this.app.maxDeltaTime = this.time.maximumDeltaTime;
     }
-    this.scenes.processPending();
+    this.scenes.pump();
   }
 
   // ---- Browser wiring -----------------------------------------------------------------

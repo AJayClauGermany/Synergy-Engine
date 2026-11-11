@@ -12,7 +12,6 @@ export enum Space {
 }
 
 const scratchVec = new pc.Vec3();
-const scratchQuat = new pc.Quat();
 const scratchMat = new pc.Mat4();
 
 /**
@@ -38,31 +37,53 @@ export class Transform extends Component implements Iterable<Transform> {
     this._node.setPosition(value.x, value.y, value.z);
   }
 
+  // World rotation and scale are composed from the local values up the parent chain,
+  // not decomposed from the world matrix: decomposition turns a mirrored (negative)
+  // scale into a bogus 180 degree rotation.
+
+  /** The parent's world rotation (identity for a root object). */
+  private parentRotation(): Quaternion {
+    let rotation = Quaternion.identity;
+    for (let node = this._node.parent; node; node = node.parent) {
+      rotation = Quaternion.from(node.getLocalRotation()).mul(rotation);
+    }
+    return rotation;
+  }
+
+  /** The parent's world scale, signs included (one for a root object). */
+  private parentScale(): Vector3 {
+    let scale = Vector3.one;
+    for (let node = this._node.parent; node; node = node.parent) {
+      scale = scale.scale(node.getLocalScale());
+    }
+    return scale;
+  }
+
   get rotation(): Quaternion {
-    return Quaternion.from(this._node.getRotation());
+    return this.parentRotation().mul(this._node.getLocalRotation());
   }
 
   set rotation(value: Quaternion) {
-    this._node.setRotation(value.x, value.y, value.z, value.w);
+    this.localRotation = this.parentRotation().inverse().mul(value).normalized;
   }
 
   /** World rotation as Euler angles in degrees. */
   get eulerAngles(): Vector3 {
-    return Vector3.from(this._node.getEulerAngles());
+    return this.rotation.eulerAngles;
   }
 
   set eulerAngles(value: Vector3) {
-    this._node.setEulerAngles(value.x, value.y, value.z);
+    this.rotation = Quaternion.euler(value);
   }
 
   /** World scale. Read-only, and approximate under rotated non-uniform parents (as in Unity). */
   get lossyScale(): Vector3 {
-    return Vector3.from(this._node.getScale());
+    return this.parentScale().scale(this._node.getLocalScale());
   }
 
   /** The direction this object faces (its local -Z axis) in world space. */
   get forward(): Vector3 {
-    return Vector3.from(this._node.forward);
+    return this.rotation.rotate(Vector3.forward);
   }
 
   set forward(value: Vector3) {
@@ -70,7 +91,7 @@ export class Transform extends Component implements Iterable<Transform> {
   }
 
   get right(): Vector3 {
-    return Vector3.from(this._node.right);
+    return this.rotation.rotate(Vector3.right);
   }
 
   set right(value: Vector3) {
@@ -78,7 +99,7 @@ export class Transform extends Component implements Iterable<Transform> {
   }
 
   get up(): Vector3 {
-    return Vector3.from(this._node.up);
+    return this.rotation.rotate(Vector3.up);
   }
 
   set up(value: Vector3) {
@@ -156,14 +177,14 @@ export class Transform extends Component implements Iterable<Transform> {
 
     const wasActive = this.gameObject.activeInHierarchy;
     if (worldPositionStays) {
-      const position = node.getPosition().clone();
-      const rotation = node.getRotation().clone();
-      const scale = node.getScale().clone();
+      const position = this.position;
+      const rotation = this.rotation;
+      const scale = this.lossyScale;
       node.reparent(newParent);
-      node.setPosition(position);
-      node.setRotation(rotation);
-      const parentScale = newParent.getScale();
-      node.setLocalScale(
+      this.position = position;
+      this.rotation = rotation;
+      const parentScale = this.parentScale();
+      this.localScale = new Vector3(
         parentScale.x !== 0 ? scale.x / parentScale.x : scale.x,
         parentScale.y !== 0 ? scale.y / parentScale.y : scale.y,
         parentScale.z !== 0 ? scale.z / parentScale.z : scale.z,
@@ -241,13 +262,14 @@ export class Transform extends Component implements Iterable<Transform> {
 
   // ---- Movement ---------------------------------------------------------------------
 
-  /** Moves by `translation`, in local space by default. */
+  /**
+   * Moves by `translation`, measured in world units. By default the direction is relative
+   * to this object's own axes (`Space.Self`), so `translate(Vector3.forward)` moves one
+   * unit the way it is facing, whatever its parents' scale.
+   */
   translate(translation: Vector3, relativeTo: Space = Space.Self): void {
-    if (relativeTo === Space.World) {
-      this._node.translate(translation.x, translation.y, translation.z);
-    } else {
-      this._node.translateLocal(translation.x, translation.y, translation.z);
-    }
+    const offset = relativeTo === Space.World ? translation : this.rotation.rotate(translation);
+    this.position = this.position.add(offset);
   }
 
   /** Rotates by Euler angles in degrees, in local space by default. */
@@ -256,14 +278,8 @@ export class Transform extends Component implements Iterable<Transform> {
   rotate(axis: Vector3, angle: number, relativeTo?: Space): void;
   rotate(first: Vector3, second?: number | Space, third?: Space): void {
     // (eulers), (eulers, space) or (axis, angle, space?).
-    if (typeof second !== 'number') {
-      const relativeTo = second ?? Space.Self;
-      if (relativeTo === Space.World) this._node.rotate(first.x, first.y, first.z);
-      else this._node.rotateLocal(first.x, first.y, first.z);
-      return;
-    }
-    const delta = Quaternion.angleAxis(second, first);
-    const relativeTo = third ?? Space.Self;
+    const delta = typeof second === 'number' ? Quaternion.angleAxis(second, first) : Quaternion.euler(first);
+    const relativeTo = (typeof second === 'number' ? third : second) ?? Space.Self;
     if (relativeTo === Space.World) this.rotation = delta.mul(this.rotation);
     else this.localRotation = this.localRotation.mul(delta);
   }
@@ -305,8 +321,7 @@ export class Transform extends Component implements Iterable<Transform> {
 
   /** World direction -> local direction (rotation only). */
   inverseTransformDirection(direction: Vector3): Vector3 {
-    scratchQuat.copy(this._node.getRotation()).invert();
-    return Quaternion.from(scratchQuat).rotate(direction);
+    return this.rotation.inverse().rotate(direction);
   }
 
   /** Local vector -> world vector (rotation and scale, no translation). */

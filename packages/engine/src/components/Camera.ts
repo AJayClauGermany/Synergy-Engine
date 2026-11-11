@@ -4,6 +4,7 @@ import { adopters } from '../core/hooks';
 import { currentEngine } from '../core/runtime';
 import { Color } from '../math/Color';
 import { Ray } from '../math/geometry';
+import { Mathf } from '../math/Mathf';
 import { Vector3, type Vector3Like } from '../math/Vector3';
 
 export enum CameraClearFlags {
@@ -14,9 +15,6 @@ export enum CameraClearFlags {
   Depth = 'depth',
   Nothing = 'nothing',
 }
-
-const scratch = new pc.Vec3();
-const scratchOut = new pc.Vec3();
 
 /**
  * Renders the scene from its GameObject's point of view. It looks along the transform's
@@ -163,13 +161,34 @@ export class Camera extends Behaviour {
     return currentEngine().canvasSize.height;
   }
 
-  /** Keeps PlayCanvas's projection in step with the view size even when nothing has rendered yet. */
-  private size(): { width: number; height: number } {
-    const size = currentEngine().canvasSize;
-    if (this.component.aspectRatioMode === pc.ASPECT_AUTO && size.height > 0) {
-      this.component.camera.aspectRatio = size.width / size.height;
+  // The conversions below are computed from the transform and the lens settings directly.
+  // PlayCanvas's own helpers read view matrices that are only refreshed when a frame is
+  // rendered, which makes them stale right after the camera moves (and always in
+  // headless mode).
+
+  /** Half the view's width and height at one unit in front of the camera (or overall, when orthographic). */
+  private halfExtents(): { x: number; y: number } {
+    const aspect = this.aspect;
+    if (this.orthographic) {
+      const y = this.component.orthoHeight;
+      return { x: y * aspect, y };
     }
-    return size;
+    const tangent = Math.tan((this.component.fov * Mathf.deg2Rad) / 2);
+    return this.component.horizontalFov ? { x: tangent, y: tangent / aspect } : { x: tangent * aspect, y: tangent };
+  }
+
+  /** Screen pixels -> normalised device coordinates: x right, y up, both in [-1, 1]. */
+  private toNdc(position: { x: number; y: number }): { x: number; y: number } {
+    const { width, height } = currentEngine().canvasSize;
+    return {
+      x: width > 0 ? (position.x / width) * 2 - 1 : 0,
+      y: height > 0 ? 1 - (position.y / height) * 2 : 0,
+    };
+  }
+
+  /** Camera space (x right, y up, looking down -z) -> world space, ignoring any scale on the camera. */
+  private fromCameraSpace(point: Vector3): Vector3 {
+    return this.transform.position.add(this.transform.rotation.rotate(point));
   }
 
   /**
@@ -177,33 +196,25 @@ export class Camera extends Behaviour {
    * mouse is over: `Physics.raycast(camera.screenPointToRay(Input.mousePosition))`.
    */
   screenPointToRay(position: { x: number; y: number }): Ray {
-    const { width, height } = this.size();
-    const forward = this.transform.forward;
+    const ndc = this.toNdc(position);
+    const half = this.halfExtents();
+    const near = this.nearClipPlane;
     if (this.orthographic) {
-      this.component.screenToWorld(position.x, position.y, 0, scratchOut, width, height);
-      return new Ray(Vector3.from(scratchOut), forward);
+      return new Ray(this.fromCameraSpace(new Vector3(ndc.x * half.x, ndc.y * half.y, -near)), this.transform.forward);
     }
-    const origin = this.transform.position;
-    this.component.screenToWorld(position.x, position.y, 1, scratchOut, width, height);
-    const direction = Vector3.from(scratchOut).sub(origin).normalized;
     // Start on the near plane, as Unity does.
-    const cosine = Math.max(direction.dot(forward), 1e-6);
-    return new Ray(origin.add(direction.mul(this.nearClipPlane / cosine)), direction);
+    const onNearPlane = new Vector3(ndc.x * half.x * near, ndc.y * half.y * near, -near);
+    const origin = this.fromCameraSpace(onNearPlane);
+    return new Ray(origin, origin.sub(this.transform.position));
   }
 
   /** Screen point -> world point. `position.z` is the distance in front of the camera. */
   screenToWorldPoint(position: Vector3Like): Vector3 {
-    const { width, height } = this.size();
-    if (this.orthographic) {
-      const depth = position.z - this.nearClipPlane;
-      this.component.screenToWorld(position.x, position.y, 0, scratchOut, width, height);
-      return Vector3.from(scratchOut).add(this.transform.forward.mul(depth));
-    }
-    const origin = this.transform.position;
-    this.component.screenToWorld(position.x, position.y, 1, scratchOut, width, height);
-    const direction = Vector3.from(scratchOut).sub(origin).normalized;
-    const cosine = Math.max(direction.dot(this.transform.forward), 1e-6);
-    return origin.add(direction.mul(position.z / cosine));
+    const ndc = this.toNdc(position);
+    const half = this.halfExtents();
+    const depth = position.z;
+    const spread = this.orthographic ? 1 : depth;
+    return this.fromCameraSpace(new Vector3(ndc.x * half.x * spread, ndc.y * half.y * spread, -depth));
   }
 
   /**
@@ -211,11 +222,15 @@ export class Camera extends Behaviour {
    * negative when the point is behind it (check this before drawing a HUD marker).
    */
   worldToScreenPoint(position: Vector3Like): Vector3 {
-    const { width, height } = this.size();
-    scratch.set(position.x, position.y, position.z);
-    this.component.worldToScreen(scratch, scratchOut, width, height);
-    const depth = Vector3.from(position).sub(this.transform.position).dot(this.transform.forward);
-    return new Vector3(scratchOut.x, scratchOut.y, depth);
+    const { width, height } = currentEngine().canvasSize;
+    const local = this.transform.rotation.inverse().rotate(Vector3.from(position).sub(this.transform.position));
+    const depth = -local.z;
+    const half = this.halfExtents();
+    // Avoid dividing by zero for a point exactly on the camera plane.
+    const spread = this.orthographic ? 1 : Math.abs(depth) < 1e-9 ? 1e-9 : depth;
+    const ndcX = local.x / (half.x * spread);
+    const ndcY = local.y / (half.y * spread);
+    return new Vector3((ndcX * 0.5 + 0.5) * width, (1 - (ndcY * 0.5 + 0.5)) * height, depth);
   }
 
   /** World point -> viewport point, where (0, 0) is top-left and (1, 1) is bottom-right. */

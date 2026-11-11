@@ -78,6 +78,9 @@ export abstract class MonoBehaviour extends Behaviour {
    * It stops by itself when this GameObject is deactivated or destroyed.
    */
   startCoroutine(routine: Iterator<Yieldable, unknown, unknown>): Coroutine {
+    if (this._destroyed) {
+      throw new Error(`Coroutine could not be started because "${this.name}" has been destroyed.`);
+    }
     if (!this.gameObject.activeInHierarchy) {
       throw new Error(
         `Coroutine could not be started because GameObject "${this.name}" is inactive.`,
@@ -187,6 +190,9 @@ export abstract class MonoBehaviour extends Behaviour {
    * which play the role of Unity's non-serialized private fields. References to objects
    * inside the cloned hierarchy are re-pointed at their clones.
    *
+   * Arrays and object literals are copied all the way down. Class instances (vectors,
+   * materials, your own classes) are shared by reference.
+   *
    * Not copied, so the clone keeps what its own field initialisers created: functions
    * (an arrow-function field would stay bound to the original), and per-instance
    * containers (`UnityEvent`, `Observable`, `Map`, `Set`) that must not be shared.
@@ -206,17 +212,22 @@ export abstract class MonoBehaviour extends Behaviour {
       ) {
         continue;
       }
-      if (Array.isArray(value)) {
-        target[key] = value.map((item) => remap(item));
-      } else if (value !== null && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype) {
-        target[key] = Object.fromEntries(
-          Object.entries(value).map(([k, v]) => [k, remap(v)]),
-        );
-      } else {
-        target[key] = remap(value);
-      }
+      target[key] = copyData(value, remap);
     }
   }
+}
+
+/**
+ * Copies plain data (arrays and object literals) all the way down, so a clone never
+ * shares nested state with its original. Class instances are kept by reference: values
+ * such as `Vector3` are immutable, and assets such as `Material` are meant to be shared.
+ */
+function copyData(value: unknown, remap: <V>(value: V) => V): unknown {
+  if (Array.isArray(value)) return value.map((item) => copyData(item, remap));
+  if (value !== null && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype) {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, copyData(item, remap)]));
+  }
+  return remap(value);
 }
 
 /** @internal */

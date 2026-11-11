@@ -72,6 +72,20 @@ describe('preview gate', () => {
     expect(bad.status).toBe(401);
   });
 
+  test('passwords with non-ASCII characters work in both the form and Basic auth', async () => {
+    const env: Env = { ASSETS: assets, PREVIEW_PASSWORD: 'pässwörd-日本' };
+    const form = await handleRequest(
+      new Request(`${origin}/__auth`, { method: 'POST', body: new URLSearchParams({ password: 'pässwörd-日本' }) }),
+      env,
+    );
+    expect(form.status).toBe(303);
+    // What a browser or curl sends: the UTF-8 bytes of "user:password", base64-encoded.
+    const bytes = new TextEncoder().encode('agent:pässwörd-日本');
+    const basic = btoa(String.fromCharCode(...bytes));
+    const response = await handleRequest(new Request(`${origin}/`, { headers: { Authorization: `Basic ${basic}` } }), env);
+    expect(response.status).toBe(200);
+  });
+
   test('fails closed with no password, and opens only when PUBLIC_ACCESS is "true"', async () => {
     const unconfigured = await handleRequest(new Request(`${origin}/`), { ASSETS: assets });
     expect(unconfigured.status).toBe(503);

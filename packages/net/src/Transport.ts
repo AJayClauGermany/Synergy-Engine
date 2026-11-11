@@ -54,7 +54,15 @@ export class LoopbackHub {
     while (this.queue.length > 0) {
       const batch = this.queue;
       this.queue = [];
-      for (const deliver of batch) deliver();
+      for (let index = 0; index < batch.length; index++) {
+        try {
+          (batch[index] as () => void)();
+        } catch (error) {
+          // Keep what has not been delivered yet, so one failing listener loses nothing.
+          this.queue = [...batch.slice(index + 1), ...this.queue];
+          throw error;
+        }
+      }
     }
   }
 

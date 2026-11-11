@@ -17,9 +17,12 @@ export class TimeState {
   accumulator = 0;
   readonly startedAt = performance.now();
 
-  /** Advances the clock by one frame of `unscaledDelta` real seconds. */
-  beginFrame(unscaledDelta: number): void {
-    const clamped = Math.min(Math.max(unscaledDelta, 0), this.maximumDeltaTime);
+  /**
+   * Advances the clock by one frame of `unscaledDelta` real seconds. Real frames are
+   * limited to `maximumDeltaTime`; an explicit `engine.step(dt)` is taken at its word.
+   */
+  beginFrame(unscaledDelta: number, clamp = true): void {
+    const clamped = Math.max(clamp ? Math.min(unscaledDelta, this.maximumDeltaTime) : unscaledDelta, 0);
     this.frameCount++;
     this.unscaledDeltaTime = clamped;
     this.unscaledTime += clamped;

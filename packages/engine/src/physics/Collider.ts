@@ -101,7 +101,10 @@ export class BoxCollider extends Collider {
     const half = this.size.mul(0.5);
     const hit = intersectRayBox(localOrigin, localDirection, this.center.sub(half), this.center.add(half));
     if (!hit) return null;
-    const normal = hit.distance === 0 ? direction.neg() : transform.transformDirection(hit.normal).normalized;
+    // `transformVector` (unlike `transformDirection`) includes scale, so a mirrored box
+    // reports the face it was really hit on. Face normals are axis-aligned in local
+    // space, which keeps this exact under non-uniform scale too.
+    const normal = hit.distance === 0 ? direction.neg() : transform.transformVector(hit.normal).normalized;
     return { distance: hit.distance, normal };
   }
 

@@ -61,7 +61,10 @@ function basicPassword(request: Request): string | null {
   const header = request.headers.get('Authorization') ?? '';
   if (!header.startsWith('Basic ')) return null;
   try {
-    const decoded = atob(header.slice(6));
+    // `atob` yields one character per byte; decode those bytes as UTF-8 so passwords
+    // with non-ASCII characters work here as they do in the login form.
+    const bytes = Uint8Array.from(atob(header.slice(6)), (character) => character.charCodeAt(0));
+    const decoded = new TextDecoder().decode(bytes);
     return decoded.slice(decoded.indexOf(':') + 1);
   } catch {
     return null;

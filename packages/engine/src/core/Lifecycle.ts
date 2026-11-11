@@ -66,6 +66,13 @@ export class Lifecycle {
       this.deferred.push(component);
       return;
     }
+    // A scene that is still being built wakes all of its scripts together at the end.
+    const waiting = component.gameObject.scene._pending;
+    if (waiting) {
+      component._deferred = true;
+      waiting.push(component);
+      return;
+    }
     this.refresh(component);
   }
 
@@ -126,8 +133,35 @@ export class Lifecycle {
     if (--this.suspendDepth > 0) return;
     const batch = this.deferred;
     this.deferred = [];
+    // Objects made inside a scene that is still being built keep waiting for that scene.
+    const ready = batch.filter((component) => {
+      const waiting = component.gameObject.scene._pending;
+      if (waiting) waiting.push(component);
+      return !waiting;
+    });
+    this.wake(ready);
+  }
+
+  /** Sends the owed awake/onEnable to a batch of deferred components, in creation order. */
+  wake(batch: Component[]): void {
     for (const component of batch) component._deferred = false;
-    for (const component of batch) this.refresh(component);
+    this.each(batch, (component) => this.refresh(component));
+  }
+
+  /**
+   * Calls `action` for every item even if one throws, then rethrows the first error.
+   * Without this, one failing script would leave the rest of a batch in limbo.
+   */
+  private each<T>(items: readonly T[], action: (item: T) => void): void {
+    let failure: { error: unknown } | null = null;
+    for (const item of items) {
+      try {
+        action(item);
+      } catch (error) {
+        failure ??= { error };
+      }
+    }
+    if (failure) throw failure.error;
   }
 
   /** Runs `build` with lifecycle callbacks deferred until it returns. */
@@ -165,13 +199,13 @@ export class Lifecycle {
     while (this.pendingStart.length > 0) {
       const batch = this.pendingStart;
       this.pendingStart = [];
-      for (const behaviour of batch) {
+      this.each(batch, (behaviour) => {
         behaviour._startQueued = false;
         // If it was disabled before starting, `_enable` will queue it again later.
-        if (behaviour._destroyed || behaviour._started || !behaviour._live) continue;
+        if (behaviour._destroyed || behaviour._started || !behaviour._live) return;
         behaviour._started = true;
         behaviour._send('start');
-      }
+      });
     }
   }
 
@@ -195,6 +229,9 @@ export class Lifecycle {
   /** Queues `target` to be destroyed at the end of the frame, `delay` seconds from now. */
   destroy(target: GameObject | Component, delay = 0): void {
     if (target._destroyed) return;
+    if (target instanceof Transform) {
+      throw new Error(`Cannot destroy the Transform of "${target.name}". Destroy the GameObject instead.`);
+    }
     this.destroyQueue.push({ target, time: this.time.time + Math.max(0, delay) });
   }
 
@@ -207,7 +244,7 @@ export class Lifecycle {
       due.push(entry.target);
       return false;
     });
-    for (const target of due) this.destroyNow(target as GameObject | Component);
+    this.each(due, (target) => this.destroyNow(target as GameObject | Component));
   }
 
   destroyNow(target: GameObject | Component): void {

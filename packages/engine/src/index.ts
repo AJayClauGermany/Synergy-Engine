@@ -13,6 +13,7 @@ export { PrimitiveType } from './core/hooks';
 export {
   Coroutine,
   YieldInstruction,
+  CustomYieldInstruction,
   WaitForSeconds,
   WaitForSecondsRealtime,
   WaitForEndOfFrame,
@@ -27,7 +28,8 @@ export { Input, KeyCode, Screen } from './core/Input';
 export { Debug } from './core/Debug';
 export { RenderSettings } from './core/RenderSettings';
 export { UnityEvent, Observable } from './core/events';
-export { Scene, SceneManager, LoadSceneMode, type SceneBuilder } from './core/SceneManager';
+export { Tween, Ease, LoopType, type EaseFunction } from './core/Tween';
+export { Scene, SceneManager, LoadSceneMode, type SceneBuilder, type SceneDefinition } from './core/SceneManager';
 export {
   Prefab,
   instantiate,
@@ -47,3 +49,20 @@ export { Collider, BoxCollider, SphereCollider, CapsuleCollider, type RaycastHit
 export { Physics, LayerMask } from './physics/Physics';
 
 export { Assets, Model } from './assets/Assets';
+
+export {
+  CellLayout,
+  CellSwizzle,
+  type GridShape,
+  hexCellSize,
+  Hex,
+  Square,
+  findPath,
+  findReachable,
+  Reachable,
+  type PathfindingOptions,
+  type PathResult,
+} from './grid';
+export { Grid, type GridHit } from './tilemap/Grid';
+export { Tilemap, TileBase, Tile, Sprite, type TileData } from './tilemap/Tilemap';
+export { TilemapRenderer } from './tilemap/TilemapRenderer';
