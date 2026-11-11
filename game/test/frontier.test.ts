@@ -30,8 +30,12 @@ async function matchWithGuest() {
 const matchOn = (machine: TestMachine) => Match.of(machine.manager) as Match;
 /** A machine's own copies of the soldiers of one team. */
 const soldiers = (machine: TestMachine, team: number) =>
-  machine.objectsOf(SoldierPrefab).map((object) => object.getComponent(Soldier) as Soldier).filter((soldier) => soldier.team.value === team);
-const scoutOf = (machine: TestMachine, team: number) => soldiers(machine, team).find((soldier) => soldier.type.value === 'scout') as Soldier;
+  machine
+    .objectsOf(SoldierPrefab)
+    .map((object) => object.getComponent(Soldier) as Soldier)
+    .filter((soldier) => soldier.team.value === team);
+const scoutOf = (machine: TestMachine, team: number) =>
+  soldiers(machine, team).find((soldier) => soldier.type.value === 'scout') as Soldier;
 /** Lets a unit's cooldown run out. */
 const rest = () => net.pump(60);
 
@@ -140,10 +144,16 @@ describe('orders', () => {
     refused(() => guest.run(() => red.moveRpc(0, 0)), 'That cell is out of reach.');
     refused(() => guest.run(() => red.moveRpc(99, 99)), 'That cell is out of reach.');
     const neighbour = soldiers(guest, 1).find((soldier) => soldier !== red) as Soldier;
-    refused(() => guest.run(() => red.moveRpc(neighbour.cell.value.x, neighbour.cell.value.y)), 'That cell is out of reach.');
+    refused(
+      () => guest.run(() => red.moveRpc(neighbour.cell.value.x, neighbour.cell.value.y)),
+      'That cell is out of reach.',
+    );
     // Somebody else's unit. The host's own copy of the Red scout exists, so the host can try.
     const redOnHost = host.object(red.networkObjectId).getComponent(Soldier) as Soldier;
-    refused(() => host.run(() => redOnHost.moveRpc(before.red.x - 1, before.red.y)), 'That unit is not yours to command.');
+    refused(
+      () => host.run(() => redOnHost.moveRpc(before.red.x - 1, before.red.y)),
+      'That unit is not yours to command.',
+    );
     // Nonsense from a modified client is dropped without a word.
     guest.run(() => red.moveRpc(1.5, Number.NaN));
     net.pump();
@@ -198,9 +208,15 @@ describe('fog of war, enforced by the host', () => {
     const goal = scoutOf(guest, 1).cell.value;
     /** One order: as far toward `target` as the scout can get. The host checks it like any other. */
     const stepToward = (target: Cell) => {
-      const reach = reachableFrom(scout.cell.value, scout.unitType.moveRange, (cell) => matchOn(host).unitAt(cell) !== null);
+      const reach = reachableFrom(
+        scout.cell.value,
+        scout.unitType.moveRange,
+        (cell) => matchOn(host).unitAt(cell) !== null,
+      );
       const distance = (cell: Cell) => Math.hypot(cell.x - target.x, cell.y - target.y);
-      const next = reach.cells.map(({ cell }) => ({ x: cell.x, y: cell.y })).sort((a, b) => distance(a) - distance(b))[0];
+      const next = reach.cells
+        .map(({ cell }) => ({ x: cell.x, y: cell.y }))
+        .sort((a, b) => distance(a) - distance(b))[0];
       if (next && distance(next) < distance(scout.cell.value)) host.run(() => scout.moveRpc(next.x, next.y));
       rest();
     };
@@ -243,11 +259,13 @@ describe('what a modified client cannot do', () => {
     expect(Math.max(...enemiesHeld)).toBe(0); // Blue is across the map, out of sight throughout
   });
 
-  test('only the host can send a refusal, so players cannot write in each other\'s HUD', async () => {
+  test("only the host can send a refusal, so players cannot write in each other's HUD", async () => {
     const { guest } = await matchWithGuest();
     const mine = scoutOf(guest, 1);
     frontierHud.update((state) => ({ ...state, message: '' }));
-    expect(() => guest.run(() => mine.refusedRpc.sendTo([0], 'You have lost. Close the tab.'))).toThrow('only the server can call it');
+    expect(() => guest.run(() => mine.refusedRpc.sendTo([0], 'You have lost. Close the tab.'))).toThrow(
+      'only the server can call it',
+    );
     net.pump();
     expect(frontierHud.value.message).toBe('');
   });

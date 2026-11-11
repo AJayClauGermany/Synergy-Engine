@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { Vector3 } from '@synergy/engine';
 import { NetworkList, type NetworkListEvent, NetworkVariable } from '../src';
-import { CratePrefab, TestNetwork } from './harness';
+import { CratePrefab, TestNetwork, warningsFrom } from './harness';
 
 let net: TestNetwork;
 afterEach(() => net.dispose());
@@ -101,7 +101,10 @@ describe('NetworkVariable', () => {
     // Alice does not own the crate; forge the update a modified client would send.
     alice.transport.send('host', { t: 'vars', u: [[id, 0, 'note', 'forged']] });
     alice.transport.send('host', { t: 'vars', u: [[id, 0, 'hp', 1]] });
-    net.pump();
+    expect(warningsFrom(() => net.pump())).toEqual([
+      'Client 1 may not write NetworkVariable "note" on "Crate"; the change was ignored.',
+      'Client 1 may not write NetworkVariable "hp" on "Crate"; the change was ignored.',
+    ]);
     expect(host.unit(id).note.value).toBe('');
     expect(host.unit(id).hp.value).toBe(100);
   });
@@ -143,9 +146,11 @@ describe('NetworkList', () => {
   test('changes are sent as operations and arrive in order', () => {
     const { host, alice, id } = setup();
     const events: string[] = [];
-    alice.unit(id).tags.onListChanged.add((event: NetworkListEvent<string>) =>
-      events.push(`${event.type}@${event.index}:${event.value ?? event.previousValue ?? ''}`),
-    );
+    alice
+      .unit(id)
+      .tags.onListChanged.add((event: NetworkListEvent<string>) =>
+        events.push(`${event.type}@${event.index}:${event.value ?? event.previousValue ?? ''}`),
+      );
     const tags = host.unit(id).tags;
     tags.add('a');
     tags.add('b');

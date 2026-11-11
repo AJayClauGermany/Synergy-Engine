@@ -13,7 +13,7 @@ export type UseCamelCase<Name extends string> = { readonly renameThisMethodTo: N
  * Unity messages nothing here sends. Listed so that a ported script which relies on one
  * says so when it runs, instead of doing nothing.
  */
-const NOT_SENT: Record<string, string> = {
+export const NOT_SENT: Readonly<Record<string, string>> = {
   oncollisionenter: 'there is no rigidbody physics yet; test for contact with Physics.overlapSphere or a raycast',
   oncollisionstay: 'there is no rigidbody physics yet; test for contact with Physics.overlapSphere or a raycast',
   oncollisionexit: 'there is no rigidbody physics yet; test for contact with Physics.overlapSphere or a raycast',
@@ -60,8 +60,7 @@ function inspect(type: MessageHost): Verdict {
       const lower = name.toLowerCase();
       const intended = byLowerCase.get(lower);
       if (intended) {
-        verdict.error ??=
-          `${type.name}.${name}() will never be called: message names are camelCase here. Rename it to ${intended}().`;
+        verdict.error ??= `${type.name}.${name}() will never be called: message names are camelCase here. Rename it to ${intended}().`;
         continue;
       }
       // "onStart", "onUpdate": a message with an "on" it does not have.
@@ -74,7 +73,9 @@ function inspect(type: MessageHost): Verdict {
       }
       const reason = NOT_SENT[lower];
       if (reason) {
-        verdict.warnings.push(`${type.name}.${name}() is a Unity message this engine does not send, so it will never be called: ${reason}.`);
+        verdict.warnings.push(
+          `${type.name}.${name}() is a Unity message this engine does not send, so it will never be called: ${reason}.`,
+        );
       }
     }
   }

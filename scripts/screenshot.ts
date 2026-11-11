@@ -30,7 +30,17 @@ type Action =
   | { kind: 'hierarchy' };
 
 const root = path.resolve(import.meta.dir, '..');
-const options = { url: '', out: '.screenshots/game.png', width: 1280, height: 720, scale: 1, scene: '', settle: 600, build: true, release: false };
+const options = {
+  url: '',
+  out: '.screenshots/game.png',
+  width: 1280,
+  height: 720,
+  scale: 1,
+  scene: '',
+  settle: 600,
+  build: true,
+  release: false,
+};
 const actions: Action[] = [];
 
 const args = Bun.argv.slice(2);
@@ -42,25 +52,52 @@ for (let i = 0; i < args.length; i++) {
     return next;
   };
   switch (flag) {
-    case '--url': options.url = value(); break;
-    case '--out': options.out = value(); break;
-    case '--width': options.width = Number(value()); break;
-    case '--height': options.height = Number(value()); break;
-    case '--scale': options.scale = Number(value()); break;
-    case '--scene': options.scene = value(); break;
-    case '--settle': options.settle = Number(value()); break;
-    case '--no-build': options.build = false; break;
-    case '--release': options.release = true; break;
+    case '--url':
+      options.url = value();
+      break;
+    case '--out':
+      options.out = value();
+      break;
+    case '--width':
+      options.width = Number(value());
+      break;
+    case '--height':
+      options.height = Number(value());
+      break;
+    case '--scale':
+      options.scale = Number(value());
+      break;
+    case '--scene':
+      options.scene = value();
+      break;
+    case '--settle':
+      options.settle = Number(value());
+      break;
+    case '--no-build':
+      options.build = false;
+      break;
+    case '--release':
+      options.release = true;
+      break;
     case '--click': {
       const [x, y] = value().split(',').map(Number);
       actions.push({ kind: 'click', x: x ?? 0, y: y ?? 0 });
       break;
     }
-    case '--key': actions.push({ kind: 'key', code: value() }); break;
-    case '--wait': actions.push({ kind: 'wait', ms: Number(value()) }); break;
-    case '--eval': actions.push({ kind: 'eval', source: value() }); break;
-    case '--hierarchy': actions.push({ kind: 'hierarchy' }); break;
-    default: throw new Error(`Unknown option ${flag}. See the comment at the top of scripts/screenshot.ts.`);
+    case '--key':
+      actions.push({ kind: 'key', code: value() });
+      break;
+    case '--wait':
+      actions.push({ kind: 'wait', ms: Number(value()) });
+      break;
+    case '--eval':
+      actions.push({ kind: 'eval', source: value() });
+      break;
+    case '--hierarchy':
+      actions.push({ kind: 'hierarchy' });
+      break;
+    default:
+      throw new Error(`Unknown option ${flag}. See the comment at the top of scripts/screenshot.ts.`);
   }
 }
 
@@ -101,7 +138,11 @@ if (!url) {
   if (options.build) {
     // Class names are kept so that errors and --hierarchy can be read; --release builds exactly what ships.
     const buildArgs = options.release ? [] : ['--keep-names'];
-    const build = Bun.spawnSync(['bun', 'run', 'scripts/build.ts', ...buildArgs], { cwd: root, stdout: 'inherit', stderr: 'inherit' });
+    const build = Bun.spawnSync(['bun', 'run', 'scripts/build.ts', ...buildArgs], {
+      cwd: root,
+      stdout: 'inherit',
+      stderr: 'inherit',
+    });
     if (build.exitCode !== 0) process.exit(build.exitCode ?? 1);
   }
   const dist = path.join(root, 'dist');
@@ -128,7 +169,10 @@ const browser = await playwright.chromium.launch({
 const errors: string[] = [];
 let exitCode = 0;
 try {
-  const page = await browser.newPage({ viewport: { width: options.width, height: options.height }, deviceScaleFactor: options.scale });
+  const page = await browser.newPage({
+    viewport: { width: options.width, height: options.height },
+    deviceScaleFactor: options.scale,
+  });
   page.on('console', (message) => {
     if (message.type() === 'error') errors.push(message.text());
   });
@@ -156,7 +200,7 @@ try {
   errors.push(String(error));
 } finally {
   await browser.close();
-  server?.stop(true);
+  await server?.stop(true);
 }
 
 if (errors.length > 0) {

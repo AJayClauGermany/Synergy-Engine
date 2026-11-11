@@ -1,3 +1,4 @@
+import { spyOn } from 'bun:test';
 import { type Engine, GameObject, Vector3 } from '@synergy/engine';
 import type { LoopbackTransport } from '@synergy/net';
 import {
@@ -35,9 +36,13 @@ export class Unit extends NetworkBehaviour {
     this.seen.push(`hit ${amount} from ${this.rpcSenderClientId}`);
     this.hp.value -= amount;
   });
-  readonly openRpc = this.rpc(SendTo.Server, (text: string) => this.seen.push(`open ${text} from ${this.rpcSenderClientId}`), {
-    requireOwnership: false,
-  });
+  readonly openRpc = this.rpc(
+    SendTo.Server,
+    (text: string) => this.seen.push(`open ${text} from ${this.rpcSenderClientId}`),
+    {
+      requireOwnership: false,
+    },
+  );
   readonly shoutRpc = this.clientRpc((text: string) => this.seen.push(`shout ${text}`));
   readonly everyoneRpc = this.rpc(SendTo.Everyone, (text: string) => this.seen.push(`everyone ${text}`));
   readonly notMeRpc = this.rpc(SendTo.NotMe, (text: string) => this.seen.push(`notMe ${text}`));
@@ -134,11 +139,31 @@ export class TestNetwork extends BaseTestNetwork<Machine> {
   constructor() {
     super((manager) => {
       manager.networkConfig.playerPrefab = PlayerPrefab;
-      manager.networkPrefabs.add(CratePrefab).add(AnnouncerPrefab).add(CarPrefab).add(NestedPrefab).add(MoverPrefab).add(OwnerMoverPrefab);
+      manager.networkPrefabs
+        .add(CratePrefab)
+        .add(AnnouncerPrefab)
+        .add(CarPrefab)
+        .add(NestedPrefab)
+        .add(MoverPrefab)
+        .add(OwnerMoverPrefab);
     });
   }
 
   protected override wrap(id: string, engine: Engine, manager: NetworkManager, transport: LoopbackTransport): Machine {
     return new Machine(id, engine, manager, transport);
+  }
+}
+
+/**
+ * Runs `action` and returns what it warned about, keeping those warnings out of the test
+ * output: a warning the test expects should be asserted, not printed.
+ */
+export function warningsFrom(action: () => void): string[] {
+  const warn = spyOn(console, 'warn').mockImplementation(() => {});
+  try {
+    action();
+    return warn.mock.calls.map((call) => call.map(String).join(' '));
+  } finally {
+    warn.mockRestore();
   }
 }

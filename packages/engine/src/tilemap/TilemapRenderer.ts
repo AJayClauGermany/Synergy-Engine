@@ -220,7 +220,10 @@ export class TilemapRenderer extends MonoBehaviour {
       normal,
       tint: tilemap.color,
       corners: outline.map((corner) => corner.sub(anchor).add(lift)),
-      fractions: flat.map(([u, v]) => [maxU > minU ? (u - minU) / (maxU - minU) : 0, maxV > minV ? (v - minV) / (maxV - minV) : 0]),
+      fractions: flat.map(([u, v]) => [
+        maxU > minU ? (u - minU) / (maxU - minU) : 0,
+        maxV > minV ? (v - minV) / (maxV - minV) : 0,
+      ]),
     };
   }
 
@@ -285,7 +288,7 @@ export class TilemapRenderer extends MonoBehaviour {
     const existing = pair[blended ? 1 : 0];
     if (existing) return existing;
 
-    const material = this.material.pcMaterial.clone() as pc.StandardMaterial;
+    const material = this.material.pcMaterial.clone();
     // Tile colours are authored like every other colour (sRGB), so have the shader
     // convert them; otherwise they come out washed-out next to ordinary materials.
     material.vertexColorGamma = true;

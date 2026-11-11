@@ -11,10 +11,7 @@ export type ConcreteComponentClass<T extends Component = Component> = new () => 
 let pendingOwner: GameObject | null = null;
 
 /** @internal Constructs a component bound to `owner`. Only `GameObject.addComponent` calls this. */
-export function constructComponent<T extends Component>(
-  type: ConcreteComponentClass<T>,
-  owner: GameObject,
-): T {
+export function constructComponent<T extends Component>(type: ConcreteComponentClass<T>, owner: GameObject): T {
   pendingOwner = owner;
   try {
     return new type();
@@ -83,17 +80,11 @@ export abstract class Component extends EngineObject {
     return this.gameObject.getComponents(type);
   }
 
-  getComponentInChildren<T extends Component>(
-    type: ComponentClass<T>,
-    includeInactive = false,
-  ): T | null {
+  getComponentInChildren<T extends Component>(type: ComponentClass<T>, includeInactive = false): T | null {
     return this.gameObject.getComponentInChildren(type, includeInactive);
   }
 
-  getComponentsInChildren<T extends Component>(
-    type: ComponentClass<T>,
-    includeInactive = false,
-  ): T[] {
+  getComponentsInChildren<T extends Component>(type: ComponentClass<T>, includeInactive = false): T[] {
     return this.gameObject.getComponentsInChildren(type, includeInactive);
   }
 

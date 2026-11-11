@@ -56,7 +56,9 @@ describe('preview gate', () => {
     );
     expect(forged.status).toBe(401);
 
-    const cookie = ((await login('correct horse battery staple')).headers.get('Set-Cookie') ?? '').split(';')[0] as string;
+    const cookie = ((await login('correct horse battery staple')).headers.get('Set-Cookie') ?? '').split(
+      ';',
+    )[0] as string;
     const rotated = await handleRequest(new Request(`${origin}/`, { headers: { Cookie: cookie } }), {
       ...locked,
       PREVIEW_PASSWORD: 'a new password',
@@ -66,7 +68,10 @@ describe('preview gate', () => {
 
   test('automation can use HTTP Basic auth', async () => {
     const header = (password: string) => ({ Authorization: `Basic ${btoa(`agent:${password}`)}` });
-    const ok = await handleRequest(new Request(`${origin}/`, { headers: header('correct horse battery staple') }), locked);
+    const ok = await handleRequest(
+      new Request(`${origin}/`, { headers: header('correct horse battery staple') }),
+      locked,
+    );
     expect(ok.status).toBe(200);
     const bad = await handleRequest(new Request(`${origin}/`, { headers: header('nope') }), locked);
     expect(bad.status).toBe(401);
@@ -82,7 +87,10 @@ describe('preview gate', () => {
     // What a browser or curl sends: the UTF-8 bytes of "user:password", base64-encoded.
     const bytes = new TextEncoder().encode('agent:pässwörd-日本');
     const basic = btoa(String.fromCharCode(...bytes));
-    const response = await handleRequest(new Request(`${origin}/`, { headers: { Authorization: `Basic ${basic}` } }), env);
+    const response = await handleRequest(
+      new Request(`${origin}/`, { headers: { Authorization: `Basic ${basic}` } }),
+      env,
+    );
     expect(response.status).toBe(200);
   });
 

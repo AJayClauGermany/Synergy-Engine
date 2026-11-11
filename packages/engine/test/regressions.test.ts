@@ -85,7 +85,9 @@ describe('scene loading', () => {
     await nextTask();
     gates[1]?.();
     await nextTask();
-    const players = SceneManager.getActiveScene().getRootGameObjects().filter((go) => go.name === 'Player');
+    const players = SceneManager.getActiveScene()
+      .getRootGameObjects()
+      .filter((go) => go.name === 'Player');
     expect(players.length).toBe(1);
     expect(SceneManager.sceneCount).toBe(1);
     new GameObject('SpawnedLater');
@@ -380,7 +382,7 @@ describe('transform', () => {
     expect(Physics.raycast(new Vector3(-5, 0, 0), Vector3.right)?.normal.equals(Vector3.left)).toBe(true);
   });
 
-  test('translate moves in world units along the object\'s own axes, whatever the parent scale', () => {
+  test("translate moves in world units along the object's own axes, whatever the parent scale", () => {
     const board = new GameObject('Board');
     board.transform.localScale = new Vector3(2, 2, 2);
     const unit = new GameObject('Unit');

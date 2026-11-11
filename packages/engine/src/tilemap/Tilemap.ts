@@ -64,7 +64,13 @@ export class Tile<Data = unknown> extends TileBase {
   data: Data;
 
   constructor(
-    init: { name?: string; sprite?: Sprite | null; color?: Color; gameObject?: Prefab | GameObject | null; data?: Data } = {},
+    init: {
+      name?: string;
+      sprite?: Sprite | null;
+      color?: Color;
+      gameObject?: Prefab | GameObject | null;
+      data?: Data;
+    } = {},
   ) {
     super();
     if (init.name !== undefined) this.name = init.name;

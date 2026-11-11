@@ -39,4 +39,9 @@ export const frontierHud = new Observable<FrontierHudState>({
   message: '',
 });
 
-export const frontierOnline = new Observable<FrontierOnlineState>({ mode: 'offline', code: null, isHost: true, error: null });
+export const frontierOnline = new Observable<FrontierOnlineState>({
+  mode: 'offline',
+  code: null,
+  isHost: true,
+  error: null,
+});

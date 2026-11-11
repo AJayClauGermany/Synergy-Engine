@@ -24,8 +24,12 @@ export function useUnityEvent<Args extends unknown[]>(
   event: UnityEvent<Args>,
   listener: (...args: Args) => void,
 ): void {
+  // The newest listener is kept in a ref, so a new function each render does not
+  // unsubscribe and resubscribe. It is stored after the render, not during it.
   const latest = useRef(listener);
-  latest.current = listener;
+  useEffect(() => {
+    latest.current = listener;
+  });
   useEffect(() => event.addListener((...args) => latest.current(...args)), [event]);
 }
 
@@ -36,7 +40,9 @@ export function useUnityEvent<Args extends unknown[]>(
 export function useFrame(callback: () => void): void {
   const engine = useEngine();
   const latest = useRef(callback);
-  latest.current = callback;
+  useEffect(() => {
+    latest.current = callback;
+  });
   useEffect(() => {
     const handler = () => latest.current();
     engine.app.on('frameend', handler);

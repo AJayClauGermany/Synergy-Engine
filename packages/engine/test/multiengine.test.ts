@@ -69,7 +69,7 @@ describe('several engines in one process', () => {
     expect(a.run(() => b.run(() => Engine.current === b) && Engine.current === a)).toBe(true);
   });
 
-  test('disposing an engine runs its scripts\' onDestroy against that engine, not the newest one', () => {
+  test("disposing an engine runs its scripts' onDestroy against that engine, not the newest one", () => {
     const seen: (Engine | null)[] = [];
     class Remember extends MonoBehaviour {
       onDestroy() {

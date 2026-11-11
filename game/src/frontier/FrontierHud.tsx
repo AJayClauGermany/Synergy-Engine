@@ -12,7 +12,10 @@ export function FrontierHud({ manager }: { manager: NetworkManager }) {
       <Banner manager={manager} />
       <OnlinePanel manager={manager} />
       <OrderBar />
-      <p className="hint">Click one of your units, then a blue cell to move or a red one to attack · right-click clears · WASD pan · Q/E rotate · wheel zoom</p>
+      <p className="hint">
+        Click one of your units, then a blue cell to move or a red one to attack · right-click clears · WASD pan · Q/E
+        rotate · wheel zoom
+      </p>
     </>
   );
 }

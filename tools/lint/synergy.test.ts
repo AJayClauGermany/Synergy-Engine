@@ -1,0 +1,360 @@
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { NOT_SENT as ENGINE_NOT_SENT } from '../../packages/engine/src/core/messageNames';
+import { MonoBehaviour } from '../../packages/engine/src/core/MonoBehaviour';
+import { NetworkBehaviour } from '../../packages/netcode/src/NetworkBehaviour';
+import { MESSAGES, NOT_SENT, rules } from './synergy';
+
+// Each rule runs on small snippets: code it must accept, and code it must report. The
+// snippets go through the real linter (one run for all of them), so this also proves
+// that oxlint loads the plugin under Bun.
+
+type RuleName = keyof typeof rules;
+
+interface Snippet {
+  code: string;
+  /** Only matters to rules that read the file name. */
+  filename?: string;
+  /** One entry per expected report, in source order: text the message must contain. */
+  errors?: (string | RegExp)[];
+}
+
+const CASES: Record<RuleName, { valid: (string | Snippet)[]; invalid: Snippet[] }> = {
+  'no-detached-method': {
+    valid: [
+      // Calling the method is not handing it over.
+      'class A { hit() { this.hp--; } run() { this.hit(); } }',
+      // An arrow keeps `this`, whether written at the call or as the field itself.
+      'class A { hit() { this.hp--; } run() { button.onClick.addListener(() => this.hit()); } }',
+      'class A { hit = () => { this.hp--; }; run() { button.onClick.addListener(this.hit); } }',
+      // The engine's invoke family binds the method itself.
+      'class A { tick() { this.n++; } start() { this.invoke(this.tick, 1); this.invokeRepeating(this.tick, 0, 1); } }',
+      'class A { tick() { this.n++; } stop() { this.cancelInvoke(this.tick); return this.isInvoking(this.tick); } }',
+      // So does a call that is also given `this` (PlayCanvas: on(name, callback, scope)).
+      "class A { onUpdate() { this.n++; } awake() { this.app.on('update', this.onUpdate, this); } }",
+      // Bound by hand.
+      'class A { hit() { this.hp--; } run() { events.add(this.hit.bind(this)); } }',
+      // A method that never uses `this` loses nothing.
+      'class A { double(n: number) { return n * 2; } run(list: number[]) { return list.map(this.double); } }',
+      // Looking at a method without taking it.
+      "class A { hit() { this.hp--; } run() { return typeof this.hit === 'function' && entry.method === this.hit; } }",
+      // Not a method of this class: nothing can be said from here.
+      'class A { run() { events.add(this.hit); } }',
+      // Getters and fields are values already.
+      'class A { get hp() { return this._hp; } run() { show(this.hp); } }',
+      // A coroutine is started by calling the method that makes it.
+      'class A { *blink() { yield null; } start() { this.startCoroutine(this.blink()); } }',
+    ],
+    invalid: [
+      {
+        code: 'class A { hit() { this.hp--; } start() { button.onClick.addListener(this.hit); } }',
+        errors: ['`this.hit` is handed over without its `this`'],
+      },
+      {
+        code: 'class A { score(u: Unit) { return u.hp * this.weight; } best(units: Unit[]) { return units.map(this.score); } }',
+        errors: ['Pass `() => this.score()`'],
+      },
+      { code: 'class A { hit() { this.hp--; } run() { const f = this.hit; f(); } }', errors: ['this.hit'] },
+      { code: 'class A { hit() { this.hp--; } run() { this.handler = this.hit; } }', errors: ['this.hit'] },
+      { code: 'class A { hit() { this.hp--; } run() { return { onHit: this.hit }; } }', errors: ['this.hit'] },
+      { code: 'class A { hit() { this.hp--; } handler() { return this.hit; } }', errors: ['this.hit'] },
+      { code: 'class A { hit() { super.hit(); } start() { events.add(this.hit!); } }', errors: ['this.hit'] },
+      // Unity's StartCoroutine(Blink()) with the call left off: the advice is to call it, not to wrap it.
+      {
+        code: 'class A { *blink() { yield null; } start() { this.startCoroutine(this.blink); } }',
+        errors: ['Call it: `this.startCoroutine(this.blink())`'],
+      },
+      {
+        code: 'class A { hit() { this.hp--; } render() { return <button onClick={this.hit} />; } }',
+        filename: 'View.tsx',
+        errors: ['this.hit'],
+      },
+    ],
+  },
+
+  'no-identity-compare': {
+    valid: [
+      'if (velocity.equals(Vector3.zero)) stop();',
+      'if (!a.equals(b)) move();',
+      'if (speed === 0) stop();',
+      // Not one of the engine's value types.
+      'if (key === KeyCode.Space) jump();',
+      'if (Mathf.PI > 3) ok();',
+      // Ordering comparisons are not about identity.
+      'if (a.x < Vector3.one.x) ok();',
+    ],
+    invalid: [
+      {
+        code: 'if (velocity == Vector3.zero) stop();',
+        errors: ['`==` compares two Vector3 objects by identity, not by their numbers, so this is false'],
+      },
+      {
+        code: 'if (this.transform.position !== Vector3.zero) move();',
+        errors: ['`!==` compares two Vector3 objects by identity, not by their numbers, so this is true'],
+      },
+      { code: 'const same = cell === new Vector3Int(1, 2, 0);', errors: ['two Vector3Int objects'] },
+      { code: 'const white = Color.white === tint;', errors: ['two Color objects'] },
+      { code: 'const still = rotation === (Quaternion.identity);', errors: ['Use `a.equals(b)`'] },
+    ],
+  },
+
+  'no-value-keys': {
+    valid: [
+      'const units = new Map<string, Unit>();',
+      'const seen = new Set<string>();',
+      'const byId: Map<number, Unit> = new Map();',
+      // Keyed by identity on purpose: these are objects with an identity, not values.
+      'const health = new Map<GameObject, number>();',
+      'const cache = new WeakMap<Vector3, number>();',
+      // Values may be anything.
+      'const positions = new Map<string, Vector3>();',
+      'const cells: Vector3Int[] = [];',
+    ],
+    invalid: [
+      {
+        code: 'const units = new Map<Vector3Int, Unit>();',
+        errors: ['A Map keyed by Vector3Int finds keys by identity'],
+      },
+      { code: 'const visited = new Set<Vector2Int>();', errors: ['Key it by a string instead: Set<string>'] },
+      { code: 'let units: Map<CellLike, Unit>;', errors: ['Key it by a string instead: Map<string, …>'] },
+      { code: 'function f(seen: ReadonlySet<Vector3>): void {}', errors: ['A ReadonlySet keyed by Vector3'] },
+      {
+        code: 'const costs = new Map<{ x: number; y: number }, number>();',
+        errors: ['A Map keyed by an object'],
+      },
+      { code: 'const seen = new Set<[number, number]>();', errors: ['A Set keyed by a tuple'] },
+      // The annotation and the constructor are each reported where they are written.
+      {
+        code: 'const units: Map<Vector3Int, Unit> = new Map<Vector3Int, Unit>();',
+        errors: ['Vector3Int', 'Vector3Int'],
+      },
+    ],
+  },
+
+  'no-unsent-message': {
+    valid: [
+      'class Unit extends MonoBehaviour { awake() {} start() {} update() {} onDestroy() {} onMouseDown() {} }',
+      'class Unit extends NetworkBehaviour { onNetworkSpawn() {} onGainedOwnership() {} }',
+      // An ordinary method that happens to start with "on".
+      'class Unit extends MonoBehaviour { onHit() {} onSelected() {} }',
+      // Not a script, so nothing sends it messages either way.
+      'class Machine { onStart() {} onTriggerEnter() {} }',
+      'class Machine extends Base { onStart() {} }',
+      // Unity's capitals are a type error already; one report is enough.
+      'class Unit extends MonoBehaviour { Update() {} }',
+      'class Unit extends MonoBehaviour { static onStart() {} }',
+    ],
+    invalid: [
+      {
+        code: 'class Unit extends MonoBehaviour { onStart() {} }',
+        errors: ['Unit.onStart() looks like a Unity message, but the engine never calls it. The message is start()'],
+      },
+      {
+        code: 'class Unit extends MonoBehaviour { onUpdate() {} OnAwake() {} }',
+        errors: ['The message is update()', 'The message is awake()'],
+      },
+      {
+        code: 'class Coin extends MonoBehaviour { onTriggerEnter(other: Collider) {} }',
+        errors: [/Coin\.onTriggerEnter\(\) is a Unity message this engine does not send.*Physics\.overlapSphere/],
+      },
+      {
+        code: 'class Crate extends NetworkBehaviour { OnCollisionEnter() {} }',
+        errors: ['there is no rigidbody physics yet'],
+      },
+      // A script that extends another script in the same file is a script too.
+      {
+        code: 'class Unit extends MonoBehaviour {} class Archer extends Unit { onStart() {} }',
+        errors: ['Archer.onStart()'],
+      },
+    ],
+  },
+
+  'no-z-axis-literal': {
+    valid: [
+      'const d = Vector3.forward;',
+      'const p = new Vector3(0, 0, 10);',
+      'const p = new Vector3(0, 1, 0);',
+      'const p = new Vector3(1, 0, 1);',
+      'const p = new Vector3(0, 0, z);',
+      'const p = new Vector2(0, 1);',
+    ],
+    invalid: [
+      { code: 'const d = new Vector3(0, 0, 1);', errors: ['new Vector3(0, 0, 1) is Vector3.back here'] },
+      {
+        code: 'transform.translate(new Vector3(0, 0, -1).mul(speed));',
+        errors: ['new Vector3(0, 0, -1) is Vector3.forward here'],
+      },
+    ],
+  },
+
+  'no-skipped-test': {
+    valid: [
+      "test('moves', () => { expect(1).toBe(1); });",
+      "describe('board', () => { it('loads', () => { expect(1).toBe(1); }); });",
+      // A test still to be written, and one that cannot run everywhere, are honest about it.
+      "test.todo('handles a draw');",
+      "test.skipIf(!process.env.CI)('uploads', () => { expect(1).toBe(1); });",
+      "test.each([1, 2])('doubles %d', (n) => { expect(n * 2).toBe(n + n); });",
+      // Other things called skip or only.
+      "queue.skip(2); filter.only('a');",
+    ],
+    invalid: [
+      { code: "test.skip('moves', () => { expect(1).toBe(2); });", errors: ['test.skip switches this test off'] },
+      { code: "describe.skip('board', () => {});", errors: ['describe.skip switches this test off'] },
+      { code: "it.only('moves', () => { expect(1).toBe(1); });", errors: ['it.only stops every other test'] },
+      { code: "describe.only('board', () => {});", errors: ["use: bun test -t 'part of its name'"] },
+      {
+        code: "test.skip.each([1, 2])('doubles %d', (n) => { expect(n).toBe(n); });",
+        errors: ['test.skip.each switches this test off'],
+      },
+    ],
+  },
+
+  'test-needs-expect': {
+    valid: [
+      "test('adds', () => { expect(1 + 1).toBe(2); });",
+      "test('loads', async () => { await expect(load()).resolves.toBe(1); });",
+      "it('does not throw', () => { expect(() => run()).not.toThrow(); });",
+      // A helper named like an assertion counts.
+      "test('board', () => { expectBoard(state); });",
+      "test('board', () => { assert.equal(1, 1); });",
+      "test('rows', () => { for (const row of rows) { if (row) expect(row.length).toBe(3); } });",
+      "test.todo('handles a draw');",
+      "describe('board', () => {});",
+    ],
+    invalid: [
+      { code: "test('moves', () => { const unit = move(state); });", errors: ['This test has no expect(...)'] },
+      { code: "it('runs', async () => { await engine.step(); });", errors: ['This test has no expect(...)'] },
+      { code: "test('moves', () => {});", errors: ['This test has no expect(...)'] },
+    ],
+  },
+
+  'behaviour-file-name': {
+    valid: [
+      { code: 'export class Health extends MonoBehaviour {}', filename: 'Health.ts' },
+      { code: 'export class Soldier extends NetworkBehaviour {}', filename: 'frontier/Soldier.ts' },
+      // Helpers and prefabs may sit next to the script.
+      {
+        code: 'class Blink extends MonoBehaviour {} export class Health extends MonoBehaviour {} export const P = 1;',
+        filename: 'Health.ts',
+      },
+      // Not scripts.
+      { code: 'export class Inventory {} export class Slot {}', filename: 'items.ts' },
+    ],
+    invalid: [
+      {
+        code: 'export class Health extends MonoBehaviour {}',
+        filename: 'health.ts',
+        errors: [
+          'The script Health is exported from health.ts. A script lives in a file named after it: rename the file to Health.ts',
+        ],
+      },
+      {
+        code: 'export class Health extends MonoBehaviour {} export class Armor extends MonoBehaviour {}',
+        filename: 'Health.ts',
+        errors: ['Armor is the second script exported from this file (Health is the first)'],
+      },
+    ],
+  },
+};
+
+interface Report {
+  rule: string;
+  message: string;
+  offset: number;
+}
+
+/** Reports per snippet file, as the linter gave them. */
+const reports = new Map<string, Report[]>();
+let workspace = '';
+
+/** Where a snippet is written: every snippet gets a folder, so file names never collide. */
+function snippetPath(rule: RuleName, kind: 'valid' | 'invalid', index: number, snippet: string | Snippet): string {
+  const filename = typeof snippet === 'string' ? 'snippet.ts' : (snippet.filename ?? 'snippet.ts');
+  return path.join(rule, `${kind}-${index}`, filename);
+}
+
+beforeAll(() => {
+  workspace = mkdtempSync(path.join(tmpdir(), 'synergy-lint-'));
+  for (const [rule, { valid, invalid }] of Object.entries(CASES) as [RuleName, (typeof CASES)[RuleName]][]) {
+    for (const [kind, snippets] of [
+      ['valid', valid],
+      ['invalid', invalid],
+    ] as const) {
+      snippets.forEach((snippet, index) => {
+        const file = path.join(workspace, snippetPath(rule, kind, index, snippet));
+        mkdirSync(path.dirname(file), { recursive: true });
+        writeFileSync(file, `${typeof snippet === 'string' ? snippet : snippet.code}\n`);
+      });
+    }
+  }
+  // Only this plugin's rules, so a report can only come from the rule under test.
+  const config = {
+    jsPlugins: [path.join(import.meta.dir, 'synergy.ts')],
+    plugins: [],
+    categories: { correctness: 'off' },
+    rules: Object.fromEntries(Object.keys(rules).map((rule) => [`synergy/${rule}`, 'error'])),
+  };
+  writeFileSync(path.join(workspace, 'oxlintrc.json'), JSON.stringify(config));
+
+  const oxlint = path.join(path.dirname(Bun.resolveSync('oxlint/package.json', import.meta.dir)), 'bin/oxlint');
+  const run = Bun.spawnSync([process.execPath, oxlint, '-c', 'oxlintrc.json', '-f', 'json', '.'], { cwd: workspace });
+  const output = JSON.parse(run.stdout.toString()) as {
+    diagnostics: { code: string; message: string; filename: string; labels: { span: { offset: number } }[] }[];
+  };
+  for (const diagnostic of output.diagnostics) {
+    const file = path.normalize(diagnostic.filename);
+    const list = reports.get(file) ?? [];
+    list.push({ rule: diagnostic.code, message: diagnostic.message, offset: diagnostic.labels[0]?.span.offset ?? 0 });
+    reports.set(file, list);
+  }
+});
+
+afterAll(() => {
+  if (workspace) rmSync(workspace, { recursive: true, force: true });
+});
+
+for (const [rule, { valid, invalid }] of Object.entries(CASES) as [RuleName, (typeof CASES)[RuleName]][]) {
+  /** What this rule said about a snippet, in source order. */
+  const said = (kind: 'valid' | 'invalid', index: number, snippet: string | Snippet): string[] =>
+    (reports.get(snippetPath(rule, kind, index, snippet)) ?? [])
+      .filter((report) => report.rule === `synergy(${rule})`)
+      .toSorted((a, b) => a.offset - b.offset)
+      .map((report) => report.message);
+
+  describe(rule, () => {
+    valid.forEach((snippet, index) => {
+      test(`accepts: ${typeof snippet === 'string' ? snippet : snippet.code}`, () => {
+        expect(said('valid', index, snippet)).toEqual([]);
+      });
+    });
+
+    invalid.forEach((snippet, index) => {
+      test(`reports: ${snippet.code}`, () => {
+        const messages = said('invalid', index, snippet);
+        const expected = snippet.errors ?? [];
+        expect(messages).toHaveLength(expected.length);
+        expected.forEach((text, at) => {
+          if (typeof text === 'string') expect(messages[at]).toContain(text);
+          else expect(messages[at]).toMatch(text);
+        });
+      });
+    });
+  });
+}
+
+// The linter cannot import the engine (it loads this plugin for every run, and the engine
+// brings PlayCanvas with it), so the plugin keeps its own copies of two engine tables.
+describe('the plugin agrees with the engine', () => {
+  test('about which messages are sent', () => {
+    const sent = new Set([...MonoBehaviour._messageNames, ...NetworkBehaviour._messageNames]);
+    const listed: string[] = [...MESSAGES];
+    expect(listed.toSorted()).toEqual([...sent].toSorted());
+  });
+
+  test('about which Unity messages are not', () => {
+    expect(NOT_SENT).toEqual(ENGINE_NOT_SENT);
+  });
+});

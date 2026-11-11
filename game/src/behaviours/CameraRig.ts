@@ -38,7 +38,11 @@ export class CameraRig extends MonoBehaviour {
     if (pan.sqrMagnitude > 0) {
       // Faster when zoomed out, so panning feels the same on screen.
       const speed = this.panSpeed * (this.distance / 13);
-      const moved = this.transform.position.add(Quaternion.euler(0, this.yaw, 0).rotate(pan).mul(speed * dt));
+      const moved = this.transform.position.add(
+        Quaternion.euler(0, this.yaw, 0)
+          .rotate(pan)
+          .mul(speed * dt),
+      );
       this.transform.position = new Vector3(
         Mathf.clamp(moved.x, -this.bounds, this.bounds),
         0,

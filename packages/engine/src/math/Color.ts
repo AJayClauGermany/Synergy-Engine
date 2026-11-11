@@ -38,7 +38,7 @@ export class Color implements ColorLike {
   static fromHex(hex: string): Color {
     let digits = hex.trim().replace(/^#/, '');
     if (digits.length === 3 || digits.length === 4) {
-      digits = [...digits].map((d) => d + d).join('');
+      digits = digits.replace(/./g, '$&$&'); // "f80" -> "ff8800"
     }
     if (!/^[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/.test(digits)) {
       throw new Error(`Color.fromHex: "${hex}" is not a valid hex colour`);
@@ -72,12 +72,7 @@ export class Color implements ColorLike {
 
   static lerp(a: Color, b: Color, t: number): Color {
     const k = Mathf.clamp01(t);
-    return new Color(
-      a.r + (b.r - a.r) * k,
-      a.g + (b.g - a.g) * k,
-      a.b + (b.b - a.b) * k,
-      a.a + (b.a - a.a) * k,
-    );
+    return new Color(a.r + (b.r - a.r) * k, a.g + (b.g - a.g) * k, a.b + (b.b - a.b) * k, a.a + (b.a - a.a) * k);
   }
 
   /** Multiplies RGB (not alpha) by `factor`. */

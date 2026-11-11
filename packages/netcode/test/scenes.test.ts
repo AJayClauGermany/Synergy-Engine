@@ -50,10 +50,16 @@ describe('loading a scene for everyone', () => {
     const completed: number[] = [];
     const finished: [string, number[], number[]][] = [];
     host.manager.sceneManager.onLoadComplete.add((clientId) => completed.push(clientId));
-    host.manager.sceneManager.onLoadEventCompleted.add((scene, loaded, timedOut) => finished.push([scene, loaded, timedOut]));
+    host.manager.sceneManager.onLoadEventCompleted.add((scene, loaded, timedOut) =>
+      finished.push([scene, loaded, timedOut]),
+    );
     const heardByAlice: string[] = [];
-    alice.manager.sceneManager.onLoadComplete.add((clientId, scene) => heardByAlice.push(`loaded ${scene} as ${clientId}`));
-    alice.manager.sceneManager.onLoadEventCompleted.add((scene, loaded) => heardByAlice.push(`${scene} ready for ${loaded.join(',')}`));
+    alice.manager.sceneManager.onLoadComplete.add((clientId, scene) =>
+      heardByAlice.push(`loaded ${scene} as ${clientId}`),
+    );
+    alice.manager.sceneManager.onLoadEventCompleted.add((scene, loaded) =>
+      heardByAlice.push(`${scene} ready for ${loaded.join(',')}`),
+    );
 
     const loading = host.run(() => host.manager.sceneManager.loadScene('Match'));
     expect(host.manager.sceneManager.clientsLoading).toEqual([0, 1, 2]);
@@ -67,7 +73,7 @@ describe('loading a scene for everyone', () => {
       // The manager itself was carried over.
       expect(machine.manager.isListening).toBe(true);
     }
-    expect(completed.sort()).toEqual([0, 1, 2]);
+    expect(completed.toSorted((a, b) => a - b)).toEqual([0, 1, 2]);
     expect(finished).toEqual([['Match', [0, 1, 2], []]]);
     expect(host.manager.sceneManager.clientsLoading).toEqual([]);
     expect(heardByAlice).toEqual(['loaded Match as 1', 'Match ready for 0,1,2']);
@@ -79,7 +85,9 @@ describe('loading a scene for everyone', () => {
     class Flag extends NetworkBehaviour {
       onNetworkSpawn() {
         // On a client, the scene must already be there when a match object arrives.
-        order.push(`${this.isServer ? 'host' : 'client'} flag, arena ${GameObject.find('Arena') ? 'present' : 'missing'}`);
+        order.push(
+          `${this.isServer ? 'host' : 'client'} flag, arena ${GameObject.find('Arena') ? 'present' : 'missing'}`,
+        );
       }
     }
     const FlagPrefab = new NetworkPrefab('Flag', (go) => {
@@ -102,7 +110,10 @@ describe('loading a scene for everyone', () => {
     await net.settle();
 
     expect(alice.has(flag.networkObjectId)).toBe(true);
-    expect(order.filter((line) => line.startsWith('client'))).toEqual(['client flag, arena present', 'client flag, arena present']);
+    expect(order.filter((line) => line.startsWith('client'))).toEqual([
+      'client flag, arena present',
+      'client flag, arena present',
+    ]);
     expect(order[0]).toBe('host flag, arena present');
   });
 
@@ -186,8 +197,12 @@ describe('loading a scene for everyone', () => {
 
   test('it is the server that loads scenes, and only registered ones', () => {
     const { host, alice } = threeMachines();
-    expect(() => alice.run(() => alice.manager.sceneManager.loadScene('Match'))).toThrow('Only the server can load a scene for everyone');
-    expect(() => host.run(() => host.manager.sceneManager.loadScene('Nowhere'))).toThrow('Scene "Nowhere" is not registered');
+    expect(() => alice.run(() => alice.manager.sceneManager.loadScene('Match'))).toThrow(
+      'Only the server can load a scene for everyone',
+    );
+    expect(() => host.run(() => host.manager.sceneManager.loadScene('Nowhere'))).toThrow(
+      'Scene "Nowhere" is not registered',
+    );
     expect(host.manager.sceneManager.sceneName).toBeNull();
   });
 });
@@ -196,8 +211,12 @@ describe('builds that do not match', () => {
   test('a client on another version of the game is refused, and told both versions', () => {
     net = new TestNetwork();
     const host = net.host('host', { configure: (manager) => (manager.networkConfig.protocolVersion = 'build-a1') });
-    const same = net.client('same', 'host', { configure: (manager) => (manager.networkConfig.protocolVersion = 'build-a1') });
-    const other = net.client('other', 'host', { configure: (manager) => (manager.networkConfig.protocolVersion = 'build-b2') });
+    const same = net.client('same', 'host', {
+      configure: (manager) => (manager.networkConfig.protocolVersion = 'build-a1'),
+    });
+    const other = net.client('other', 'host', {
+      configure: (manager) => (manager.networkConfig.protocolVersion = 'build-b2'),
+    });
     const unset = net.client('unset');
     net.pump();
 
@@ -232,11 +251,14 @@ describe('builds that do not match', () => {
     const network = new BaseTestNetwork((manager) => (manager.networkConfig.playerPrefab = PlayerPrefab));
     net = network;
     const host = network.host('host', { configure: (manager) => manager.networkPrefabs.add(onHost).add(CratePrefab) });
-    const join = () => network.client('guest', 'host', { configure: (manager) => manager.networkPrefabs.add(onClient).add(CratePrefab) });
+    const join = () =>
+      network.client('guest', 'host', {
+        configure: (manager) => manager.networkPrefabs.add(onClient).add(CratePrefab),
+      });
     return { network, host, join };
   }
 
-  test('a prefab with different variables on the client ends that client\'s connection, and says why', () => {
+  test("a prefab with different variables on the client ends that client's connection, and says why", () => {
     const errors = spyOn(console, 'error').mockImplementation(() => {});
     try {
       const { network, host, join } = mismatched();
@@ -303,7 +325,9 @@ describe('scene loads that are interrupted', () => {
     await first;
     expect(events).toEqual([]); // and says nothing to the new session
     expect(host.manager.sceneManager.isLoading).toBe(true);
-    expect(() => host.run(() => host.manager.sceneManager.loadScene('Match'))).toThrow('is still loading on the server');
+    expect(() => host.run(() => host.manager.sceneManager.loadScene('Match'))).toThrow(
+      'is still loading on the server',
+    );
 
     await new Promise((resolve) => setTimeout(resolve, 0));
     slowLoads[1]?.();
@@ -372,7 +396,7 @@ describe('scene loads that are interrupted', () => {
     host.manager.sceneManager.onSynchronizeComplete.add((id) => synchronized.push(id));
     await host.run(() => host.manager.sceneManager.loadScene('Match'));
     await net.settle();
-    expect(completed.sort()).toEqual([0, 1, 2]);
+    expect(completed.toSorted((a, b) => a - b)).toEqual([0, 1, 2]);
 
     for (let i = 0; i < 3; i++) alice.transport.send('host', { t: 'sceneLoaded', e: 1 });
     net.pump();

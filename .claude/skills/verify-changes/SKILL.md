@@ -1,6 +1,6 @@
 ---
 name: verify-changes
-description: Use after changing game or engine code, and before reporting work as done, to verify it with the type-checker, headless tests, and browser screenshots.
+description: Use after changing game or engine code, and before reporting work as done, to verify it with the automatic checks (format, lint, types, tests, project graph), headless tests, and browser screenshots.
 ---
 
 # Verifying changes
@@ -9,12 +9,24 @@ Three levels, cheapest first. Do the ones that apply; say which you did.
 
 ## 1. `bun run check` (always)
 
-Type-checks the app, Convex functions and the Cloudflare Worker, then runs every test
-(about a second). It must pass.
+Six checks in a few seconds: the lockfile, formatting, lint, types, every test, and the
+project graph (unused files, undeclared packages, import cycles, layering). It prints
+each failure with a "What to do", one line per check, and `PASSED` or `FAILED`.
 
-Type-checking catches Unity-cased messages (`Update`), but not a method the engine never
-calls for another reason (`onStart`, a script that was never added to an object). So for
-behaviour changes also do 2 or 3.
+```bash
+bun run fix     # apply what a tool can fix (lint fixes, formatting), then run the checks
+bun run check   # the checks only; `bun run check lint types` runs the ones you name
+```
+
+The loop: change one thing, `bun run fix`, read the **first** failure, fix that, repeat.
+Do not fix a failure by skipping a test, switching a rule off, or adding a disable
+comment without a real reason; `docs/checks.md` explains every rule and what to write
+instead.
+
+The checks know the usual Unity mistakes (`==` on vectors, `Map<Vector3Int, T>`,
+`onStart()`, `this.method` passed without its `this`, `Update()`), but they cannot know
+what the game should do, or that a script was never added to an object. So for behaviour
+changes also do 2 or 3.
 
 ## 2. Headless tests (gameplay and engine logic)
 
@@ -62,6 +74,8 @@ test('space fires', () => {
   method that looks like a message but is never called.
 
 Run one file or folder: `bun test game/test/scene.test.ts`, `bun test packages/engine`.
+One test: add `-t "part of its name"`. `bun run coverage` lists, per file, the lines no
+test reached: use it to see what the test of a new script misses.
 
 ## 3. Screenshots (anything visual)
 

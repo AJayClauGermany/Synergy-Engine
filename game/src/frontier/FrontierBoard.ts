@@ -37,7 +37,8 @@ export class FrontierBoard extends MonoBehaviour {
   private _fogged = new Set<string>();
 
   awake() {
-    if (!this.palette) throw new Error('FrontierBoard needs its palette before it wakes: set board.palette in the scene.');
+    if (!this.palette)
+      throw new Error('FrontierBoard needs its palette before it wakes: set board.palette in the scene.');
     const built = createTilemaps(map, this.palette, { name: 'Map', parent: this.transform });
     this._grid = built.grid;
     this._terrain = built.layer('Terrain');

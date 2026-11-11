@@ -21,7 +21,10 @@ function buildPrimitive(device: pc.GraphicsDevice, type: PrimitiveType): pc.Mesh
     case PrimitiveType.Cube:
       return pc.Mesh.fromGeometry(device, new pc.BoxGeometry());
     case PrimitiveType.Sphere:
-      return pc.Mesh.fromGeometry(device, new pc.SphereGeometry({ radius: 0.5, latitudeBands: 24, longitudeBands: 32 }));
+      return pc.Mesh.fromGeometry(
+        device,
+        new pc.SphereGeometry({ radius: 0.5, latitudeBands: 24, longitudeBands: 32 }),
+      );
     case PrimitiveType.Capsule:
       return pc.Mesh.fromGeometry(device, new pc.CapsuleGeometry({ radius: 0.5, height: 2 }));
     case PrimitiveType.Cylinder:
@@ -166,7 +169,7 @@ export class Material {
   readonly pcMaterial: pc.StandardMaterial;
 
   constructor(source?: Material) {
-    this.pcMaterial = source ? (source.pcMaterial.clone() as pc.StandardMaterial) : new pc.StandardMaterial();
+    this.pcMaterial = source ? source.pcMaterial.clone() : new pc.StandardMaterial();
     if (!source) {
       this.pcMaterial.useMetalness = true;
       this.pcMaterial.metalness = 0;
@@ -280,8 +283,7 @@ function syncRender(gameObject: GameObject, rebuildMeshes: boolean): void {
   const engine = currentEngine();
   const materials = renderer?._materials ?? [];
   const fallback = Material._default(engine);
-  const materialAt = (index: number) =>
-    (materials[index] ?? materials[materials.length - 1] ?? fallback).pcMaterial;
+  const materialAt = (index: number) => (materials[index] ?? materials[materials.length - 1] ?? fallback).pcMaterial;
 
   if (rebuildMeshes) {
     const meshes = filter?._mesh?._resolve(engine) ?? [];

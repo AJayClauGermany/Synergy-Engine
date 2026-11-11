@@ -86,7 +86,10 @@ export class Catalog<T extends { readonly id: string }> implements Iterable<T> {
       closest && closest.distance <= Math.max(2, Math.floor(closest.known.length / 3))
         ? ` Did you mean "${closest.known}"?`
         : '';
-    const known = ids.length === 0 ? '(none)' : ids.slice(0, 30).join(', ') + (ids.length > 30 ? `, and ${ids.length - 30} more` : '');
+    const known =
+      ids.length === 0
+        ? '(none)'
+        : ids.slice(0, 30).join(', ') + (ids.length > 30 ? `, and ${ids.length - 30} more` : '');
     throw new Error(`There is no ${this.kind} "${id}".${hint} Known ${this.kind}s: ${known}.`);
   }
 

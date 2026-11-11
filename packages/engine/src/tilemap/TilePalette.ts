@@ -34,18 +34,25 @@ export interface TilePaletteLoadOptions {
 }
 
 function fail(what: string, problems: string[]): never {
-  throw new Error(`${what} has ${problems.length === 1 ? 'a problem' : `${problems.length} problems`}:\n  - ${problems.join('\n  - ')}`);
+  throw new Error(
+    `${what} has ${problems.length === 1 ? 'a problem' : `${problems.length} problems`}:\n  - ${problems.join('\n  - ')}`,
+  );
 }
 
 function spritesOf(sheet: SpriteSheetData, texture: Texture): Map<string | null, Sprite> {
   const pixelsPerUnit = sheet.pixelsPerUnit;
   const sprites = new Map<string | null, Sprite>([[null, new Sprite(texture, undefined, { pixelsPerUnit })]]);
   if (sheet.columns !== undefined && sheet.rows !== undefined) {
-    Sprite.slice(texture, sheet.columns, sheet.rows, { pixelsPerUnit }).forEach((sprite, index) => sprites.set(String(index), sprite));
+    Sprite.slice(texture, sheet.columns, sheet.rows, { pixelsPerUnit }).forEach((sprite, index) =>
+      sprites.set(String(index), sprite),
+    );
   }
   for (const [name, rect] of Object.entries(sheet.sprites ?? {})) {
     const pivot = rect.pivot ? new Vector2(rect.pivot[0], rect.pivot[1]) : undefined;
-    sprites.set(name, new Sprite(texture, { x: rect.x, y: rect.y, width: rect.width, height: rect.height }, { pivot, pixelsPerUnit }));
+    sprites.set(
+      name,
+      new Sprite(texture, { x: rect.x, y: rect.y, width: rect.width, height: rect.height }, { pivot, pixelsPerUnit }),
+    );
   }
   return sprites;
 }
@@ -93,7 +100,10 @@ export class TilePalette<Data = Record<string, unknown>> {
    * no texture gives its tiles no artwork: they draw in their flat colour. That is what
    * a headless test wants, where no image can be decoded: `TilePalette.create(data)`.
    */
-  static create<Data = Record<string, unknown>>(data: TilePaletteData<Data>, textures: Record<string, Texture> = {}): TilePalette<Data> {
+  static create<Data = Record<string, unknown>>(
+    data: TilePaletteData<Data>,
+    textures: Record<string, Texture> = {},
+  ): TilePalette<Data> {
     return new TilePalette(data, textures);
   }
 
@@ -107,7 +117,11 @@ export class TilePalette<Data = Record<string, unknown>> {
     const textures: Record<string, Texture> = {};
     await Promise.all(
       Object.entries(data.sheets ?? {}).map(async ([name, sheet]) => {
-        const url = options.images?.[sheet.image] ?? (options.baseUrl ? new URL(sheet.image, new URL(options.baseUrl, globalThis.location?.href)).href : sheet.image);
+        const url =
+          options.images?.[sheet.image] ??
+          (options.baseUrl
+            ? new URL(sheet.image, new URL(options.baseUrl, globalThis.location?.href)).href
+            : sheet.image);
         textures[name] = await Assets.loadTexture(url);
       }),
     );
@@ -117,7 +131,8 @@ export class TilePalette<Data = Record<string, unknown>> {
   /** Fetches a palette JSON file and loads it; image paths are relative to that file. */
   static async fromUrl<Data = Record<string, unknown>>(url: string): Promise<TilePalette<Data>> {
     const response = await fetch(url);
-    if (!response.ok) throw new Error(`Could not load the tile palette "${url}": ${response.status} ${response.statusText}.`);
+    if (!response.ok)
+      throw new Error(`Could not load the tile palette "${url}": ${response.status} ${response.statusText}.`);
     return TilePalette.load((await response.json()) as TilePaletteData<Data>, { baseUrl: url });
   }
 
@@ -198,7 +213,8 @@ export function createTilemaps(
     tilemaps,
     layer(name: string): Tilemap {
       const found = byName.get(name);
-      if (!found) throw new Error(`The map has no layer "${name}". Its layers: ${[...byName.keys()].join(', ') || '(none)'}.`);
+      if (!found)
+        throw new Error(`The map has no layer "${name}". Its layers: ${[...byName.keys()].join(', ') || '(none)'}.`);
       return found;
     },
   };

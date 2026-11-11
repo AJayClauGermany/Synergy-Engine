@@ -56,13 +56,7 @@ export abstract class CustomYieldInstruction extends YieldInstruction {
  * - another generator: run it inline, then continue
  */
 export type Yieldable =
-  | YieldInstruction
-  | Coroutine
-  | PromiseLike<unknown>
-  | Iterator<Yieldable, unknown, unknown>
-  | null
-  | undefined
-  | void;
+  YieldInstruction | Coroutine | PromiseLike<unknown> | Iterator<Yieldable, unknown, unknown> | null | undefined | void;
 
 /**
  * The type of a coroutine body. Unity's `IEnumerator`:
@@ -101,15 +95,11 @@ export class Coroutine {
 }
 
 function isIterator(value: unknown): value is Iterator<Yieldable, unknown, unknown> {
-  return (
-    typeof value === 'object' && value !== null && typeof (value as Iterator<unknown>).next === 'function'
-  );
+  return typeof value === 'object' && value !== null && typeof (value as Iterator<unknown>).next === 'function';
 }
 
 function isThenable(value: unknown): value is PromiseLike<unknown> {
-  return (
-    typeof value === 'object' && value !== null && typeof (value as PromiseLike<unknown>).then === 'function'
-  );
+  return typeof value === 'object' && value !== null && typeof (value as PromiseLike<unknown>).then === 'function';
 }
 
 /** @internal Runs every coroutine in the engine. */
@@ -262,6 +252,7 @@ export class CoroutineScheduler {
       );
       return (phase) => phase === 'update' && settled;
     }
+    // oxlint-disable-next-line typescript/no-base-to-string -- whatever the script yielded; its own text is all there is
     throw new TypeError(`A coroutine yielded something it cannot wait on: ${String(value)}`);
   }
 }

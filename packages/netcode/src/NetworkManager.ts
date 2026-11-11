@@ -1,11 +1,28 @@
-import { Debug, destroy, destroyImmediate, dontDestroyOnLoad, Engine, instantiate, MonoBehaviour, nameType, Quaternion, SceneManager, Time, Vector3 } from '@synergy/engine';
+import {
+  Debug,
+  destroy,
+  destroyImmediate,
+  dontDestroyOnLoad,
+  Engine,
+  instantiate,
+  MonoBehaviour,
+  nameType,
+  Quaternion,
+  SceneManager,
+  Time,
+  Vector3,
+} from '@synergy/engine';
 import { Signal, type Transport } from '@synergy/net';
 import { CustomMessagingManager } from './CustomMessaging';
 import type { NetworkBehaviour } from './NetworkBehaviour';
 import { NetworkObject } from './NetworkObject';
 import { type NetworkPrefab, NetworkPrefabs } from './NetworkPrefab';
 import { NetworkSceneManager } from './NetworkSceneManager';
-import { type NetworkVariableBase, NetworkVariableReadPermission, NetworkVariableWritePermission } from './NetworkVariable';
+import {
+  type NetworkVariableBase,
+  NetworkVariableReadPermission,
+  NetworkVariableWritePermission,
+} from './NetworkVariable';
 import {
   type ClientMessage,
   PROTOCOL_VERSION,
@@ -99,7 +116,9 @@ export class NetworkClient {
 
   /** Everything they own. */
   get ownedObjects(): NetworkObject[] {
-    return [...this.manager.spawnManager.spawnedObjects.values()].filter((object) => object.ownerClientId === this.clientId);
+    return [...this.manager.spawnManager.spawnedObjects.values()].filter(
+      (object) => object.ownerClientId === this.clientId,
+    );
   }
 }
 
@@ -183,7 +202,8 @@ export class NetworkManager extends MonoBehaviour {
    * Called on the server for each connection request when `networkConfig.connectionApproval`
    * is on. Fill in `response` (`approved = true` to admit); it may return a Promise.
    */
-  connectionApprovalCallback: ((request: ConnectionApprovalRequest, response: ConnectionApprovalResponse) => void | Promise<void>) | null = null;
+  connectionApprovalCallback:
+    ((request: ConnectionApprovalRequest, response: ConnectionApprovalResponse) => void | Promise<void>) | null = null;
 
   readonly spawnManager = new SpawnManager(this);
   readonly customMessagingManager = new CustomMessagingManager(this);
@@ -314,7 +334,9 @@ export class NetworkManager extends MonoBehaviour {
   override _summary(): string {
     if (this.role === 'none') return 'not started';
     if (!this.connected) return `${this.role}, connecting`;
-    const clients = this.isServer ? `, clients [${this.connectedClientsIds.join(', ')}]` : `, client id ${this.clientId}`;
+    const clients = this.isServer
+      ? `, clients [${this.connectedClientsIds.join(', ')}]`
+      : `, client id ${this.clientId}`;
     return `${this.role}${clients}, ${this.spawnManager.spawnedObjects.size} spawned, tick ${this.tick}`;
   }
 
@@ -366,7 +388,9 @@ export class NetworkManager extends MonoBehaviour {
   startClient(transport: Transport, serverId?: string): boolean {
     const server = serverId ?? (transport as { hostId?: string }).hostId;
     if (!server) {
-      throw new Error("startClient needs the server's id. Pass it, or use a transport that knows its host (PeerJsTransport).");
+      throw new Error(
+        "startClient needs the server's id. Pass it, or use a transport that knows its host (PeerJsTransport).",
+      );
     }
     return this.scoped(() => {
       this.begin('client', transport);
@@ -485,7 +509,11 @@ export class NetworkManager extends MonoBehaviour {
   update(): void {
     this.frameDelta = Time.unscaledDeltaTime;
     this.clock += this.frameDelta;
-    if (this.role === 'client' && !this.connected && this.clock - this.connectStartedAt > this.networkConfig.connectTimeout) {
+    if (
+      this.role === 'client' &&
+      !this.connected &&
+      this.clock - this.connectStartedAt > this.networkConfig.connectTimeout
+    ) {
       this.disconnectReason = 'The server did not answer in time.';
       this.onTransportFailure.emit(this.disconnectReason);
       this.stop();
@@ -683,6 +711,8 @@ export class NetworkManager extends MonoBehaviour {
       case 'sceneDone':
         this.sceneManager.onLoadEventCompleted.emit(message.n, message.ok, message.late);
         break;
+      default:
+        break; // 'approved' only means something before the connection is up (handled above)
     }
   }
 
@@ -699,7 +729,9 @@ export class NetworkManager extends MonoBehaviour {
         object.ownerClientId === from &&
         object.isNetworkVisibleTo(from);
       if (!allowed) {
-        Debug.logWarning(`Client ${from} may not write NetworkVariable "${name}" on "${object.name}"; the change was ignored.`);
+        Debug.logWarning(
+          `Client ${from} may not write NetworkVariable "${name}" on "${object.name}"; the change was ignored.`,
+        );
         return;
       }
       variable._readDelta(data, from);
@@ -820,7 +852,8 @@ export class NetworkManager extends MonoBehaviour {
     if (!prefab) return;
     const root = instantiate(prefab, position ?? Vector3.zero, rotation ?? Quaternion.identity);
     const object = root.getComponent(NetworkObject);
-    if (!object) throw new Error(`The player prefab "${prefab.name}" has no NetworkObject. Make it with new NetworkPrefab(...).`);
+    if (!object)
+      throw new Error(`The player prefab "${prefab.name}" has no NetworkObject. Make it with new NetworkPrefab(...).`);
     this.spawnObject(object, clientId, true);
   }
 
@@ -850,10 +883,14 @@ export class NetworkManager extends MonoBehaviour {
       this.requireServer('spawn objects');
       if (object._spawned) throw new Error(`"${object.name}" is already spawned.`);
       if (!object._prefabName) {
-        throw new Error(`"${object.name}" was not made from a NetworkPrefab, so clients cannot create it. Use new NetworkPrefab(...).`);
+        throw new Error(
+          `"${object.name}" was not made from a NetworkPrefab, so clients cannot create it. Use new NetworkPrefab(...).`,
+        );
       }
       if (!this.networkPrefabs.has(object._prefabName)) {
-        throw new Error(`NetworkPrefab "${object._prefabName}" is not registered. Call networkManager.networkPrefabs.add(prefab) on the server and every client.`);
+        throw new Error(
+          `NetworkPrefab "${object._prefabName}" is not registered. Call networkManager.networkPrefabs.add(prefab) on the server and every client.`,
+        );
       }
       if (owner !== SERVER_CLIENT_ID && !this.clientRecords.has(owner)) {
         throw new Error(`Cannot spawn "${object.name}" for client ${owner}: that client is not connected.`);
@@ -906,7 +943,9 @@ export class NetworkManager extends MonoBehaviour {
     } else if (!this._sceneLoading && !this.engine?.isDisposed) {
       // (During a networked scene load the old scene's objects go with it; the server's
       // despawns follow. And when the whole engine is shutting down, everything goes.)
-      Debug.logWarning(`"${object.name}" was destroyed on a client. Only the server may destroy spawned objects; ask it with an RPC.`);
+      Debug.logWarning(
+        `"${object.name}" was destroyed on a client. Only the server may destroy spawned objects; ask it with an RPC.`,
+      );
     }
     this.removeObject(object, false);
   }
@@ -990,7 +1029,8 @@ export class NetworkManager extends MonoBehaviour {
   changeOwnership(object: NetworkObject, newOwner: number): void {
     this.requireServer('change ownership');
     if (!object._spawned) throw new Error(`"${object.name}" is not spawned.`);
-    if (object._player) throw new Error(`"${object.name}" is a player object, so its owner cannot change. Despawn it and spawn another.`);
+    if (object._player)
+      throw new Error(`"${object.name}" is a player object, so its owner cannot change. Despawn it and spawn another.`);
     if (newOwner !== SERVER_CLIENT_ID && !this.clientRecords.has(newOwner)) {
       throw new Error(`Cannot give "${object.name}" to client ${newOwner}: that client is not connected.`);
     }
@@ -1057,7 +1097,9 @@ export class NetworkManager extends MonoBehaviour {
     return this.scoped(() => {
       this.requireServer('load a scene for everyone');
       if (!SceneManager.isRegistered(name)) {
-        throw new Error(`Scene "${name}" is not registered. Call SceneManager.register("${name}", ...) on the server and every client.`);
+        throw new Error(
+          `Scene "${name}" is not registered. Call SceneManager.register("${name}", ...) on the server and every client.`,
+        );
       }
       if (this._sceneLoading || this.sceneEvent) {
         // Unity refuses this too. Replacing a load that clients are still answering would
@@ -1164,7 +1206,8 @@ export class NetworkManager extends MonoBehaviour {
     if (this.sceneEvent !== event) return;
     this.sceneEvent = null;
     const timedOut = [...event.waiting];
-    for (const id of this.remoteClientIds()) this.sendTo(id, { t: 'sceneDone', n: event.n, ok: event.done, late: timedOut });
+    for (const id of this.remoteClientIds())
+      this.sendTo(id, { t: 'sceneDone', n: event.n, ok: event.done, late: timedOut });
     this.sceneManager.onLoadEventCompleted.emit(event.n, event.done, timedOut);
   }
 
@@ -1183,7 +1226,12 @@ export class NetworkManager extends MonoBehaviour {
   // ---- RPCs ---------------------------------------------------------------------------------------
 
   /** @internal Called by an RPC field. */
-  _invokeRpc(behaviour: NetworkBehaviour, definition: RpcDefinition, args: unknown[], targets: readonly number[] | undefined): void {
+  _invokeRpc(
+    behaviour: NetworkBehaviour,
+    definition: RpcDefinition,
+    args: unknown[],
+    targets: readonly number[] | undefined,
+  ): void {
     const object = behaviour._networkObject;
     const name = definition.name;
     if (!object?._spawned || !this.connected) {
@@ -1192,17 +1240,23 @@ export class NetworkManager extends MonoBehaviour {
     let mode = definition.mode;
     if (targets) {
       if (mode !== SendTo.SpecifiedInParams && !definition.serverOnly) {
-        throw new Error(`"${name}".sendTo(...) only works on a clientRpc, or an rpc declared with SendTo.SpecifiedInParams.`);
+        throw new Error(
+          `"${name}".sendTo(...) only works on a clientRpc, or an rpc declared with SendTo.SpecifiedInParams.`,
+        );
       }
       mode = SendTo.SpecifiedInParams;
     } else if (mode === SendTo.SpecifiedInParams) {
-      throw new Error(`"${name}" was declared with SendTo.SpecifiedInParams. Call ${name}.sendTo([clientIds], ...) instead.`);
+      throw new Error(
+        `"${name}" was declared with SendTo.SpecifiedInParams. Call ${name}.sendTo([clientIds], ...) instead.`,
+      );
     }
     if (definition.serverOnly && !this.isServer) {
       throw new Error(`"${name}" is a clientRpc, so only the server can call it. Use a serverRpc to ask the server.`);
     }
     if (!this.isServer && definition.mode === SendTo.Server && definition.requireOwnership && !object.isOwner) {
-      throw new Error(`Only the owner can call "${name}" (it is owned by client ${object.ownerClientId}). Declare it with { requireOwnership: false } to allow anyone.`);
+      throw new Error(
+        `Only the owner can call "${name}" (it is owned by client ${object.ownerClientId}). Declare it with { requireOwnership: false } to allow anyone.`,
+      );
     }
 
     const sender = this.clientId;
@@ -1213,13 +1267,21 @@ export class NetworkManager extends MonoBehaviour {
       for (const id of this.participantIds()) {
         if (!isRecipient(mode, id, audience)) continue;
         if (id === SERVER_CLIENT_ID) this.runRpc(object, index, name, args, sender);
-        else if (object._visibleTo.has(id)) this.sendTo(id, { t: 'rpc', o: object._id, b: index, n: name, a: args, from: sender }, object);
+        else if (object._visibleTo.has(id))
+          this.sendTo(id, { t: 'rpc', o: object._id, b: index, n: name, a: args, from: sender }, object);
       }
       return;
     }
     if (isRecipient(mode, sender, audience)) this.runRpc(object, index, name, args, sender);
     if (mode !== SendTo.Me) {
-      this.sendToServer({ t: 'rpc', o: object._id, b: index, n: name, a: args, ids: targets ? [...targets] : undefined });
+      this.sendToServer({
+        t: 'rpc',
+        o: object._id,
+        b: index,
+        n: name,
+        a: args,
+        ids: targets ? [...targets] : undefined,
+      });
     }
   }
 
@@ -1233,17 +1295,23 @@ export class NetworkManager extends MonoBehaviour {
       return;
     }
     if (definition.mode === SendTo.Server && definition.requireOwnership && object.ownerClientId !== senderId) {
-      Debug.logWarning(`Client ${senderId} called "${message.n}" on "${object.name}" without owning it; the call was ignored.`);
+      Debug.logWarning(
+        `Client ${senderId} called "${message.n}" on "${object.name}" without owning it; the call was ignored.`,
+      );
       return;
     }
     // The audience comes from the server's own declaration, never from the message.
     const mode = definition.mode;
-    const targets = mode === SendTo.SpecifiedInParams && Array.isArray(message.ids) ? message.ids.filter(Number.isInteger) : undefined;
+    const targets =
+      mode === SendTo.SpecifiedInParams && Array.isArray(message.ids)
+        ? message.ids.filter(Number.isInteger)
+        : undefined;
     const audience: RpcAudience = { sender: senderId, owner: object.ownerClientId, hostIsClient: this.isHost, targets };
     for (const id of this.participantIds()) {
       if (id === senderId || !isRecipient(mode, id, audience)) continue; // the caller already ran it
       if (id === SERVER_CLIENT_ID) this.runRpc(object, message.b, message.n, message.a, senderId);
-      else if (object._visibleTo.has(id)) this.sendTo(id, { t: 'rpc', o: object._id, b: message.b, n: message.n, a: message.a, from: senderId }, object);
+      else if (object._visibleTo.has(id))
+        this.sendTo(id, { t: 'rpc', o: object._id, b: message.b, n: message.n, a: message.a, from: senderId }, object);
     }
   }
 

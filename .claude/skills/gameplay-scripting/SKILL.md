@@ -123,5 +123,6 @@ still `null`, what value does the field really have.
 
 ## Finish
 
-Run `bun run check`. For behaviour changes add a headless test or take a screenshot (see
-the `verify-changes` skill).
+Run `bun run fix` (formats, applies safe lint fixes, then runs every check) until it says
+`PASSED`. For behaviour changes add a headless test or take a screenshot (see the
+`verify-changes` skill).

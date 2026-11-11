@@ -65,27 +65,29 @@ export abstract class NetworkBehaviour extends MonoBehaviour {
 
   // Unity's spellings are type errors, as in MonoBehaviour: they would never be called.
   /** @deprecated Write `onNetworkSpawn()`. */
-  protected declare OnNetworkSpawn?: UseCamelCase<'onNetworkSpawn'>;
+  declare protected OnNetworkSpawn?: UseCamelCase<'onNetworkSpawn'>;
   /** @deprecated Write `onNetworkDespawn()`. */
-  protected declare OnNetworkDespawn?: UseCamelCase<'onNetworkDespawn'>;
+  declare protected OnNetworkDespawn?: UseCamelCase<'onNetworkDespawn'>;
   /** @deprecated Write `onGainedOwnership()`. */
-  protected declare OnGainedOwnership?: UseCamelCase<'onGainedOwnership'>;
+  declare protected OnGainedOwnership?: UseCamelCase<'onGainedOwnership'>;
   /** @deprecated Write `onLostOwnership()`. */
-  protected declare OnLostOwnership?: UseCamelCase<'onLostOwnership'>;
+  declare protected OnLostOwnership?: UseCamelCase<'onLostOwnership'>;
 
   // ---- Where am I? ----------------------------------------------------------------------
 
   /** The NetworkObject this script belongs to. */
   get networkObject(): NetworkObject {
     const object = this._networkObject ?? this.gameObject.getComponentInParent(NetworkObject);
-    if (!object) throw new Error(`"${this.name}" has a NetworkBehaviour but no NetworkObject. Make it from a NetworkPrefab.`);
+    if (!object)
+      throw new Error(`"${this.name}" has a NetworkBehaviour but no NetworkObject. Make it from a NetworkPrefab.`);
     return object;
   }
 
   /** The manager this object is spawned under. */
   get networkManager(): NetworkManager {
     const manager = this._networkObject?._manager;
-    if (!manager) throw new Error(`"${this.name}" is not spawned, so it has no NetworkManager yet. Wait for onNetworkSpawn.`);
+    if (!manager)
+      throw new Error(`"${this.name}" is not spawned, so it has no NetworkManager yet. Wait for onNetworkSpawn.`);
     return manager;
   }
 
@@ -148,7 +150,11 @@ export abstract class NetworkBehaviour extends MonoBehaviour {
    *   readonly pingRpc = this.rpc(SendTo.Everyone, (message: string) => console.log(message));
    *   this.pingRpc('hello');
    */
-  protected rpc<A extends unknown[]>(to: SendTo, handler: (...args: A) => void, options: RpcOptions = {}): RpcFunction<A> {
+  protected rpc<A extends unknown[]>(
+    to: SendTo,
+    handler: (...args: A) => void,
+    options: RpcOptions = {},
+  ): RpcFunction<A> {
     return createRpc(this, to, handler, { requireOwnership: options.requireOwnership ?? false, serverOnly: false });
   }
 
@@ -158,7 +164,10 @@ export abstract class NetworkBehaviour extends MonoBehaviour {
    * owner may call it; pass `{ requireOwnership: false }` to let any client.
    */
   protected serverRpc<A extends unknown[]>(handler: (...args: A) => void, options: RpcOptions = {}): RpcFunction<A> {
-    return createRpc(this, SendTo.Server, handler, { requireOwnership: options.requireOwnership ?? true, serverOnly: false });
+    return createRpc(this, SendTo.Server, handler, {
+      requireOwnership: options.requireOwnership ?? true,
+      serverOnly: false,
+    });
   }
 
   /**
@@ -220,7 +229,9 @@ export abstract class NetworkBehaviour extends MonoBehaviour {
    * to one instance, so each clone keeps the ones its own field initialisers created.
    */
   override _copyFrom(source: this, remap: <V>(value: V) => V): void {
-    const own = Object.entries(this).filter(([, value]) => value instanceof NetworkVariableBase || rpcDefinitionOf(value));
+    const own = Object.entries(this).filter(
+      ([, value]) => value instanceof NetworkVariableBase || rpcDefinitionOf(value),
+    );
     super._copyFrom(source, remap);
     for (const [key, value] of own) (this as Record<string, unknown>)[key] = value;
   }

@@ -9,7 +9,13 @@
  * State (where each unit is, whose turn, who is winning) does NOT live here. In the
  * netcode model it lives in NetworkVariables, on Match and Soldier.
  */
-import { Catalog, layerTileAt, type TilemapData, type TilemapLayerData, type TilePaletteData } from '@synergy/engine/data';
+import {
+  Catalog,
+  layerTileAt,
+  type TilemapData,
+  type TilemapLayerData,
+  type TilePaletteData,
+} from '@synergy/engine/data';
 import { cellKey, findReachable, Hex, type Reachable } from '@synergy/engine/grid';
 import mapJson from './data/map.json';
 import tilesJson from './data/tiles.json';
@@ -61,8 +67,16 @@ export const TEAM_NAMES = ['Blue', 'Red'] as const;
 /** Each team's units and where they start. Red's cells mirror Blue's across the map. */
 export const ARMY = ['scout', 'guard', 'guard'] as const;
 export const START_CELLS: readonly (readonly Cell[])[] = [
-  [{ x: 1, y: 1 }, { x: 1, y: 0 }, { x: 2, y: 0 }],
-  [{ x: ground.width - 2, y: ground.height - 2 }, { x: ground.width - 2, y: ground.height - 1 }, { x: ground.width - 3, y: ground.height - 1 }],
+  [
+    { x: 1, y: 1 },
+    { x: 1, y: 0 },
+    { x: 2, y: 0 },
+  ],
+  [
+    { x: ground.width - 2, y: ground.height - 2 },
+    { x: ground.width - 2, y: ground.height - 1 },
+    { x: ground.width - 3, y: ground.height - 1 },
+  ],
 ];
 /** The world advances on its own clock: every team earns `INCOME` each `WORLD_TICK_SECONDS`. */
 export const WORLD_TICK_SECONDS = 2;
@@ -96,7 +110,8 @@ export function allCells(): Cell[] {
 export function reachableFrom(from: Cell, movePoints: number, occupied: (cell: Cell) => boolean): Reachable {
   return findReachable(from, movePoints, {
     neighbors: (cell) => Hex.neighbors(cell).filter(canEnter),
-    cost: (_from, to) => (occupied(to) ? Number.POSITIVE_INFINITY : (terrainAt(to)?.moveCost ?? Number.POSITIVE_INFINITY)),
+    cost: (_from, to) =>
+      occupied(to) ? Number.POSITIVE_INFINITY : (terrainAt(to)?.moveCost ?? Number.POSITIVE_INFINITY),
   });
 }
 

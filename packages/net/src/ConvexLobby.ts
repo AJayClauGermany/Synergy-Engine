@@ -21,7 +21,10 @@ type Mutation<Args extends Record<string, unknown>, Result> = FunctionReference<
 type Query<Args extends Record<string, unknown>, Result> = FunctionReference<'query', 'public', Args, Result>;
 const api = anyApi as unknown as {
   rooms: {
-    create: Mutation<{ name: string; playerId: string; playerName: string; peerCode?: string; maxPlayers?: number }, RoomInfo>;
+    create: Mutation<
+      { name: string; playerId: string; playerName: string; peerCode?: string; maxPlayers?: number },
+      RoomInfo
+    >;
     join: Mutation<{ code: string; playerId: string; playerName: string }, RoomInfo>;
     leave: Mutation<{ code: string; playerId: string }, null>;
     heartbeat: Mutation<{ code: string; playerId: string }, null>;
@@ -199,10 +202,8 @@ export class ConvexSession<C> implements Session<C> {
 
   private subscribe(): void {
     this.stopCommands?.();
-    this.stopCommands = this.lobby.client.onUpdate(
-      api.commands.list,
-      { code: this.code, after: this.cursor },
-      (rows) => this.received(rows as CommandEntry<C>[]),
+    this.stopCommands = this.lobby.client.onUpdate(api.commands.list, { code: this.code, after: this.cursor }, (rows) =>
+      this.received(rows as CommandEntry<C>[]),
     );
   }
 

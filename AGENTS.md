@@ -14,9 +14,11 @@ Cloudflare Workers (preview deploys) · Electrobun (desktop).
 |---------|--------------|
 | `bun install` | Install dependencies |
 | `bun run dev` | Dev server with hot reload at http://localhost:3000 |
-| `bun run check` | **Type-check everything and run all tests. Run this before you call a change done.** |
-| `bun test` | Tests only (headless, about a second). `bun test game` runs one folder |
-| `bun run typecheck` | Type-check only |
+| `bun run check` | **Every automatic check: lockfile, format, lint, types, tests, project graph. Ends with `PASSED` or `FAILED`. Run it before you call a change done.** |
+| `bun run fix` | Apply what a tool can fix by itself (lint fixes, formatting), then run the same checks |
+| `bun test` | Tests only (headless, about two seconds). `bun test game` runs one folder, `-t "name"` one test |
+| `bun run lint` / `typecheck` / `lint:project` / `format` | One check by itself. `bun run lint path/to/File.ts` lints one file |
+| `bun run coverage` | Tests with coverage: per file, the lines no test reached |
 | `bun run build` | Production build into `dist/` |
 | `bun run screenshot` | Build, open in headless Chromium, save `.screenshots/game.png`; fails on page errors. `--hierarchy` prints the scene as text |
 | `bun run backend` | Convex dev deployment (interactive login the first time); writes its URL to `.env.local` |
@@ -53,17 +55,20 @@ packages/netcode/        Netcode for GameObjects on those transports  (@synergy/
 convex/                  backend functions; _generated/ is generated, never edit it
 cloudflare/worker.ts     password gate in front of the static build
 desktop/                 Electrobun shell
-scripts/                 dev server, build, screenshot tool
+scripts/                 dev server, build, screenshot tool, the check runner
 tools/unity/             editor script that exports Unity tiles, tilemaps and ScriptableObjects
+tools/lint/              lint rules for the mistakes a Unity port makes (loaded by oxlint)
 .env.schema              every environment variable: type, comment, secret or not (varlock)
-docs/                    unity-to-synergy.md, porting-from-unity.md, content.md, tilemaps.md,
-                         architecture.md, multiplayer.md, netcode.md, environment.md,
-                         deploying.md, desktop.md
+docs/                    unity-to-synergy.md, porting-from-unity.md, checks.md, content.md,
+                         tilemaps.md, architecture.md, multiplayer.md, netcode.md,
+                         environment.md, deploying.md, desktop.md
 ```
 
 ## Unity knowledge transfers, with these differences
 
-Read `docs/unity-to-synergy.md` for the full map. The ones that cause bugs:
+Read `docs/unity-to-synergy.md` for the full map. The ones that cause bugs are below.
+`bun run check` catches many of them and says what to write instead (`docs/checks.md`),
+but not all: it cannot know which way you meant a vector to point.
 
 1. **camelCase** methods and messages: `update()`, `getComponent(Health)`, `Input.getKeyDown(KeyCode.Space)`.
    Unity's spelling (`Update()`, `OnEnable()`) is a type error and an error when the script
@@ -179,7 +184,13 @@ spawn into it when `onLoadComplete` fires for client 0, and enable play on
 
 ## Verifying your work
 
-1. `bun run check` must pass.
+Work in small steps and let the tools answer: change one thing, run `bun run fix`, read
+the **first** failure, do what its "What to do" says, run it again. `docs/checks.md`
+explains each check and every message of the project's own lint rules.
+
+1. `bun run check` must end with `PASSED`. Fix the code, not the check: no skipped
+   tests, no rule switched off, no disable comment without a reason that would convince
+   a reviewer.
 2. Gameplay logic: add or extend a test. Pure rules go in `game/test/*.test.ts`;
    behaviours can be tested in a real scene with `Engine.createHeadless()`, `engine.step()`
    and `engine.input.pressKey(...)` / `moveMouse(...)` / `pressMouseButton(...)`
@@ -197,12 +208,18 @@ warning or nothing at all. Test or screenshot behaviour changes.
 
 ## Conventions
 
-- TypeScript strict mode. No `any`; no non-null `!` where a check is cheap.
+- Most of what follows is enforced by `bun run check`; the rest is on you.
+- TypeScript strict mode. No `any`; no non-null `!`.
+- Formatting belongs to `bun fmt` (`bun run fix`). Do not format by hand or argue with it.
 - Engine code in `packages/`, game code in `game/`. `packages/engine` may import only
   `playcanvas`; `packages/net` imports nothing from the engine; `packages/netcode` imports
   only the engine and `packages/net`; `packages/engine/src/math` imports nothing at all,
-  and `src/grid` and `src/data` only `src/math`.
+  and `src/grid` and `src/data` only `src/math`. Game rules import only those three pure
+  entry points. (`.fallowrc.jsonc` holds this as zones.)
+- No import cycles: two files that import each other. Use `import type` when only the
+  type is needed, or move the shared part to a third file.
 - One exported behaviour per file, named like the class.
+- No file or export that nothing uses. A test counts as a use.
 - Comments explain why, or map a concept to Unity. Public engine APIs get a doc comment.
 - Game rules are pure and deterministic: no `Math.random()`, `Date.now()` or scene access
   inside `apply()`. Use `new Random(state.seed)` for randomness and

@@ -25,7 +25,9 @@ a whole project (what to export, what to port first).
    first (data and rules before managers, managers before views). If the Unity project
    has an EditMode test for the script, port it in the same change and make it pass
    (`[Test]` → `test`, `Assert.AreEqual(expected, actual)` → `expect(actual).toBe(expected)`).
-   Run `bun run check` after each script, not after ten: one error is easy to place.
+   Run `bun run fix` after each script, not after ten: one error is easy to place. It
+   formats the file, applies the safe lint fixes, and runs every check; work through
+   what it lists from the top until it says `PASSED`.
 3. **Translate mechanically:**
    - `class X : MonoBehaviour` → `export class X extends MonoBehaviour`
    - `void Update()` → `update()`; all members camelCase
@@ -40,16 +42,25 @@ a whole project (what to export, what to port first).
    `transform.position += v` → `transform.position = transform.position.add(v)`.
    `q * v` → `q.rotate(v)`; `q1 * q2` → `q1.mul(q2)`.
 5. **Fix what C# did for you.** These compile and then behave differently; search the
-   script for each (table: `docs/unity-to-synergy.md`, "C# to TypeScript"):
+   script for each (table: `docs/unity-to-synergy.md`, "C# to TypeScript"). The lint
+   check reports the ones marked *(checked)* with what to write instead; the others no
+   tool can see, so they are yours to find:
    - `/` between two ints → `Math.trunc(a / b)`. `(int)x` → `Math.trunc(x)`.
    - `Dictionary` or `HashSet` keyed by a cell or other struct → `Map`/`Set` keyed by
      `cellKey(cell)` (or another string you build). Object keys match by identity.
+     *(checked where the key type is written: `Map<Vector3Int, T>`)*
    - A struct that was assigned or passed around → it is now a shared object. Copy it
      (`{ ...stats }`) wherever the C# relied on getting its own copy.
    - `list.Sort()`, `OrderBy` → `toSorted((a, b) => a.cost - b.cost)`, always with a comparer.
-   - `==` between vectors or cells → `.equals`.
+     *(checked)*
+   - `==` between vectors or cells → `.equals`. *(checked against a constant such as
+     `Vector3.zero`; `a.position == b.position` is not)*
+   - A method passed as a value (`onClick.AddListener(OnClick)`, `list.Select(Score)`) →
+     an arrow: `addListener(() => this.onClick())`. C# binds the method to its object;
+     here `this` would be undefined. `this.invoke(this.tick, t)` is the exception: the
+     engine binds it. *(checked)*
 6. **Fix the conventions that differ:**
-   - Literal axes: `new Vector3(0, 0, 1)` meaning "forward" → `Vector3.forward`.
+   - Literal axes: `new Vector3(0, 0, 1)` meaning "forward" → `Vector3.forward`. *(checked)*
    - Screen Y: `mousePosition.y > Screen.height - margin` meant "top edge" in Unity; here
      the top edge is `y < margin`.
    - `Physics.Raycast(ray, out var hit)` → `const hit = Physics.raycast(ray); if (hit)`.
@@ -59,7 +70,11 @@ a whole project (what to export, what to port first).
      synced rules, seed it from the game state and store `random.state` back. Results
      will not match Unity's for the same seed.
    - Messages keep Unity's names in camelCase. `Update()` left as it was is a type error;
-     `OnTriggerEnter`/`OnCollisionEnter` have no equivalent yet and are warned about.
+     `OnTriggerEnter`/`OnCollisionEnter` have no equivalent yet, and `onStart()` is not a
+     message at all. *(all checked)*
+   - Two classes that use each other (every Unity project has them) → two files that
+     import each other, which is an import cycle here. Use `import type` on the side that
+     needs only the type, or move what both need into a third file. *(checked)*
    - `tilemap.BoxFill(position, tile, x0, y0, x1, y1)` → `tilemap.boxFill(tile, min, max)`.
    - `transform.DOMove(p, t).SetEase(Ease.OutQuad)` → `Tween.move(transform, p, t).setEase(Ease.OutQuad)`.
    - `tilemap.SetTile(new Vector3Int(x, y, 0), tile)` → `tilemap.setTile({ x, y }, tile)`.
@@ -79,7 +94,9 @@ a whole project (what to export, what to port first).
    shape: see the `netcode` skill and the map in `docs/netcode.md`. Attributes become
    fields (`readonly moveRpc = this.serverRpc(...)`), and setup moves from `Awake` to
    `onNetworkSpawn`.
-9. **Verify** with `bun run check`, and a headless test or screenshot. If an object is
+9. **Verify** with `bun run check` (it must say `PASSED`), and a headless test or
+   screenshot. A ported file that no test and no other file imports is reported as
+   unused: that is the reminder to write its test. If an object is
    missing or a reference is `null`, print `Debug.hierarchy()` before changing code.
 
 ## Worked example
@@ -111,6 +128,34 @@ export class Mover extends MonoBehaviour {
     if (dir.sqrMagnitude > 0) this.transform.rotation = Quaternion.lookRotation(dir);
   }
 }
+```
+
+And its test, `game/test/mover.test.ts`. A script needs no scene to be tested: make the
+objects, step the engine, look at the result.
+
+```ts
+import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { Engine, GameObject, Vector3 } from '@synergy/engine';
+import { Mover } from '../src/behaviours/Mover';
+
+let engine: Engine;
+beforeEach(() => {
+  engine = Engine.createHeadless();
+});
+afterEach(() => {
+  engine.dispose();
+});
+
+test('the mover walks toward its target and faces it', () => {
+  const mover = new GameObject('Mover').addComponent(Mover);
+  const target = new GameObject('Target');
+  target.transform.position = new Vector3(10, 0, 0);
+  mover.target = target.transform;
+
+  engine.stepSeconds(1); // one simulated second at speed 3
+  expect(mover.transform.position.x).toBeCloseTo(3);
+  expect(mover.transform.forward.equals(Vector3.right, 1e-4)).toBe(true);
+});
 ```
 
 ## When the mapping is unclear

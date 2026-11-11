@@ -13,7 +13,9 @@ describe('custom messages', () => {
     const bob = net.client('bob');
     net.pump();
     const heard: string[] = [];
-    host.manager.customMessagingManager.registerNamedMessageHandler('chat', (sender, data) => heard.push(`host got ${JSON.stringify(data)} from ${sender}`));
+    host.manager.customMessagingManager.registerNamedMessageHandler('chat', (sender, data) =>
+      heard.push(`host got ${JSON.stringify(data)} from ${sender}`),
+    );
     for (const machine of [alice, bob]) {
       machine.manager.customMessagingManager.registerNamedMessageHandler('news', (sender, data) =>
         heard.push(`${machine.id} got ${JSON.stringify(data)} from ${sender}`),
@@ -31,7 +33,9 @@ describe('custom messages', () => {
       'host got {"text":"hi"} from 1',
     ]);
 
-    expect(() => alice.manager.customMessagingManager.sendNamedMessage('chat', 1, 2)).toThrow(/only send messages to the server/);
+    expect(() => alice.manager.customMessagingManager.sendNamedMessage('chat', 1, 2)).toThrow(
+      /only send messages to the server/,
+    );
     expect(() => host.manager.customMessagingManager.sendNamedMessage('news', 1, 9)).toThrow(/not connected/);
   });
 
@@ -41,7 +45,9 @@ describe('custom messages', () => {
     const alice = net.client('alice');
     net.pump();
     const heard: unknown[] = [];
-    const off = host.manager.customMessagingManager.registerNamedMessageHandler('chat', (_sender, data) => heard.push(data));
+    const off = host.manager.customMessagingManager.registerNamedMessageHandler('chat', (_sender, data) =>
+      heard.push(data),
+    );
     alice.manager.customMessagingManager.sendNamedMessage('chat', 1);
     net.pump();
     off();

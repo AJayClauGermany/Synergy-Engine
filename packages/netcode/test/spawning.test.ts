@@ -139,7 +139,7 @@ describe('spawning', () => {
     net.pump();
     const late = net.client('late');
     net.pump();
-    expect([...late.manager.spawnManager.spawnedObjects.keys()].sort()).toEqual([1, 2, 3, 4]);
+    expect([...late.manager.spawnManager.spawnedObjects.keys()].toSorted((a, b) => a - b)).toEqual([1, 2, 3, 4]);
     expect(late.unit(crates[1]?.networkObjectId as number).tags.toArray()).toEqual(['t1']);
     expect(late.player(1).isLocalPlayer).toBe(true);
   });
@@ -152,7 +152,9 @@ describe('spawning', () => {
     expect(() => crate.spawn()).toThrow(/already spawned/);
     expect(() => host.make(CratePrefab).spawnWithOwnership(99)).toThrow(/not connected/);
 
-    const unregistered = host.run(() => instantiate(new NetworkPrefab('Ghost')).getComponent(NetworkObject) as NetworkObject);
+    const unregistered = host.run(
+      () => instantiate(new NetworkPrefab('Ghost')).getComponent(NetworkObject) as NetworkObject,
+    );
     expect(() => unregistered.spawn()).toThrow(/not registered/);
 
     const plain = host.run(() => new GameObject('Plain').addComponent(NetworkObject));

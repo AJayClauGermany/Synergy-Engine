@@ -43,7 +43,9 @@ export class NetworkSceneManager {
    * finished or ran out of time (`networkConfig.loadSceneTimeOut`). Fires on the server
    * and on every client. Start play from here. Unity: `OnLoadEventCompleted`.
    */
-  readonly onLoadEventCompleted = new Signal<[sceneName: string, clientsCompleted: number[], clientsTimedOut: number[]]>();
+  readonly onLoadEventCompleted = new Signal<
+    [sceneName: string, clientsCompleted: number[], clientsTimedOut: number[]]
+  >();
   /**
    * Server only. A client that joined after the scene was loaded has caught up: it has
    * the scene and every object it may see. Unity: `OnSynchronizeComplete`.

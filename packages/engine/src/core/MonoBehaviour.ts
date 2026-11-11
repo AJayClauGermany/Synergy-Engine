@@ -1,10 +1,5 @@
 import { Behaviour } from './Component';
-import {
-  type Coroutine,
-  type IEnumerator,
-  WaitForSeconds,
-  type Yieldable,
-} from './Coroutine';
+import { type Coroutine, type IEnumerator, WaitForSeconds, type Yieldable } from './Coroutine';
 import { Observable, UnityEvent } from './events';
 import { checkMessageNames, type UseCamelCase } from './messageNames';
 import { currentEngine } from './runtime';
@@ -90,31 +85,31 @@ export abstract class MonoBehaviour extends Behaviour {
   // run time (see messageNames.ts) covers code that is not type-checked before it runs.
 
   /** @deprecated Write `awake()`. */
-  protected declare Awake?: UseCamelCase<'awake'>;
+  declare protected Awake?: UseCamelCase<'awake'>;
   /** @deprecated Write `onEnable()`. */
-  protected declare OnEnable?: UseCamelCase<'onEnable'>;
+  declare protected OnEnable?: UseCamelCase<'onEnable'>;
   /** @deprecated Write `start()`. */
-  protected declare Start?: UseCamelCase<'start'>;
+  declare protected Start?: UseCamelCase<'start'>;
   /** @deprecated Write `update()`. */
-  protected declare Update?: UseCamelCase<'update'>;
+  declare protected Update?: UseCamelCase<'update'>;
   /** @deprecated Write `lateUpdate()`. */
-  protected declare LateUpdate?: UseCamelCase<'lateUpdate'>;
+  declare protected LateUpdate?: UseCamelCase<'lateUpdate'>;
   /** @deprecated Write `fixedUpdate()`. */
-  protected declare FixedUpdate?: UseCamelCase<'fixedUpdate'>;
+  declare protected FixedUpdate?: UseCamelCase<'fixedUpdate'>;
   /** @deprecated Write `onDisable()`. */
-  protected declare OnDisable?: UseCamelCase<'onDisable'>;
+  declare protected OnDisable?: UseCamelCase<'onDisable'>;
   /** @deprecated Write `onDestroy()`. */
-  protected declare OnDestroy?: UseCamelCase<'onDestroy'>;
+  declare protected OnDestroy?: UseCamelCase<'onDestroy'>;
   /** @deprecated Write `onMouseDown()`. */
-  protected declare OnMouseDown?: UseCamelCase<'onMouseDown'>;
+  declare protected OnMouseDown?: UseCamelCase<'onMouseDown'>;
   /** @deprecated Write `onMouseUp()`. */
-  protected declare OnMouseUp?: UseCamelCase<'onMouseUp'>;
+  declare protected OnMouseUp?: UseCamelCase<'onMouseUp'>;
   /** @deprecated Write `onMouseEnter()`. */
-  protected declare OnMouseEnter?: UseCamelCase<'onMouseEnter'>;
+  declare protected OnMouseEnter?: UseCamelCase<'onMouseEnter'>;
   /** @deprecated Write `onMouseOver()`. */
-  protected declare OnMouseOver?: UseCamelCase<'onMouseOver'>;
+  declare protected OnMouseOver?: UseCamelCase<'onMouseOver'>;
   /** @deprecated Write `onMouseExit()`. */
-  protected declare OnMouseExit?: UseCamelCase<'onMouseExit'>;
+  declare protected OnMouseExit?: UseCamelCase<'onMouseExit'>;
 
   constructor() {
     super();
@@ -142,9 +137,7 @@ export abstract class MonoBehaviour extends Behaviour {
       throw new Error(`Coroutine could not be started because "${this.name}" has been destroyed.`);
     }
     if (!this.gameObject.activeInHierarchy) {
-      throw new Error(
-        `Coroutine could not be started because GameObject "${this.name}" is inactive.`,
-      );
+      throw new Error(`Coroutine could not be started because GameObject "${this.name}" is inactive.`);
     }
     return currentEngine().coroutines.start(this, routine);
   }
@@ -195,9 +188,7 @@ export abstract class MonoBehaviour extends Behaviour {
   }
 
   isInvoking(method?: () => void): boolean {
-    return this._invokes.some(
-      (entry) => !entry.coroutine.isDone && (!method || entry.method === method),
-    );
+    return this._invokes.some((entry) => !entry.coroutine.isDone && (!method || entry.method === method));
   }
 
   // ---- Engine plumbing --------------------------------------------------------------
@@ -215,9 +206,7 @@ export abstract class MonoBehaviour extends Behaviour {
 
   /** @internal */
   _has(message: MessageName): boolean {
-    return (
-      typeof (this as unknown as Record<MessageName, unknown>)[message] === 'function'
-    );
+    return typeof (this as unknown as Record<MessageName, unknown>)[message] === 'function';
   }
 
   override _awake(): void {
