@@ -1,0 +1,37 @@
+{
+  "name": "synergy-engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Unity-style game engine template for TypeScript, built on PlayCanvas. Clone it, build your game.",
+  "license": "BSL-1.0",
+  "workspaces": [
+    "packages/*",
+    "game"
+  ],
+  "scripts": {
+    "dev": "bun run scripts/dev.ts",
+    "build": "bun run scripts/build.ts",
+    "start": "bun run scripts/serve.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p convex/tsconfig.json && tsc --noEmit -p cloudflare/tsconfig.json",
+    "check": "bun run typecheck && bun test",
+    "screenshot": "bun run scripts/screenshot.ts",
+    "backend": "convex dev",
+    "preview:local": "bun run build && wrangler dev",
+    "preview:deploy": "bun run build && wrangler preview",
+    "deploy": "bun run build && wrangler deploy",
+    "desktop:dev": "bun run scripts/build.ts --outdir desktop/dist && cd desktop && bun ../node_modules/electrobun/bin/electrobun.cjs dev",
+    "desktop:build": "bun run scripts/build.ts --outdir desktop/dist && cd desktop && bun ../node_modules/electrobun/bin/electrobun.cjs build --env=stable"
+  },
+  "dependencies": {
+    "convex": "^1.49.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261110.1",
+    "@types/bun": "^1.4.4",
+    "electrobun": "2.0.6",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.160.0"
+  }
+}

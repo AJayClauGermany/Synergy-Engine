@@ -1,0 +1,4 @@
+[serve.static]
+# Only variables starting with PUBLIC_ are exposed to browser code in `bun run dev`.
+# The production build applies the same rule (scripts/build.ts). Never put secrets in them.
+env = "PUBLIC_*"

@@ -1,0 +1,46 @@
+name: Preview
+
+# Deploys a password-protected preview of each pull request to Cloudflare Workers.
+#
+# Off by default. To turn it on (see docs/deploying.md):
+#   1. Add repository secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID.
+#   2. Add a repository variable CLOUDFLARE_PREVIEWS with the value "true".
+#   3. Set the shared preview password once:
+#        bunx wrangler preview base-config secret put PREVIEW_PASSWORD
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    # Pull requests from forks cannot read the secrets, so they are skipped.
+    if: vars.CLOUDFLARE_PREVIEWS == 'true' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      - name: Deploy preview
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PREVIEW_NAME: pr-${{ github.event.pull_request.number }}
+        run: |
+          bunx wrangler preview --name "$PREVIEW_NAME" | tee preview.log
+          {
+            echo "### Preview \`$PREVIEW_NAME\`"
+            echo '```'
+            cat preview.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

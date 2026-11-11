@@ -1,0 +1,26 @@
+{
+  // Cloudflare Worker that serves the built game from dist/ behind a password.
+  // See docs/deploying.md. Rename this to something unique for your game.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "synergy-game",
+  "main": "cloudflare/worker.ts",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./dist/",
+    "binding": "ASSETS",
+    // Unknown paths fall back to index.html.
+    "not_found_handling": "single-page-application",
+    // Send every request through the Worker first, so nothing is served before the password check.
+    "run_worker_first": true
+  },
+  "workers_dev": true,
+  "preview_urls": true,
+  // Production settings. Flip to "true" when the game should be open to everyone.
+  "vars": {
+    "PUBLIC_ACCESS": "false"
+  },
+  // Settings for `wrangler preview` (per-branch preview links). Previews do not inherit the
+  // production vars or secrets above, and with no PUBLIC_ACCESS they stay locked until a
+  // PREVIEW_PASSWORD secret is set for them.
+  "previews": {}
+}
