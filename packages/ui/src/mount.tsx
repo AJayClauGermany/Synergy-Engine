@@ -1,6 +1,5 @@
 import type { Engine } from '@synergy/engine';
-import { createContext, type ReactNode } from 'react';
-import { createRoot } from 'react-dom/client';
+import { type ComponentChildren, createContext, render } from 'preact';
 
 export const EngineContext = createContext<Engine | null>(null);
 
@@ -27,7 +26,7 @@ const STYLE = `
 `;
 
 /**
- * Renders a React tree on top of the game canvas.
+ * Renders a Preact tree on top of the game canvas.
  *
  *   mountUI(<Hud />, { engine });
  *
@@ -35,7 +34,7 @@ const STYLE = `
  * false while the player is using the HUD. That replaces Unity's
  * `EventSystem.current.IsPointerOverGameObject()` check.
  */
-export function mountUI(element: ReactNode, options: MountOptions): MountedUI {
+export function mountUI(element: ComponentChildren, options: MountOptions): MountedUI {
   const { engine } = options;
   const container = options.container ?? engine.canvas.parentElement;
   if (!container) throw new Error('mountUI: the canvas has no parent element to hold the UI overlay.');
@@ -52,13 +51,12 @@ export function mountUI(element: ReactNode, options: MountOptions): MountedUI {
   root.className = 'synergy-ui';
   container.append(root);
 
-  const reactRoot = createRoot(root);
-  reactRoot.render(<EngineContext.Provider value={engine}>{element}</EngineContext.Provider>);
+  render(<EngineContext.Provider value={engine}>{element}</EngineContext.Provider>, root);
 
   return {
     root,
     unmount() {
-      reactRoot.unmount();
+      render(null, root);
       root.remove();
     },
   };

@@ -5,7 +5,7 @@ PlayCanvas**. You clone it and build your game in `game/`. It targets strategy g
 (turn-based or real-time) but the engine itself is generic.
 
 Stack: Bun (runtime, bundler, test runner, package manager) · PlayCanvas (rendering) ·
-React (HUD) · PeerJS and Convex (multiplayer) · varlock (environment variables) ·
+Preact (HUD; not React) · PeerJS and Convex (multiplayer) · varlock (environment variables) ·
 Cloudflare Workers (preview deploys) · Electrobun (desktop).
 
 ## Commands
@@ -38,7 +38,7 @@ game/                    THE GAME. Most work happens here. It holds two samples:
   src/scenes/            scenes as functions (Unity: .unity files)
   src/behaviours/        MonoBehaviour scripts and prefabs
   src/rules/             Skirmish's pure rules: state, commands, check(), apply()
-  src/ui/                React HUD and CSS
+  src/ui/                Preact HUD and CSS
   src/hud.ts             Observables the HUD reads
   src/online.ts          host/join helpers (PeerJS, Convex)
   src/frontier/          the netcode sample, whole: data/ (map, tiles, sprite sheet as files),
@@ -47,7 +47,7 @@ game/                    THE GAME. Most work happens here. It holds two samples:
   docs/                  notes about this particular game (not the engine)
 packages/engine/         Unity-style runtime on PlayCanvas   (@synergy/engine)
                          src/math, src/grid, src/data are pure: @synergy/engine/math, /grid, /data
-packages/ui/             React helpers: mountUI, useObservable, WorldAnchor   (@synergy/ui)
+packages/ui/             Preact helpers: mountUI, useObservable, WorldAnchor   (@synergy/ui)
 packages/net/            command sessions, transports, Convex lobby   (@synergy/net)
 packages/netcode/        Netcode for GameObjects on those transports  (@synergy/netcode)
 convex/                  backend functions; _generated/ is generated, never edit it
@@ -140,6 +140,21 @@ Load images with `Assets.loadSprite(url)` (they load as sRGB colour textures).
 game code, read it in a component with `useObservable`. Replace objects/arrays rather than
 mutating them. Elements that should block clicks to the game need `data-interactive`
 (buttons, inputs and links already do).
+
+**The HUD is Preact, not React.** It is small (about 8 kB gzipped against React's 66 kB)
+and keeps the familiar function-component model, but React habits need these changes:
+
+- Import hooks from `preact/hooks` (`useState`, `useEffect`, `useRef`, ...) and types such
+  as `ComponentChildren` and `CSSProperties` from `preact`. Never import `react` or
+  `react-dom`: they are not installed. JSX needs no import (`jsxImportSource` is `preact`).
+- Text fields update with `onInput`, read through `event.currentTarget.value`. Preact's
+  `onChange` is the DOM's, which fires only when the field loses focus.
+- `class` and `className` both work. Events are native DOM events (no synthetic events).
+- `useSyncExternalStore`, `forwardRef`, `memo` and `createPortal` live in `preact/compat`,
+  not core. Prefer core Preact; to read game state use `useObservable`.
+- A library written for React needs `preact/compat` aliased in for `react` and `react-dom`
+  (in `scripts/build.ts`, the dev server and tests). Prefer a Preact-native or framework-free
+  library instead.
 
 **Decide how shared state works, once per game.** There are two models; pick the one the
 game uses and stay with it (`docs/multiplayer.md` compares them):

@@ -1,6 +1,6 @@
 import type { NetworkManager } from '@synergy/netcode';
 import { useObservable } from '@synergy/ui';
-import { useState } from 'react';
+import { useState } from 'preact/hooks';
 import { frontierHud, frontierOnline } from './hud';
 import { TEAM_NAMES } from './rules';
 import { hostOnline, joinOnline, playOffline, rematch } from './session';
@@ -120,7 +120,7 @@ function OnlinePanel({ manager }: { manager: NetworkManager }) {
       >
         <input
           value={code}
-          onChange={(event) => setCode(event.target.value.toUpperCase())}
+          onInput={(event) => setCode(event.currentTarget.value.toUpperCase())}
           placeholder="Room code"
           maxLength={6}
           aria-label="Room code"

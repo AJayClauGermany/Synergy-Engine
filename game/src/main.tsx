@@ -30,7 +30,7 @@ async function main() {
     await playOffline(manager);
   } else {
     const scene = requested && SceneManager.isRegistered(requested) ? requested : 'Skirmish';
-    // The React HUD belongs to the Skirmish game; other scenes bring their own UI.
+    // The Preact HUD belongs to the Skirmish game; other scenes bring their own UI.
     if (scene === 'Skirmish') mountUI(<Hud />, { engine });
     await SceneManager.loadScene(scene);
   }

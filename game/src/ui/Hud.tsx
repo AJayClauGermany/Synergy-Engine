@@ -1,6 +1,6 @@
 import { Vector3 } from '@synergy/engine';
 import { useObservable, WorldAnchor } from '@synergy/ui';
-import { useState } from 'react';
+import { useState } from 'preact/hooks';
 import { GameController } from '../behaviours/GameController';
 import { hud, network, unitMarkers } from '../hud';
 import {
@@ -156,7 +156,7 @@ function NetworkPanel() {
           >
             <input
               value={code}
-              onChange={(event) => setCode(event.target.value.toUpperCase())}
+              onInput={(event) => setCode(event.currentTarget.value.toUpperCase())}
               placeholder="Room code"
               maxLength={6}
               aria-label="Room code"

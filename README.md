@@ -31,7 +31,7 @@ has the full map and the handful of deliberate differences.
 | **Tile maps** | Unity's `Grid`/`Tilemap`/`Tile` with square and hex cells, layers, mouse picking, hex maths and weighted pathfinding. Drawn in blocks, so maps of tens of thousands of tiles stay cheap to change. |
 | **Content from data** | Tile palettes, maps and definitions (Unity's Tile assets, painted Tilemaps and ScriptableObjects) load from JSON, with a Unity editor script to export them (`tools/unity`). |
 | **Tweens** | DOTween-style `Tween.move(...)`, eases, loops; usable from coroutines. |
-| **HUD** (`packages/ui`) | React over the canvas: `mountUI`, `useObservable`, `<WorldAnchor>` for health bars and labels. |
+| **HUD** (`packages/ui`) | [Preact](https://preactjs.com) over the canvas (not React; hooks come from `preact/hooks`): `mountUI`, `useObservable`, `<WorldAnchor>` for health bars and labels. |
 | **Netcode** (`packages/netcode`) | Unity's Netcode for GameObjects: `NetworkManager`, `NetworkObject`, `NetworkVariable`, RPCs, ownership, visibility, synchronized scene loading. One player hosts, the rest connect to them. |
 | **Multiplayer** (`packages/net`) | Transports (WebRTC via PeerJS, in-memory), plus ordered command sessions for turn-based and asynchronous games. |
 | **Backend** (`convex/`) | The lobby (rooms, join codes, open-games list) and a server-ordered command log. |
@@ -111,7 +111,7 @@ Coming from an existing Unity project? Start at
 ## Status
 
 This is an early foundation (v0.1). Working and tested: the engine core, tile maps and
-pathfinding, sprites, content loading, tweens, React HUD, command sessions, netcode
+pathfinding, sprites, content loading, tweens, Preact HUD, command sessions, netcode
 (tested with simulated machines), the Cloudflare gate and both sample games.
 Type-checked but not tested against live services: PeerJS transport, Convex backend.
 Written from documentation but not yet run: the Unity exporter (`tools/unity`, which

@@ -14,7 +14,7 @@ a whole project (what to export, what to port first).
 1. **Check the feature exists.** Not available yet: Rigidbody and collision/trigger
    messages, Animator, AudioSource, ParticleSystem, NavMesh, uGUI Text/Button/sliced
    images. Say so up front and propose the substitute (kinematic movement with raycasts,
-   PlayCanvas directly through `gameObject.entity`, React for interactive UI) instead of
+   PlayCanvas directly through `gameObject.entity`, the Preact HUD for interactive UI) instead of
    inventing an API.
    Available and easy to miss: `SpriteRenderer`, `Canvas`/`CanvasScaler`/`RectTransform`/`Image`,
    `Grid`/`Tilemap`/`Tile` (including Unity's hex layout),
