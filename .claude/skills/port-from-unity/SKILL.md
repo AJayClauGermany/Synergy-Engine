@@ -130,6 +130,34 @@ export class Mover extends MonoBehaviour {
 }
 ```
 
+And its test, `game/test/mover.test.ts`. A script needs no scene to be tested: make the
+objects, step the engine, look at the result.
+
+```ts
+import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { Engine, GameObject, Vector3 } from '@synergy/engine';
+import { Mover } from '../src/behaviours/Mover';
+
+let engine: Engine;
+beforeEach(() => {
+  engine = Engine.createHeadless();
+});
+afterEach(() => {
+  engine.dispose();
+});
+
+test('the mover walks toward its target and faces it', () => {
+  const mover = new GameObject('Mover').addComponent(Mover);
+  const target = new GameObject('Target');
+  target.transform.position = new Vector3(10, 0, 0);
+  mover.target = target.transform;
+
+  engine.stepSeconds(1); // one simulated second at speed 3
+  expect(mover.transform.position.x).toBeCloseTo(3);
+  expect(mover.transform.forward.equals(Vector3.right, 1e-4)).toBe(true);
+});
+```
+
 ## When the mapping is unclear
 
 Look at the engine source rather than guessing: every public class in

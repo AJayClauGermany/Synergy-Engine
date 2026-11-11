@@ -96,7 +96,8 @@ export const STEPS: readonly Step[] = [
     hint:
       'Fix the first error first; later ones often follow from it.\n' +
       'UseCamelCase<"update"> in a message means a Unity-cased method: rename Update() to update().\n' +
-      'An operator on vectors (a + b) is not TypeScript: write a.add(b), v.mul(2). See docs/unity-to-synergy.md.',
+      'An operator on vectors (a + b) is not TypeScript: write a.add(b), v.mul(2). See docs/unity-to-synergy.md.\n' +
+      '"T | undefined" from list[i] or map.get(key): the item may be missing. Give a fallback (?? 0) or test for it first.',
     detail: (output) => countOf(output, /: error TS\d+/g, 'error'),
   },
   {
@@ -112,7 +113,8 @@ export const STEPS: readonly Step[] = [
       const fail = Number(output.match(/^\s*(\d+) fail$/m)?.[1] ?? 0);
       const errors = Number(output.match(/^\s*(\d+) errors?$/m)?.[1] ?? 0);
       const failed = [fail > 0 ? `${fail} fail` : '', errors > 0 ? plural(errors, 'error') : ''].filter(Boolean);
-      return [...failed, `${pass} pass`].join(', ');
+      const files = output.match(/across (\d+) files?/)?.[1];
+      return [...failed, `${pass} pass`].join(', ') + (files ? ` in ${plural(Number(files), 'file')}` : '');
     },
     lines: 100,
   },

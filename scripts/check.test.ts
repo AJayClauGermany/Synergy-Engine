@@ -51,7 +51,9 @@ describe('the steps', () => {
 
   test('the test step counts passes, failures and errors', () => {
     const detail = step('test').detail;
-    expect(detail?.(' 404 pass\n 0 fail\n 3587 expect() calls\nRan 404 tests across 26 files.')).toBe('404 pass');
+    expect(detail?.(' 404 pass\n 0 fail\n 3587 expect() calls\nRan 404 tests across 26 files.')).toBe(
+      '404 pass in 26 files',
+    );
     expect(detail?.(' 404 pass\n 2 fail\n 1 error\n')).toBe('2 fail, 1 error, 404 pass');
   });
 

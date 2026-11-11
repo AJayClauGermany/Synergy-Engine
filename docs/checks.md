@@ -39,7 +39,7 @@ ok      install   0.0s
 ok      format    0.1s
 FAILED  lint      1.4s  1 problem
 ok      types     0.5s
-ok      test      2.6s  419 pass
+ok      test      2.6s  422 pass in 28 files
 ok      project   1.0s
 
 FAILED: lint. Fix what is listed above, top first, then run `bun run check` again.
