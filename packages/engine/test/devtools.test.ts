@@ -158,6 +158,17 @@ describe('Debug.hierarchy', () => {
     );
   });
 
+  test('an object with no prototype in a field is described, not tripped over', () => {
+    class Inventory extends MonoBehaviour {
+      counts: Record<string, number> = Object.assign(Object.create(null) as Record<string, number>, { arrows: 12 });
+      nested = { lookup: Object.create(null) as Record<string, number> };
+    }
+    new GameObject('Pack').addComponent(Inventory);
+    expect(Debug.hierarchy()).toBe(
+      ['Scene "Untitled" (active)', '  Pack <Inventory>', '    | Inventory: counts={arrows: 12}, nested={lookup: {…}}'].join('\n'),
+    );
+  });
+
   test('can leave the fields out, stop at a depth, or start from one object', () => {
     const root = new GameObject('Root');
     const child = new GameObject('Child');

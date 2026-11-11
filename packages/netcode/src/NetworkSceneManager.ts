@@ -29,6 +29,8 @@ import type { NetworkManager } from './NetworkManager';
  *
  * The scene must be registered with `SceneManager.register` under the same name on
  * every machine. Scenes are loaded in Single mode; additive networked loads are not built.
+ * One load runs at a time: `loadScene` throws until the previous one has been answered
+ * by every client (`onLoadEventCompleted`).
  */
 export class NetworkSceneManager {
   /**

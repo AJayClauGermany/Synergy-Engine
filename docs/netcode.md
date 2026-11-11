@@ -158,10 +158,11 @@ narrow:
   only check that covers everything.
 - The prefab names, as above.
 - When an object spawns, the host sends the names of the variables and RPCs on each of
-  its behaviours, and a client whose copy differs refuses to create it and says what
-  differs. This catches a renamed, added or removed variable even when
-  `protocolVersion` was left unset. It cannot tell apart two behaviours whose members
-  have the same names, which is why the version matters.
+  its behaviours. A client whose copy differs disconnects, with what differs in
+  `disconnectReason`: carrying on would mean playing a different game from everyone
+  else. This catches a renamed, added or removed variable even when `protocolVersion`
+  was left unset. It cannot tell apart two behaviours whose members have the same names,
+  which is why the version matters.
 
 (Class names are not used for any of this: a release build shortens them, so they mean
 nothing across builds. Field names are kept as written.)
@@ -321,6 +322,9 @@ another machine's engine may be the current one (wrap what follows in `machine.r
   with the old scene. So player objects carry over, and a match's units, spawned with
   `spawn(true)`, are gone when the host loads the lobby scene again. The NetworkManager
   is kept too.
+- One load at a time: `loadScene` throws while the previous one is still being answered
+  (`sceneManager.clientsLoading` is not empty), as Unity's does. Wait for
+  `onLoadEventCompleted`.
 - A plain `SceneManager.loadScene` is not synchronized: it changes the scene on that
   machine only.
 

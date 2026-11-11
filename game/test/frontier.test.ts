@@ -219,6 +219,70 @@ describe('fog of war, enforced by the host', () => {
   });
 });
 
+describe('what a modified client cannot do', () => {
+  test('a player joining mid-match is never sent the enemies it cannot see, not even for a moment', async () => {
+    net = new TestNetwork(setupFrontier);
+    const host = net.host();
+    await host.run(() => startMatch(host.manager));
+    net.pump();
+
+    // The second player arrives after the match began, and will command Red.
+    const guest = net.client('guest');
+    const enemiesHeld: number[] = [];
+    // The first picture of the world has just been applied when this fires: look at what it held.
+    guest.manager.onClientConnectedCallback.add(() => enemiesHeld.push(soldiers(guest, 0).length));
+    for (let frame = 0; frame < 12; frame++) {
+      net.pump(1);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      if (guest.manager.isConnectedClient) enemiesHeld.push(soldiers(guest, 0).length);
+    }
+
+    expect(matchOn(guest).teamOf(guest.manager.localClientId)).toBe(1);
+    expect(soldiers(guest, 1).length).toBe(3); // its own army did arrive
+    expect(enemiesHeld.length).toBeGreaterThan(1);
+    expect(Math.max(...enemiesHeld)).toBe(0); // Blue is across the map, out of sight throughout
+  });
+
+  test('only the host can send a refusal, so players cannot write in each other\'s HUD', async () => {
+    const { guest } = await matchWithGuest();
+    const mine = scoutOf(guest, 1);
+    frontierHud.update((state) => ({ ...state, message: '' }));
+    expect(() => guest.run(() => mine.refusedRpc.sendTo([0], 'You have lost. Close the tab.'))).toThrow('only the server can call it');
+    net.pump();
+    expect(frontierHud.value.message).toBe('');
+  });
+});
+
+describe('starting twice', () => {
+  test('a second start while the first is loading is refused, and there is still one match', async () => {
+    net = new TestNetwork(setupFrontier);
+    const host = net.host();
+    const first = host.run(() => startMatch(host.manager));
+    const second = host.run(() => startMatch(host.manager)); // a double-clicked "Play again"
+    await expect(second).rejects.toThrow('is still loading');
+    await first;
+    net.pump();
+
+    expect(host.objectsOf('Match').length).toBe(1);
+    expect(soldiers(host, 0).length + soldiers(host, 1).length).toBe(6);
+  });
+
+  test('a start cut short by a shutdown leaves nothing behind for the next one', async () => {
+    net = new TestNetwork(setupFrontier);
+    const host = net.host();
+    const first = host.run(() => startMatch(host.manager));
+    host.run(() => host.manager.shutdown()); // leaving while the scene is still loading
+    await expect(first).rejects.toThrow('The match was stopped before its scene had loaded.');
+
+    host.run(() => host.manager.startHost(net.hub.connect('host-again')));
+    const match = await host.run(() => startMatch(host.manager));
+    net.pump();
+    expect(match.phase.value).toBe('playing');
+    expect(host.objectsOf('Match').length).toBe(1);
+    expect(soldiers(host, 0).length + soldiers(host, 1).length).toBe(6);
+  });
+});
+
 describe('the world and late arrivals', () => {
   test('the host advances the world on the network clock and every machine sees the result', async () => {
     const { host, guest } = await matchWithGuest();

@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, test } from 'bun:test';
-import { GameObject, SceneManager } from '@synergy/engine';
+import { afterEach, describe, expect, spyOn, test } from 'bun:test';
+import { Engine, GameObject, SceneManager } from '@synergy/engine';
 import { NetworkBehaviour, NetworkPrefab, NetworkVariable } from '../src';
 import { TestNetwork as BaseTestNetwork } from '../src/testing';
 import { CratePrefab, PlayerPrefab, TestNetwork } from './harness';
@@ -25,6 +25,13 @@ SceneManager.register('SlowMatch', {
   build: () => {
     new GameObject('Arena');
   },
+});
+
+/** A scene that cannot be built on one particular machine: a broken build, a missing asset. */
+let brokenOn: Engine | null = null;
+SceneManager.register('BrokenForOne', () => {
+  if (Engine.current === brokenOn) throw new Error('this machine cannot build the scene');
+  new GameObject('Arena');
 });
 
 function threeMachines() {
@@ -203,34 +210,202 @@ describe('builds that do not match', () => {
     expect(host.manager.connectedClientsIds).toEqual([0, 1]);
   });
 
-  test('a prefab with different variables on the client is not created, and says why', () => {
-    class Health extends NetworkBehaviour {
-      readonly hp = new NetworkVariable(10);
-    }
-    class HealthWithArmour extends NetworkBehaviour {
-      readonly hp = new NetworkVariable(10);
-      readonly armour = new NetworkVariable(0);
-    }
-    // Same name, different contents: what two builds of a game can disagree about.
-    const onHost = new NetworkPrefab('Soldier', (go) => {
-      go.addComponent(HealthWithArmour);
-    });
-    const onClient = new NetworkPrefab('Soldier', (go) => {
-      go.addComponent(Health);
-    });
-    net = new BaseTestNetwork((manager) => (manager.networkConfig.playerPrefab = PlayerPrefab));
-    const host = net.host('host', { configure: (manager) => manager.networkPrefabs.add(onHost) });
-    const guest = net.client('guest', 'host', { configure: (manager) => manager.networkPrefabs.add(onClient) });
-    net.pump();
-    expect(guest.manager.isConnectedClient).toBe(true); // the names match, so it was admitted
+  // The two prefabs below share a name and differ in contents: what two builds of a game can disagree about.
+  class Health extends NetworkBehaviour {
+    readonly hp = new NetworkVariable(10);
+  }
+  class HealthWithArmour extends NetworkBehaviour {
+    readonly hp = new NetworkVariable(10);
+    readonly armour = new NetworkVariable(0);
+  }
+  const onHost = new NetworkPrefab('Soldier', (go) => {
+    go.addComponent(HealthWithArmour);
+  });
+  const onClient = new NetworkPrefab('Soldier', (go) => {
+    go.addComponent(Health);
+  });
+  const mismatch =
+    'NetworkPrefab "Soldier" is not the same here as on the server: its NetworkBehaviours have different variables or RPCs ' +
+    '(server: armour,hp|; here: hp|). The two machines are running different builds; reload both.';
 
-    const soldier = host.make(onHost);
-    host.run(() => soldier.spawn());
-    expect(() => net.pump()).toThrow(
-      'NetworkPrefab "Soldier" is not the same here as on the server: its NetworkBehaviours have different variables or RPCs ' +
-        '(server: armour,hp|; here: hp|). The two machines are running different builds; reload both. The object was not created.',
+  function mismatched() {
+    const network = new BaseTestNetwork((manager) => (manager.networkConfig.playerPrefab = PlayerPrefab));
+    net = network;
+    const host = network.host('host', { configure: (manager) => manager.networkPrefabs.add(onHost).add(CratePrefab) });
+    const join = () => network.client('guest', 'host', { configure: (manager) => manager.networkPrefabs.add(onClient).add(CratePrefab) });
+    return { network, host, join };
+  }
+
+  test('a prefab with different variables on the client ends that client\'s connection, and says why', () => {
+    const errors = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { network, host, join } = mismatched();
+      const guest = join();
+      network.pump();
+      expect(guest.manager.isConnectedClient).toBe(true); // the names match, so it was admitted
+
+      const soldier = host.make(onHost);
+      host.run(() => soldier.spawn());
+      network.pump();
+
+      // It does not carry on with the wrong variables, or without the object: it leaves.
+      expect(guest.manager.isListening).toBe(false);
+      expect(guest.manager.disconnectReason).toBe(mismatch);
+      expect(guest.run(() => GameObject.find('Soldier'))).toBeNull();
+      expect(host.manager.connectedClientsIds).toEqual([0]);
+      expect(errors).toHaveBeenCalledTimes(1);
+    } finally {
+      errors.mockRestore();
+    }
+  });
+
+  test('the same disagreement found while joining refuses the join outright, not halfway', () => {
+    const errors = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { network, host, join } = mismatched();
+      const soldier = host.make(onHost);
+      const crate = host.make(CratePrefab);
+      host.run(() => {
+        soldier.spawn();
+        crate.spawn();
+      });
+      const guest = join();
+      let connected = false;
+      guest.manager.onClientConnectedCallback.add(() => (connected = true));
+      network.pump();
+
+      expect(connected).toBe(false);
+      expect(guest.manager.isConnectedClient).toBe(false);
+      expect(guest.manager.disconnectReason).toBe(mismatch);
+      expect(guest.manager.spawnManager.spawnedObjects.size).toBe(0);
+      expect(host.manager.connectedClientsIds).toEqual([0]);
+    } finally {
+      errors.mockRestore();
+    }
+  });
+});
+
+describe('scene loads that are interrupted', () => {
+  test('a load abandoned by a shutdown does not finish into the next session', async () => {
+    net = new TestNetwork();
+    const host = net.host();
+    const events: string[] = [];
+    host.manager.sceneManager.onLoadComplete.add((id, scene) => events.push(`loaded ${scene} on ${id}`));
+    host.manager.sceneManager.onLoadEventCompleted.add((scene) => events.push(`ready ${scene}`));
+
+    const first = host.run(() => host.manager.sceneManager.loadScene('SlowMatch'));
+    host.run(() => host.manager.shutdown());
+    host.run(() => host.manager.startHost(net.hub.connect('host-again')));
+    const second = host.run(() => host.manager.sceneManager.loadScene('SlowMatch'));
+    expect(slowLoads.length).toBe(1); // the engine loads one scene at a time: the second waits behind the first
+
+    slowLoads[0]?.(); // the abandoned load finishes
+    await first;
+    expect(events).toEqual([]); // and says nothing to the new session
+    expect(host.manager.sceneManager.isLoading).toBe(true);
+    expect(() => host.run(() => host.manager.sceneManager.loadScene('Match'))).toThrow('is still loading on the server');
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    slowLoads[1]?.();
+    await second;
+    expect(events).toEqual(['loaded SlowMatch on 0', 'ready SlowMatch']);
+    expect(host.manager.sceneManager.isLoading).toBe(false);
+  });
+
+  test('a client that leaves mid-load and joins again ends up in step with the host', async () => {
+    const network = new TestNetwork();
+    net = network;
+    const host = network.host();
+    const guest = network.client('guest');
+    network.pump();
+    const crate = host.make(CratePrefab);
+    host.run(() => crate.spawn());
+    network.pump();
+    const order: string[] = [];
+    host.manager.sceneManager.onSynchronizeComplete.add((id) => order.push(`host: client ${id} synchronized`));
+    guest.manager.onClientConnectedCallback.add((id) => order.push(`guest: connected as ${id}`));
+
+    const loading = host.run(() => host.manager.sceneManager.loadScene('SlowMatch'));
+    network.pump(); // the guest is now loading too
+    slowLoads[0]?.();
+    await loading;
+    guest.run(() => guest.manager.shutdown());
+    guest.run(() => guest.manager.startClient(network.hub.connect('guest-again'), 'host'));
+    network.pump();
+    for (const release of slowLoads) release(); // the guest's first load ends: it belongs to the session it left
+    await network.settle();
+    for (const release of slowLoads) release(); // and then the load its second join asked for
+    await network.settle();
+
+    // Joined once, in the right order, and changes made since reach it.
+    expect(order).toEqual(['guest: connected as 2', 'host: client 2 synchronized']);
+    host.run(() => (host.unit(crate.networkObjectId).hp.value = 55));
+    network.pump();
+    expect(guest.unit(crate.networkObjectId).hp.value).toBe(55);
+  });
+
+  test('a second load is refused while clients are still answering the first, which then completes', async () => {
+    const { host } = threeMachines();
+    const finished: string[] = [];
+    host.manager.sceneManager.onLoadEventCompleted.add((scene) => finished.push(scene));
+
+    const loading = host.run(() => host.manager.sceneManager.loadScene('SlowMatch'));
+    net.pump();
+    slowLoads[0]?.();
+    await loading; // the host has it; alice and bob do not yet
+    expect(() => host.run(() => host.manager.sceneManager.loadScene('Match'))).toThrow(
+      '"SlowMatch" is still loading on clients 1, 2. Wait for sceneManager.onLoadEventCompleted before loading "Match".',
     );
-    expect(guest.has(soldier.networkObjectId)).toBe(false);
-    expect(guest.run(() => GameObject.find('Soldier'))).toBeNull();
+    for (const release of slowLoads) release();
+    await net.settle();
+    expect(finished).toEqual(['SlowMatch']);
+    await host.run(() => host.manager.sceneManager.loadScene('Match')); // and now it may
+    await net.settle();
+    expect(finished).toEqual(['SlowMatch', 'Match']);
+  });
+
+  test('a client saying "loaded" more than once counts once', async () => {
+    const { host, alice } = threeMachines();
+    const completed: number[] = [];
+    const synchronized: number[] = [];
+    host.manager.sceneManager.onLoadComplete.add((id) => completed.push(id));
+    host.manager.sceneManager.onSynchronizeComplete.add((id) => synchronized.push(id));
+    await host.run(() => host.manager.sceneManager.loadScene('Match'));
+    await net.settle();
+    expect(completed.sort()).toEqual([0, 1, 2]);
+
+    for (let i = 0; i < 3; i++) alice.transport.send('host', { t: 'sceneLoaded', e: 1 });
+    net.pump();
+    expect(completed.length).toBe(3);
+    expect(synchronized).toEqual([]);
+  });
+
+  test('a client whose copy of the scene fails to build is not left waiting for ever', async () => {
+    const errors = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const network = new TestNetwork();
+      net = network;
+      const host = network.host();
+      // This machine logs script errors and carries on, as a browser does.
+      const guest = network.client('guest', 'host', { throwOnError: false });
+      network.pump();
+      brokenOn = guest.engine;
+      const finished: [number[], number[]][] = [];
+      host.manager.sceneManager.onLoadEventCompleted.add((_scene, loaded, late) => finished.push([loaded, late]));
+
+      await host.run(() => host.manager.sceneManager.loadScene('BrokenForOne'));
+      const crate = host.make(CratePrefab);
+      host.run(() => crate.spawn(true));
+      await network.settle();
+
+      expect(errors).toHaveBeenCalled();
+      // It reported in, so the host is not held up, and it is handling messages again.
+      expect(guest.manager.sceneManager.isLoading).toBe(false);
+      expect(finished).toEqual([[[0, 1], []]]);
+      expect(guest.has(crate.networkObjectId)).toBe(true);
+    } finally {
+      errors.mockRestore();
+      brokenOn = null;
+    }
   });
 });

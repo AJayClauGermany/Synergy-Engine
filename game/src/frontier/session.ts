@@ -49,10 +49,22 @@ export function createFrontierManager(): NetworkManager {
 export function startMatch(manager: NetworkManager): Promise<Match> {
   const scenes = manager.sceneManager;
   return new Promise<Match>((resolve, reject) => {
+    // Start the load first. If it is refused (another scene is still loading: a
+    // double-clicked "Play again"), it throws here and nothing has been set up to undo.
+    let loading: Promise<void>;
+    try {
+      loading = scenes.loadScene(FRONTIER_SCENE);
+    } catch (error) {
+      reject(error);
+      return;
+    }
+
+    let spawned = false;
     const offLoaded = scenes.onLoadComplete.add((clientId, scene) => {
       // Wait for the host's own copy of the scene (client 0 is the host).
       if (clientId !== NetworkManager.serverClientId || scene !== FRONTIER_SCENE) return;
       offLoaded();
+      spawned = true;
 
       const match = instantiate(MatchPrefab).getComponent(Match) as Match;
       match.networkObject.spawn(true);
@@ -70,10 +82,15 @@ export function startMatch(manager: NetworkManager): Promise<Match> {
       });
       resolve(match);
     });
-    scenes.loadScene(FRONTIER_SCENE).catch((error: unknown) => {
+
+    // The load can end without the event: the network was shut down while it ran. Then
+    // this start is over, and its listener must not be left to fire for the next one.
+    const abandon = (error: unknown) => {
+      if (spawned) return;
       offLoaded();
       reject(error);
-    });
+    };
+    loading.then(() => abandon(new Error('The match was stopped before its scene had loaded.')), abandon);
   });
 }
 
@@ -93,51 +110,80 @@ export function spawnSoldier(match: Match, type: string, team: number, cell: { x
 }
 
 // ---- Ways to play --------------------------------------------------------------------------
+// Each of these replaces whatever was going on before. They can overlap (a click while
+// another is still connecting), so each takes a number and gives up quietly if a later
+// request has started by the time it would act.
 
+let request = 0;
 /** Stops listening for the end of a joined match, when leaving it on purpose. */
 let stopWatching: () => void = () => {};
 
-/** A match on this machine alone. It is still a host, with no clients, so there is one code path. */
-export async function playOffline(manager: NetworkManager): Promise<void> {
+function begin(manager: NetworkManager): () => boolean {
+  const mine = ++request;
   stopWatching();
-  manager.shutdown();
-  manager.startHost(new LoopbackHub().connect('host'));
-  frontierOnline.value = { mode: 'offline', code: null, isHost: true, error: null };
-  await startMatch(manager);
+  stopWatching = () => {};
+  manager.shutdown(); // ends the previous match here; a start it had in flight is abandoned
+  return () => mine === request;
 }
 
-/** Hosts a match others can join with the code this resolves to. */
+/** Starts a match unless a later request has taken over. A start that was overtaken is not an error. */
+async function start(manager: NetworkManager, current: () => boolean): Promise<void> {
+  try {
+    await startMatch(manager);
+  } catch (error) {
+    if (current()) throw error;
+  }
+}
+
+/** A match on this machine alone. It is still a host, with no clients, so there is one code path. */
+export async function playOffline(manager: NetworkManager): Promise<void> {
+  const current = begin(manager);
+  manager.startHost(new LoopbackHub().connect('host'));
+  frontierOnline.value = { mode: 'offline', code: null, isHost: true, error: null };
+  await start(manager, current);
+}
+
+/** Host only: a new match for the players already here. Does nothing while one is still starting. */
+export async function rematch(manager: NetworkManager): Promise<void> {
+  if (!manager.isServer || manager.sceneManager.isLoading || manager.sceneManager.clientsLoading.length > 0) return;
+  const mine = request;
+  await start(manager, () => mine === request);
+}
+
+/** Hosts a match others can join with the code shown in the HUD. */
 export async function hostOnline(manager: NetworkManager): Promise<void> {
+  const current = begin(manager);
   frontierOnline.value = { mode: 'connecting', code: null, isHost: true, error: null };
   try {
     const { hostGame } = await import('@synergy/netcode/lobby');
-    stopWatching();
-    manager.shutdown();
+    if (!current()) return;
     const game = await hostGame(manager, { prefix: PEER_PREFIX });
+    if (!current()) return;
     frontierOnline.value = { mode: 'hosting', code: game.code, isHost: true, error: null };
-    await startMatch(manager);
+    await start(manager, current);
   } catch (error) {
-    await fallBack(manager, error);
+    if (current()) await fallBack(manager, error);
   }
 }
 
 /** Joins a hosted match. The host sends the scene and every object this player may see. */
 export async function joinOnline(manager: NetworkManager, code: string): Promise<void> {
+  const current = begin(manager);
   frontierOnline.value = { mode: 'connecting', code, isHost: false, error: null };
   try {
     const { joinGame } = await import('@synergy/netcode/lobby');
-    stopWatching();
-    manager.shutdown();
+    if (!current()) return;
     await joinGame(manager, code.trim(), { prefix: PEER_PREFIX });
+    if (!current()) return;
     frontierOnline.value = { mode: 'joined', code, isHost: false, error: null };
     // If the host leaves or refuses us (manager.disconnectReason says which), play alone again.
     const off = manager.onClientStopped.add(() => {
       off();
-      void fallBack(manager, new Error(manager.disconnectReason || 'The match ended.'));
+      if (current()) void fallBack(manager, new Error(manager.disconnectReason || 'The match ended.'));
     });
     stopWatching = off;
   } catch (error) {
-    await fallBack(manager, error);
+    if (current()) await fallBack(manager, error);
   }
 }
 

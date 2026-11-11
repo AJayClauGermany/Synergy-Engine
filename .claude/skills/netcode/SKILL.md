@@ -86,6 +86,20 @@ Everyone must be in the same scene, with its map loaded, before anyone acts.
 
 Spawn from the events rather than after `await loadScene(...)`: in a test with several
 machines, the code after an `await` can run with another machine's engine current.
+`loadScene` throws while an earlier load is still being answered, so guard a "play
+again" button (`rematch` in the sample's `session.ts`).
+
+Three things the sample gets right that are easy to get wrong:
+
+- **What a newcomer is sent.** The host builds a joining client's first picture of the
+  world before `onClientConnectedCallback` runs. A `checkObjectVisibility` that treats
+  "nothing known about this client yet" as "may see everything" leaks hidden objects to
+  everyone who joins. Default to hidden; show after you have decided who they are.
+- **Who may call an RPC.** `this.rpc(SendTo.X, ...)` can be called by any client and is
+  relayed. For something only the host should say, use `clientRpc`, and still check the
+  arguments' types in the handler.
+- **Listeners you add for one start.** Remove them when that start ends, including when
+  it ends early (the network was shut down mid-load), or the next start runs them too.
 
 ## Testing
 

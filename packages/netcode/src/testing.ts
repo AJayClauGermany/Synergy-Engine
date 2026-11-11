@@ -56,6 +56,11 @@ export class TestMachine {
 export interface TestMachineOptions {
   /** Called with the manager before it starts, to change this machine's configuration. */
   configure?: (manager: NetworkManager) => void;
+  /**
+   * `false` makes this machine treat an exception in game code as a browser does: it is
+   * logged and the game carries on. By default a simulated machine throws, so the test fails.
+   */
+  throwOnError?: boolean;
 }
 
 /**
@@ -93,7 +98,7 @@ export class TestNetwork<Machine extends TestMachine = TestMachine> {
 
   /** A machine that has not started networking yet. `host`, `server` and `client` start it for you. */
   create(id: string, options: TestMachineOptions = {}): Machine {
-    const engine = Engine.createHeadless();
+    const engine = Engine.createHeadless({ throwOnError: options.throwOnError });
     const transport = this.hub.connect(id);
     const manager = engine.run(() => {
       const manager = new GameObject('NetworkManager').addComponent(NetworkManager);

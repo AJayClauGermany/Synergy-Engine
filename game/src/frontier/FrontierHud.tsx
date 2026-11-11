@@ -3,7 +3,7 @@ import { useObservable } from '@synergy/ui';
 import { useState } from 'react';
 import { frontierHud, frontierOnline } from './hud';
 import { TEAM_NAMES } from './rules';
-import { hostOnline, joinOnline, playOffline, startMatch } from './session';
+import { hostOnline, joinOnline, playOffline, rematch } from './session';
 
 /** Frontier's heads-up display. It reads the observables in hud.ts; its buttons call session.ts. */
 export function FrontierHud({ manager }: { manager: NetworkManager }) {
@@ -26,7 +26,7 @@ function Banner({ manager }: { manager: NetworkManager }) {
       <div className="banner" data-team={state.winner} data-interactive>
         <strong>{TEAM_NAMES[state.winner] ?? 'Nobody'} wins</strong>
         {online.isHost ? (
-          <button type="button" onClick={() => void startMatch(manager)}>
+          <button type="button" onClick={() => void rematch(manager)}>
             Play again
           </button>
         ) : (

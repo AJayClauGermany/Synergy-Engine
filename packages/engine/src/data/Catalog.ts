@@ -16,12 +16,14 @@ function editDistance(a: string, b: string): number {
  * Makes plain data read-only all the way down (arrays and object literals; class
  * instances are left alone). Returns the same value.
  */
-export function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== 'object' || Object.isFrozen(value)) return value;
+export function deepFreeze<T>(value: T, seen = new WeakSet<object>()): T {
+  if (value === null || typeof value !== 'object' || seen.has(value)) return value;
   const plain = Array.isArray(value) || Object.getPrototypeOf(value) === Object.prototype;
   if (!plain) return value;
+  seen.add(value); // data that refers back to itself is visited once
   Object.freeze(value);
-  for (const item of Object.values(value)) deepFreeze(item);
+  // Look inside even when the outer object was frozen already: what it holds may not be.
+  for (const item of Object.values(value)) deepFreeze(item, seen);
   return value;
 }
 

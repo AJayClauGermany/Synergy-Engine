@@ -13,7 +13,7 @@ import {
   Vector3,
 } from '@synergy/engine';
 import { Hex } from '@synergy/engine/grid';
-import { NetworkBehaviour, NetworkPrefab, NetworkVariable, SendTo } from '@synergy/netcode';
+import { NetworkBehaviour, NetworkPrefab, NetworkVariable } from '@synergy/netcode';
 import { FrontierBoard } from './FrontierBoard';
 import { frontierHud } from './hud';
 import { type Combatant, Match } from './Match';
@@ -48,9 +48,13 @@ export class Soldier extends NetworkBehaviour implements Combatant {
 
   readonly moveRpc = this.serverRpc((x: number, y: number) => this.move(x, y), { requireOwnership: false });
   readonly attackRpc = this.serverRpc((targetId: number) => this.attack(targetId), { requireOwnership: false });
-  /** The host's answer to a refused order, sent only to the player who gave it. */
-  readonly refusedRpc = this.rpc(SendTo.SpecifiedInParams, (reason: string) => {
-    frontierHud.update((state) => ({ ...state, message: reason }));
+  /**
+   * The host's answer to a refused order, sent only to the player who gave it. A
+   * `clientRpc` can be called by the host alone, so a player cannot put words in another
+   * player's HUD; and what arrives is still checked, because it came over the network.
+   */
+  readonly refusedRpc = this.clientRpc((reason: string) => {
+    if (typeof reason === 'string') frontierHud.update((state) => ({ ...state, message: reason.slice(0, 200) }));
   });
 
   private _match: Match | null = null;

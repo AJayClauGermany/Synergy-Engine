@@ -100,6 +100,17 @@ describe('Catalog', () => {
     const mine = { ...tank, hp: 12 };
     expect(mine.hp).toBe(12);
     expect(types.get('tank').hp).toBe(20);
+
+    // Frozen on the outside only (as `Object.freeze` leaves things) is frozen all the way in here.
+    const shallow = Object.freeze({ id: 'jeep', weapon: { damage: 2 } });
+    const jeep = new Catalog('unit type', [shallow]).get('jeep');
+    expect(() => {
+      jeep.weapon.damage = 50;
+    }).toThrow();
+    // Data that refers to itself does not send it round in circles.
+    const loop: { id: string; self?: unknown } = { id: 'loop' };
+    loop.self = loop;
+    expect(new Catalog('thing', [loop]).get('loop').id).toBe('loop');
   });
 
   test('duplicate and missing ids are refused when the catalog is made', () => {

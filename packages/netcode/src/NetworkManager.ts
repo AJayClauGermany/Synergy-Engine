@@ -247,6 +247,8 @@ export class NetworkManager extends MonoBehaviour {
   _sceneLoading = false;
   private sceneEvent: SceneEvent | null = null;
   private nextSceneEvent = 1;
+  /** Server: the machines that have reported having the current scene. Each counts once. */
+  private readonly sceneReported = new Set<number>();
 
   // ---- Reading state ----------------------------------------------------------------------
 
@@ -419,7 +421,7 @@ export class NetworkManager extends MonoBehaviour {
     this._networkScene = null;
     this._sceneLoading = false;
     this.sceneEvent = null;
-    this.nextSceneEvent = 1;
+    this.sceneReported.clear();
     this.offs.push(
       transport.onMessage.add((peer, message) => this.inbox.push({ peer, message })),
       transport.onPeerLeft.add((peer) => this.inbox.push({ peer, left: true })),
@@ -455,9 +457,12 @@ export class NetworkManager extends MonoBehaviour {
     this.pendingPeers.clear();
     this.dirtyVariables.clear();
     this.rpcSenders.length = 0;
+    // A scene load in flight cannot be cancelled; dropping the reference is what tells
+    // its completion (see the `loaded` closures) that it belongs to a session that is over.
     this._networkScene = null;
     this._sceneLoading = false;
     this.sceneEvent = null;
+    this.sceneReported.clear();
 
     if (wasConnectedClient) this.onClientDisconnectCallback.emit(localId);
     if (wasServer) this.onServerStopped.emit(wasHost);
@@ -799,7 +804,10 @@ export class NetworkManager extends MonoBehaviour {
     this.serverTickAtSync = message.tick;
     this.clockAtSync = this.clock;
     const enter = () => {
-      for (const data of message.objs) this.clientSpawn(data);
+      for (const data of message.objs) {
+        this.clientSpawn(data);
+        if (!this.connected) return; // an object could not be made: this client has left (see clientSpawn)
+      }
       this.onClientConnectedCallback.emit(message.id);
     };
     // The match may already be in a scene: load it first, so the objects have somewhere to go.
@@ -932,13 +940,18 @@ export class NetworkManager extends MonoBehaviour {
     object.dontDestroyWithOwner = data.k;
     object._initBehaviours();
     if (data.sig !== undefined && data.sig !== object._layout()) {
-      // Carrying on would put the server's values into whichever variables happen to line up.
-      destroyImmediate(root);
-      throw new Error(
+      // Carrying on would put the server's values into whichever variables happen to line
+      // up, and skipping the object would leave this client playing a different game from
+      // everyone else. The two machines run different builds, so this one leaves.
+      const reason =
         `NetworkPrefab "${data.p}" is not the same here as on the server: its NetworkBehaviours have different ` +
-          `variables or RPCs (server: ${data.sig || 'none'}; here: ${object._layout() || 'none'}). ` +
-          'The two machines are running different builds; reload both. The object was not created.',
-      );
+        `variables or RPCs (server: ${data.sig || 'none'}; here: ${object._layout() || 'none'}). ` +
+        'The two machines are running different builds; reload both.';
+      destroyImmediate(root);
+      Debug.logError(reason);
+      this.disconnectReason = reason;
+      this.stop();
+      return;
     }
     for (const [behaviourIndex, name, state] of data.vars) {
       object._behaviours[behaviourIndex]?._variables.get(name)?._readFull(state, false);
@@ -1046,7 +1059,14 @@ export class NetworkManager extends MonoBehaviour {
       if (!SceneManager.isRegistered(name)) {
         throw new Error(`Scene "${name}" is not registered. Call SceneManager.register("${name}", ...) on the server and every client.`);
       }
-      if (this._sceneLoading) throw new Error(`"${this._networkScene?.n}" is still loading. Wait for it before loading "${name}".`);
+      if (this._sceneLoading || this.sceneEvent) {
+        // Unity refuses this too. Replacing a load that clients are still answering would
+        // leave it without an ending: its onLoadEventCompleted would never fire.
+        throw new Error(
+          `"${this._networkScene?.n}" is still loading on ${this._sceneLoading ? 'the server' : `clients ${this._clientsLoading().join(', ')}`}. ` +
+            `Wait for sceneManager.onLoadEventCompleted before loading "${name}".`,
+        );
+      }
 
       const event: SceneEvent = {
         n: name,
@@ -1055,17 +1075,22 @@ export class NetworkManager extends MonoBehaviour {
         done: [],
         startedAt: this.clock,
       };
+      // This object is the load's identity. Event numbers start again with every session,
+      // so a load left over from an earlier one could carry the same number.
+      const scene: SceneRef = { n: event.n, e: event.e };
       this.sceneEvent = event;
-      this._networkScene = { n: event.n, e: event.e };
+      this._networkScene = scene;
       this._sceneLoading = true;
+      this.sceneReported.clear();
       // Clients hear about the scene before anything that will be spawned into it.
       for (const id of this.remoteClientIds()) this.sendTo(id, { t: 'scene', n: event.n, e: event.e });
       this.keepAcrossScenes();
 
       const loaded = () =>
         this.scoped(() => {
+          if (this._networkScene !== scene) return; // shut down, or restarted, while it loaded
           this._sceneLoading = false;
-          if (this.role !== 'none') this.clientLoadedScene(SERVER_CLIENT_ID, event.e);
+          this.clientLoadedScene(SERVER_CLIENT_ID, event.e);
         });
       return SceneManager.loadScene(name).then(loaded, (error: unknown) => {
         loaded();
@@ -1086,11 +1111,18 @@ export class NetworkManager extends MonoBehaviour {
     this.keepAcrossScenes();
     const loaded = () =>
       this.scoped(() => {
-        if (this.role !== 'client' || this._networkScene?.e !== scene.e) return; // disconnected meanwhile
+        // Left, or left and joined again, while it loaded: this load is not the session's any more.
+        if (this.role !== 'client' || this._networkScene !== scene) return;
         this._sceneLoading = false;
-        then?.();
-        this.sendToServer({ t: 'sceneLoaded', e: scene.e });
-        this.sceneManager.onLoadComplete.emit(this.clientId, scene.n);
+        try {
+          then?.();
+        } finally {
+          // Whatever happened to the objects, the server is waiting to hear about the scene.
+          if (this.role === 'client' && this._networkScene === scene) {
+            this.sendToServer({ t: 'sceneLoaded', e: scene.e });
+            this.sceneManager.onLoadComplete.emit(this.clientId, scene.n);
+          }
+        }
       });
     if (!SceneManager.isRegistered(scene.n)) {
       Debug.logError(
@@ -1101,8 +1133,12 @@ export class NetworkManager extends MonoBehaviour {
       return;
     }
     SceneManager.loadScene(scene.n).then(loaded, (error: unknown) => {
-      Engine.current?.reportError(error, `loading the scene "${scene.n}" the server asked for`);
-      loaded();
+      try {
+        // An engine that throws on errors (tests) throws here; one in a browser logs.
+        (this.engine ?? Engine.current)?.reportError(error, `loading the scene "${scene.n}" the server asked for`);
+      } finally {
+        loaded(); // either way, do not stay paused for ever
+      }
     });
   }
 
@@ -1110,6 +1146,8 @@ export class NetworkManager extends MonoBehaviour {
   private clientLoadedScene(clientId: number, eventId: number): void {
     const scene = this._networkScene;
     if (!scene || scene.e !== eventId) return; // an answer to an older load
+    if (this.sceneReported.has(clientId)) return; // said so already: a repeat changes nothing
+    this.sceneReported.add(clientId);
     const event = this.sceneEvent;
     this.sceneManager.onLoadComplete.emit(clientId, scene.n);
     if (event?.waiting.delete(clientId)) {

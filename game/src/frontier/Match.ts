@@ -119,10 +119,17 @@ export class Match extends NetworkBehaviour {
    * Whether a client may know about a unit: its own team's always, an enemy only while
    * one of its units sees it. Watchers see everything. Units ask this through
    * `checkObjectVisibility`, so a hidden enemy is not sent to that client at all.
+   *
+   * A client that has no seat yet is sent nothing. That moment exists: the host builds a
+   * newcomer's first picture of the world before `onClientConnectedCallback` gives it a
+   * seat, and "not seated" must not be read as "watching", or every joining player would
+   * be handed the enemy's positions. Once seated, `refreshVisibility` sends what it may see.
    */
   canClientSee(clientId: number, unit: Combatant): boolean {
-    const team = this.teamOf(clientId);
-    return team < 0 || unit.team.value === team || canSee(this.viewersOf(team), unit.cell.value);
+    const seat = [...this.seats].find((candidate) => candidate.client === clientId);
+    if (!seat) return false;
+    if (seat.team < 0) return true;
+    return unit.team.value === seat.team || canSee(this.viewersOf(seat.team), unit.cell.value);
   }
 
   /** Call after anything that changes who sees whom: a move, a death, a new player. */

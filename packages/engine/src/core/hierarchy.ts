@@ -42,7 +42,8 @@ function show(value: unknown, depth = 0): string | null {
     return items.includes(null) ? `[${value.length} items]` : `[${items.join(', ')}]`;
   }
   if (value instanceof Map || value instanceof Set) return `${value.constructor.name}(${value.size})`;
-  if (Object.getPrototypeOf(value) === Object.prototype) {
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype === Object.prototype || prototype === null) {
     if (depth > 0) return '{…}';
     const entries = Object.entries(value).flatMap(([key, item]) => {
       const text = show(item, depth + 1);
@@ -58,8 +59,9 @@ function show(value: unknown, depth = 0): string | null {
   }
   // Colours and other classes that know how to describe themselves. Anything else
   // (materials, PlayCanvas objects) would only be noise.
-  const describe = (value as { toString(): string }).toString;
-  return describe === Object.prototype.toString ? null : clip(describe.call(value), 60);
+  // (An object made with Object.create(null) has no toString at all.)
+  const describe = (value as { toString?: () => string }).toString;
+  return typeof describe !== 'function' || describe === Object.prototype.toString ? null : clip(describe.call(value), 60);
 }
 
 function fieldsOf(component: Component): string {
