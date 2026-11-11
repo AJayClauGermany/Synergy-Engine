@@ -71,7 +71,9 @@ universally needed. Otherwise document that games pass it via
 - **Statics go through `currentEngine()`** (`core/runtime.ts`), never a module-level
   singleton, so tests can create and dispose engines freely.
 - Watch for import cycles: `core/` must not import from `components/` except through
-  `hooks.ts` (types are fine).
+  `hooks.ts` (types are fine). `bun run check` reports a cycle, and an import that
+  breaks the layering above (the zones in `.fallowrc.jsonc`). A new top-level folder
+  under `src/` is in the `engine` zone unless you give it its own.
 
 ## Tests
 
@@ -98,3 +100,9 @@ afterEach(() => { engine.dispose(); });
 
 Add the API to `docs/unity-to-synergy.md` (and remove it from "Not implemented yet").
 If it changes a rule agents rely on, update `AGENTS.md` and the relevant skill.
+
+If you add a message the engine sends (or start sending one from `NOT_SENT` in
+`core/messageNames.ts`), update the same two lists in `tools/lint/synergy.ts`: the lint
+rule `no-unsent-message` keeps its own copy, and a test fails until they agree. If the
+new API has a way to be misused that a port would hit, consider a lint rule for it
+(`docs/checks.md`, "Adding a rule").

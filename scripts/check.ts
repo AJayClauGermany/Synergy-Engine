@@ -85,7 +85,7 @@ export const STEPS: readonly Step[] = [
       'Run `bun run fix` for what can be fixed automatically, then fix the rest by hand, first one first.\n' +
       'Each line names its rule in brackets; docs/checks.md explains the synergy(...) rules with examples.\n' +
       'Change the code, not the rule: a disable comment needs a reason a reviewer would accept.',
-    detail: (output) => countOf(output, /^\S+:\d+:\d+: error /gm, 'problem'),
+    detail: (output) => countOf(output, /^\S+:\d+:\d+: error\b/gm, 'problem'),
     present: sortFindings,
   },
   {

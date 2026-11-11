@@ -54,11 +54,17 @@ If the game is multiplayer, choose one model before porting gameplay
 Start with code that has no Unity in it: calculations, rules, pathfinding, data
 classes. Port one script at a time, each with its test (a Unity EditMode test becomes a
 `bun test`; where there is none, write one from the C#'s behaviour first), and run
-`bun run check` after each.
+`bun run fix` after each. It formats the file and then runs every check; fix what it
+lists, first item first, until it says `PASSED`, and only then take the next script.
+That loop needs no judgement about whether the code is acceptable: the tools decide
+([checks.md](checks.md)).
 
 The language differs in ways that compile and then give other answers: integer
 division, struct copies, dictionary keys, sorting. The list is short and worth reading
-once: "C# to TypeScript" in [unity-to-synergy.md](unity-to-synergy.md).
+once: "C# to TypeScript" in [unity-to-synergy.md](unity-to-synergy.md). The lint check
+catches several of them (comparing vectors with `==`, a `Map` keyed by a cell, a sort
+without a comparer, a method passed without its object), but not integer division or a
+shared struct: only a test shows those.
 
 ## 5. Rebuild the scenes
 

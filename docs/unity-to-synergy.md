@@ -73,6 +73,9 @@ export class Spinner extends MonoBehaviour {
 
 The API above is Unity's; the language under it is not C#. These are the habits that
 compile here and then do something else, which makes them the costly ones in a port.
+`bun run check` reports some of them (keys, `==` on vectors, sorting, events given a
+bare method; see [checks.md](checks.md)). The rest, such as integer division and shared
+structs, only a test can show.
 
 | C# | TypeScript | What goes wrong otherwise |
 |----|------------|---------------------------|

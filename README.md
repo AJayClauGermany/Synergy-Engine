@@ -39,7 +39,7 @@ has the full map and the handful of deliberate differences.
 | **Previews** (`cloudflare/`) | Deploy to Cloudflare Workers behind a password. |
 | **Desktop** (`desktop/`) | Package with Electrobun; runs offline. |
 | **Sample games** (`game/`) | *Skirmish*: a turn-based hex game on command sessions. *Frontier* (`?scene=Frontier`): a real-time, host-authoritative match on netcode, with a map from data and fog of war. Start from the one that matches your game. |
-| **Agent support** | `AGENTS.md`, task skills, a headless test mode and a screenshot tool, so AI agents can build and verify changes on their own. |
+| **Agent support** | `AGENTS.md`, task skills, a headless test mode, a screenshot tool, and one `bun run check` whose lint rules know the mistakes a Unity port makes, so AI agents can build and verify changes on their own. |
 
 It is aimed at strategy games (turn-based and real-time), but the engine is generic.
 
@@ -62,7 +62,9 @@ turn. Forests cost extra movement and water blocks it. Edit anything under `game
 bun run check
 ```
 
-type-checks everything and runs the tests, with no browser needed.
+formats, lints, type-checks and tests everything in a few seconds, with no browser needed,
+and ends with `PASSED` or `FAILED`. `bun run fix` applies what can be fixed automatically
+first. [docs/checks.md](docs/checks.md) describes each check.
 
 ## Making it yours
 
@@ -83,7 +85,9 @@ Coming from an existing Unity project? Start at
 | Command | |
 |---|---|
 | `bun run dev` | Dev server with hot reload |
-| `bun run check` | Type-check and test |
+| `bun run check` | Every check: format, lint, types, tests, project graph |
+| `bun run fix` | Fix what a tool can, then check |
+| `bun test` | Tests only |
 | `bun run build` | Production build into `dist/` |
 | `bun run start` | Serve `dist/` locally |
 | `bun run screenshot` | Capture the game in headless Chromium |
@@ -99,6 +103,7 @@ Coming from an existing Unity project? Start at
 - [Unity to Synergy](docs/unity-to-synergy.md): the API map and the differences
 - [Architecture](docs/architecture.md): how it sits on PlayCanvas, the frame loop, headless mode
 - [Porting from Unity](docs/porting-from-unity.md): the order to bring an existing project across
+- [Checks](docs/checks.md): what `bun run check` runs, the lint rules for Unity habits, the layering
 - [Tile maps](docs/tilemaps.md): grids, hex maps, layers, picking, pathfinding
 - [Content as data](docs/content.md): tile palettes, maps and definitions from JSON; exporting from Unity
 - [Netcode](docs/netcode.md): Netcode for GameObjects in TypeScript: spawning, variables, RPCs, scenes, lobby

@@ -21,6 +21,6 @@ jobs:
         with:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
-      # Type-checks every project, then runs the engine, net, game and worker tests headlessly.
+      # Lockfile, formatting, lint, types, every test (headless) and the project graph: docs/checks.md.
       - run: bun run check
       - run: bun run build
