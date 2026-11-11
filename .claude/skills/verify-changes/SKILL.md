@@ -88,9 +88,11 @@ positions, script fields. It is an action like the others, so
 `--hierarchy --click 603,466 --hierarchy` shows the scene before and after a click. Read
 it first; open the PNG for what only a picture shows (colours, overlap, layout).
 
-The tool builds with class names kept, so messages and the hierarchy are readable.
-`--release` tests the fully minified build that is deployed (there your own classes
-print as shortened names unless registered with `nameType`).
+The tool builds with class names kept, so messages and the hierarchy are readable. Two
+cases where a game class prints under another name (engine classes never do): with
+`--url` against `bun run dev`, the dev bundler may add a number (`CameraRig3` is
+`CameraRig`); with `--release`, the fully minified build that is deployed, names are
+shortened. `nameType(CameraRig, 'CameraRig')` after a class fixes its name everywhere.
 
 `--scene Frontier` opens the netcode sample.
 
