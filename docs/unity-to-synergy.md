@@ -34,7 +34,7 @@ export class Spinner extends MonoBehaviour {
 
 | # | Unity | Synergy | Why |
 |---|-------|---------|-----|
-| 1 | `PascalCase` methods: `Update()`, `GetComponent<T>()` | `camelCase`: `update()`, `getComponent(T)` | TypeScript convention. Properties were already camelCase in Unity. |
+| 1 | `PascalCase` methods: `Update()`, `GetComponent<T>()` | `camelCase`: `update()`, `getComponent(T)` | TypeScript convention. Properties were already camelCase in Unity. A message left in Unity's spelling is a type error, and an error when the script is added. |
 | 2 | Generics: `GetComponent<Health>()` | Pass the class: `getComponent(Health)` | Types do not exist at runtime in TypeScript. |
 | 3 | Operators: `a + b`, `v * 2`, `q * v` | Methods: `a.add(b)`, `v.mul(2)`, `q.rotate(v)` | No operator overloading. See the table below. |
 | 4 | `Vector3` is a mutable struct | `Vector3`, `Quaternion`, `Color` are **immutable**; every operation returns a new value | Gives struct-like value semantics. `transform.position.x = 5` is a compile error in both. |
@@ -67,6 +67,35 @@ export class Spinner extends MonoBehaviour {
 | `q * v` | `q.rotate(v)` |
 | `transform.position += Vector3.up` | `transform.position = transform.position.add(Vector3.up)` |
 | `new Vector3(p.x, 0, p.z)` | `p.withY(0)` |
+
+## C# to TypeScript
+
+The API above is Unity's; the language under it is not C#. These are the habits that
+compile here and then do something else, which makes them the costly ones in a port.
+
+| C# | TypeScript | What goes wrong otherwise |
+|----|------------|---------------------------|
+| `int / int` truncates: `7 / 2` is `3` | `Math.trunc(7 / 2)` | `/` always gives `3.5`. Damage, costs and grid indices drift |
+| `(int)value`, `Mathf.FloorToInt` | `Math.trunc(value)`, `Mathf.floorToInt` | `(int)` drops the fraction toward zero; `floor` differs for negatives |
+| `Mathf.RoundToInt(2.5f)` is `2` | `Mathf.roundToInt(2.5)` is `2` | Same as Unity (halfway goes to the even number). JavaScript's own `Math.round(2.5)` is `3` |
+| `struct` values are copied on assignment | objects are shared: copy with `{ ...value }` | Two units end up editing one stats object. Engine vectors and colours are immutable, so they are safe to share |
+| `Dictionary<Vector3Int, T>`, `HashSet<Vector2Int>` | `Map<string, T>` keyed by `cellKey(cell)` | `Map` and `Set` compare object keys by identity, so an equal cell is never found |
+| `dict[key]` throws when missing | `map.get(key)` returns `undefined` | Handle the missing case; the type-checker asks you to |
+| `a == b` on structs and strings | `===` for numbers and strings, `a.equals(b)` for vectors and cells | `===` on two equal vectors is `false` |
+| `list.Sort()`, `OrderBy(x => x.cost)` | `list.toSorted((a, b) => a.cost - b.cost)` | `sort()` changes the array in place and, with no comparer, sorts numbers as text (`10` before `9`) |
+| `List<T>`: `Add`, `Remove(x)`, `Count`, `Contains` | `T[]`: `push`, `splice(indexOf(x), 1)`, `length`, `includes` | |
+| LINQ: `Where`, `Select`, `Any`, `All`, `First`, `FirstOrDefault`, `Sum` | `filter`, `map`, `some`, `every`, `find`, `find`, `reduce` | `find` returns `undefined` rather than throwing as `First` does |
+| `foreach (var pair in dict)` | `for (const [key, value] of map)` | |
+| `public int Hp { get; private set; }` | `private _hp = 0; get hp() { return this._hp; }` | |
+| `event Action<int> Damaged;` `Damaged?.Invoke(5);` `x.Damaged += F;` | `readonly damaged = new UnityEvent<[number]>();` `this.damaged.invoke(5);` `x.damaged.addListener(f)` | Pass arrow functions or bound methods, or `this` is lost in the handler |
+| `public static Game Instance;` set in `Awake` | `static instance: Game \| null = null;` set in `awake`, cleared in `onDestroy` | |
+| `bool TryGet(out T value)`, `ref` parameters | return the value or `null` (or a tuple) | |
+| `async Task<T>`, `await` | `async` returning `Promise<T>`, `await` | In a script, a coroutine can `yield` a promise |
+| `[Serializable] class UnitData`, ScriptableObject | an `interface` and plain objects in a `.ts` module | Keep the asset's name as an `id` field so saved data still refers to it |
+| `enum Team { Red, Blue }` | `enum Team { Red, Blue }` | Same numbering, so serialized numbers keep their meaning |
+| `uint`, overflow, `long` | every number is a 64-bit float; bit operators work on 32 bits | Hashes and bit masks ported literally can differ |
+| `namespace`, `using` | one class per file, `import { X } from './X'` | |
+| NUnit: `[Test]`, `[SetUp]`, `Assert.AreEqual(expected, actual)` | `test(...)`, `beforeEach(...)`, `expect(actual).toBe(expected)` | The arguments swap places. `Assert.AreEqual(a, b, 0.01f)` is `expect(b).toBeCloseTo(a, 2)` |
 
 ## API map
 
@@ -144,7 +173,8 @@ Iterate children with `for (const child of transform)`.
 | Input Manager settings | `Input.defineAxis(...)`, `Input.defineButton(...)` |
 | `Screen.width`, `Screen.height` | same (CSS pixels) |
 | `Debug.Log`, `LogWarning`, `LogError`, `DrawLine`, `DrawRay` | `Debug.log`, `logWarning`, `logError`, `drawLine`, `drawRay` |
-| `Mathf.*` | `Mathf.*` in camelCase; `Mathf.SmoothDamp(..., ref v, ...)` returns `[value, velocity]` |
+| The Hierarchy and Inspector windows | `Debug.hierarchy()`: the loaded scenes as text, with each script's field values |
+| `Mathf.*` | `Mathf.*` in camelCase; `Mathf.SmoothDamp(..., ref v, ...)` returns `[value, velocity]`. `round` and `roundToInt` send halfway values to the even number, as Unity does |
 | `SceneManager.LoadScene("Main")` | `await SceneManager.loadScene('Main')` after `SceneManager.register('Main', build)`. For scenes that need assets, register `{ preload, build }` |
 | `Random.Range`, `Random.value` | `new Random(seed)`: `range`, `rangeInt`, `value`, `pick`, `shuffle`, `state` |
 | `RenderSettings.ambientLight` | same |
@@ -180,7 +210,8 @@ with canvas UI.
 |-------|---------|
 | `Grid` (`cellSize`, `cellGap`, `cellLayout`, `cellSwizzle`) | same. Layouts: `Rectangle`, `Hexagon` (Unity's offset coordinates) |
 | `CellToWorld`, `WorldToCell`, `GetCellCenterWorld` | same in camelCase |
-| `Tilemap.SetTile`, `GetTile<T>`, `HasTile`, `SetTiles`, `BoxFill`, `FloodFill`, `SwapTile`, `ClearAllTiles`, `cellBounds`, `SetColor` | same in camelCase |
+| `Tilemap.SetTile`, `GetTile<T>`, `HasTile`, `SetTiles`, `FloodFill`, `SwapTile`, `ClearAllTiles`, `cellBounds`, `SetColor` | same in camelCase |
+| `Tilemap.BoxFill(position, tile, startX, startY, endX, endY)` | `tilemap.boxFill(tile, min, max)`: two corner cells, both inclusive |
 | `Tile`, `TileBase.GetTileData`, `Tile.gameObject` | `Tile`, `TileBase.getTileData`, `tile.gameObject` (a `Prefab` or GameObject) |
 | `TilemapRenderer` (`sortingOrder`) | same |
 | `Vector3Int`, `Vector2Int`, `BoundsInt` | same; any `{ x, y }` is accepted as a cell |

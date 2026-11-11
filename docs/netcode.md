@@ -144,7 +144,10 @@ Make the object with `instantiate(prefab)`, then call `spawn()` on the host. Cli
 their own copy from the same prefab, at the same transform, with the same owner and
 variable values. A `NetworkPrefab` must be registered on every machine with
 `networkManager.networkPrefabs.add(...)`; its name is its identity on the wire, and a
-client whose list differs from the host's is refused with a clear message.
+client whose list of names differs from the host's is refused with a clear message.
+Only the names are compared. Two builds in which a prefab of the same name carries
+different scripts, or the same scripts in a different order, connect and then put values
+in the wrong variables, so keep the host and its clients on the same build.
 
 Only the host spawns, despawns and destroys. Destroying the host's copy of a spawned
 object despawns it everywhere. If a client needs something spawned, it asks with a
@@ -256,6 +259,13 @@ pausing with `Time.timeScale = 0` does not stop it. The host's rate wins. `manag
 fires once per tick just before changes are sent, `localTime` is this machine's tick and
 `serverTime` the host's (exact on the host, an estimate within a tick or two on clients).
 
+Two limits to know before timing gameplay with it. The clock adds up
+`Time.unscaledDeltaTime`, which a browser frame caps at `Time.maximumDeltaTime` (0.1 s),
+so across a stall (a hidden tab, a long load) it falls behind real time. And when one
+frame spans several ticks, `onTick` fires once, with the latest tick: compare tick numbers
+rather than counting calls. For a deadline that must hold through a stall, store a time
+from `Date.now()` on the host.
+
 ### Custom messages
 
 ```ts
@@ -349,7 +359,9 @@ survive the real network fails in the test.
 
 ## Not built yet
 
-Scene-placed network objects and synchronized scene loading (`NetworkSceneManager`),
+A check that host and client agree on what a prefab contains (see [Spawning](#spawning)),
+a network clock that keeps real time through a stall (see [Ticks](#ticks)),
+scene-placed network objects and synchronized scene loading (`NetworkSceneManager`),
 reparenting network objects, prefab pooling handlers, `NetworkAnimator` and
 `NetworkRigidbody` (the engine has no animation or rigidbodies yet), client-side prediction
 and reconciliation, host migration, reconnecting to a running match, and distributed

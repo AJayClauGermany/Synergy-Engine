@@ -12,8 +12,9 @@ Three levels, cheapest first. Do the ones that apply; say which you did.
 Type-checks the app, Convex functions and the Cloudflare Worker, then runs every test
 (about a second). It must pass.
 
-Type-checking has blind spots here: a lifecycle message with the wrong name
-(`Update`, `onStart`) compiles and is never called. So for behaviour changes also do 2 or 3.
+Type-checking catches Unity-cased messages (`Update`), but not a method the engine never
+calls for another reason (`onStart`, a script that was never added to an object). So for
+behaviour changes also do 2 or 3.
 
 ## 2. Headless tests (gameplay and engine logic)
 
@@ -47,6 +48,11 @@ test('space fires', () => {
 - Input "down" edges last one frame: read them inside a behaviour's `update`, not after
   `engine.step()` returns.
 - Pure rules (`game/src/rules`) need no engine at all; test them directly.
+- When an assertion fails and you cannot see why, `console.log(Debug.hierarchy())` prints
+  every GameObject with its components, position and script fields. Pass
+  `{ root: gameObject }` for one object, `{ fields: false }` for names only.
+- Warnings printed during a test run are worth reading: the engine warns once about a
+  method that looks like a message but is never called.
 
 Run one file or folder: `bun test game/test/scene.test.ts`, `bun test packages/engine`.
 
@@ -66,9 +72,19 @@ Drive the game first, in order:
 bun run screenshot --click 603,466 --click 606,365 --wait 700 --out .screenshots/moved.png
 ```
 
-Options: `--click x,y` · `--key Space` · `--wait ms` · `--eval "<js>"` · `--scene Name` ·
-`--width/--height` · `--scale 2` · `--out file` · `--url http://localhost:3000` (use a running dev
-server) · `--no-build`.
+Options: `--click x,y` · `--key Space` · `--wait ms` · `--eval "<js>"` · `--hierarchy` ·
+`--scene Name` · `--width/--height` · `--scale 2` · `--out file` ·
+`--url http://localhost:3000` (use a running dev server) · `--no-build` · `--release`.
+
+`--hierarchy` prints the live scene as text (`Debug.hierarchy()`): objects, components,
+positions, script fields. It is an action like the others, so
+`--hierarchy --click 603,466 --hierarchy` shows the scene before and after a click. Read
+it first; open the PNG for what only a picture shows (colours, overlap, layout).
+
+The tool builds with class names kept, so messages and the hierarchy are readable. A
+built-in component may print with a `2` on the end (`Camera2`): that is the bundler
+keeping it apart from PlayCanvas's class of the same name. `--release` tests the fully
+minified build that is deployed.
 
 `--eval` runs in the page and prints JSON. `synergy` is the engine API plus `engine`:
 

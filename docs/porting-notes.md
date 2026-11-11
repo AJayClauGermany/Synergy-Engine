@@ -40,8 +40,13 @@ The package list is the small part. The original's custom simulation (weighted h
 pathfinding, combat patterns, fog of war, supply lines, construction, AI, map editing,
 authoritative action handling) has to be ported from C# by hand. How it fits here:
 
-- **Put it in pure rules modules** like `game/src/rules/`: state, commands, `check`,
-  `apply`. No engine imports beyond `@synergy/engine/grid`, so the same code runs in the
+- **Choose where the state lives before porting it.** If the Unity code keeps it in
+  `NetworkBehaviour`s (`NetworkVariable`s changed by server RPCs), the direct port keeps
+  that shape with `@synergy/netcode`, script by script ([netcode.md](netcode.md)). The
+  alternative is to pull it out into pure rules modules like `game/src/rules/` (state,
+  commands, `check`, `apply`), which is more work up front and gives replays, saves and
+  server-side validation. Either way, keep calculations (costs, ranges, damage) in pure
+  functions with no engine imports beyond `@synergy/engine/grid`, so they run in the
   browser, in tests, and on a server.
 - **Use the existing Unity EditMode tests as the specification.** Port each as a
   `bun test` and make it pass. Add fixtures exported from Unity (maps, saves, combat
@@ -56,8 +61,9 @@ authoritative action handling) has to be ported from C# by hand. How it fits her
 ### Simultaneous control, cooldowns and world ticks
 
 The original ruleset is not turn-based: players act at the same time, each action has a
-cooldown, and the world advances on a shared two-second tick. The command model handles
-this without special support for "turns":
+cooldown, and the world advances on a shared two-second tick. With netcode the host runs
+that tick and stores each cooldown as a "ready at" time in a `NetworkVariable`. The
+command model handles it too, without special support for "turns":
 
 - `startTicker(session, 2000, { type: 'tick' })` makes the host submit a tick command
   every two seconds, in the same ordered stream as player actions.
@@ -99,7 +105,9 @@ in the game state so every player rolls the same numbers.
   implement the `Session<C>` interface over it; game code does not change. Server-driven
   ticks can also come from Convex's scheduler instead of the host player's machine.
 - **Hidden information.** Fog of war that must be secret from the other player cannot be
-  enforced with a shared command log. It needs per-player views computed on the server.
+  enforced with a shared command log. With netcode the host decides what each client
+  receives (`checkObjectVisibility`, `networkShow` / `networkHide`, `read: Owner`
+  variables), which is enough while the host is trusted.
 - **Voice chat** (Vivox) was installed but disabled. Nothing is planned.
 
 ## Rendering and presentation
@@ -111,9 +119,9 @@ in the game state so every player rolls the same numbers.
   PlayCanvas and is not wrapped yet.
 - **Switching between globe and tactical map** is `SceneManager.loadScene`, or both
   loaded additively with one deactivated.
-- **Sprites.** Tiles can be textured today. Free-standing sprites (units, props) need a
-  `SpriteRenderer` component, which is the most valuable missing piece for a 2D-looking
-  game; PlayCanvas has a sprite system to wrap.
+- **Sprites.** Tiles can be textured, and free-standing sprites (units, props) use
+  `SpriteRenderer`, which shares the scene and depth buffer with 3D meshes. Sprite
+  animation and sorting layers are not built.
 - **Camera.** Promote `CameraRig` from the sample into the engine once its behaviour is
   settled (focus on a target, follow, confinement to the map bounds).
 
@@ -144,7 +152,7 @@ in the game state so every player rolls the same numbers.
 
 In rough priority order for this game:
 
-1. `SpriteRenderer` (+ sprite animation if units are animated sheets)
+1. Sprite animation, if units are animated sheets (`SpriteRenderer` itself is built)
 2. `AudioSource` / `AudioClip`
 3. Camera helper in the engine (focus, follow, confine)
 4. Outline and other per-object effects; post-processing wrappers

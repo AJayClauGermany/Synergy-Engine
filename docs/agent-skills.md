@@ -30,6 +30,10 @@ Project skills:
 - `bun run screenshot` opens the built game in headless Chromium, can click and press
   keys, evaluates expressions against the live engine (`--eval`), saves a PNG, and fails
   if the page logged an error.
+- `Debug.hierarchy()` returns the scene as text (objects, components, positions, script
+  fields); `bun run screenshot --hierarchy` prints it from the running game.
+- A script with a Unity-cased message (`Update`) fails the type-check and throws when it
+  is added; near misses are warned about once.
 - In a running game, `window.synergy` exposes the engine API and the `engine` instance.
 
 ## Optional: the vendors' own skills

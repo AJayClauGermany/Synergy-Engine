@@ -18,7 +18,7 @@ Cloudflare Workers (preview deploys) · Electrobun (desktop).
 | `bun test` | Tests only (headless, about a second). `bun test game` runs one folder |
 | `bun run typecheck` | Type-check only |
 | `bun run build` | Production build into `dist/` |
-| `bun run screenshot` | Build, open in headless Chromium, save `.screenshots/game.png`; fails on page errors |
+| `bun run screenshot` | Build, open in headless Chromium, save `.screenshots/game.png`; fails on page errors. `--hierarchy` prints the scene as text |
 | `bun run backend` | Convex dev deployment (interactive login the first time); writes its URL to `.env.local` |
 | `bun run env` | Check environment variables against `.env.schema` (secrets masked) |
 | `bun run preview:local` / `preview:deploy` / `deploy` | Cloudflare: local gate, branch preview, main deployment |
@@ -61,7 +61,8 @@ docs/                    unity-to-synergy.md, architecture.md, tilemaps.md, mult
 Read `docs/unity-to-synergy.md` for the full map. The ones that cause bugs:
 
 1. **camelCase** methods and messages: `update()`, `getComponent(Health)`, `Input.getKeyDown(KeyCode.Space)`.
-   A message spelled `Update()` is silently never called.
+   Unity's spelling (`Update()`, `OnEnable()`) is a type error and an error when the script
+   is added. A near miss such as `onStart()` only logs a warning, so read the output.
 2. **Vectors are immutable and have no operators**: `a.add(b)`, `v.mul(2)`, `q.rotate(v)`.
    `transform.position = transform.position.add(delta)`.
 3. **Right-handed world, forward is -Z.** Always write `Vector3.forward` / `transform.forward`,
@@ -74,7 +75,11 @@ Read `docs/unity-to-synergy.md` for the full map. The ones that cause bugs:
 7. **Coroutines are generators**: `*run(): IEnumerator { yield new WaitForSeconds(1); }`, started
    with `this.startCoroutine(this.run())` (call it).
 8. **Lights aim along -Y.** Use `light.direction = ...`.
-9. **No rigidbody physics, animation, audio or particles yet.** Colliders are for
+9. **C# habits that change meaning.** `a / b` never truncates (`Math.trunc(a / b)` for
+   integer division); objects used as `Map`/`Set` keys match by identity, not value
+   (`cellKey(cell)` for cells); `array.sort()` sorts in place and as text unless given a
+   comparer. The table is in `docs/unity-to-synergy.md`, "C# to TypeScript".
+10. **No rigidbody physics, animation, audio or particles yet.** Colliders are for
    raycasts only. Reach PlayCanvas directly via `gameObject.entity` / `engine.app` when needed.
    `docs/porting-notes.md` lists what is missing and in what order to build it.
 
@@ -122,12 +127,21 @@ game code, read it in a component with `useObservable`. Replace objects/arrays r
 mutating them. Elements that should block clicks to the game need `data-interactive`
 (buttons, inputs and links already do).
 
-**Add a player action.** Add a variant to `Command` in `game/src/rules/`, handle it in
-`check()` and `apply()`, add a rule test, then submit it from input or HUD code with
-`controller.submit(...)`. Never change game state outside `apply()`; that is what keeps
-multiplayer in sync.
+**Decide how shared state works, once per game.** There are two models; pick the one the
+game uses and stay with it (`docs/multiplayer.md` compares them):
 
-**Make something networked (the Netcode for GameObjects way).** For real-time play, use
+- *Commands* (the sample game): state is plain data in `game/src/rules/`, changed only by
+  `apply()`. Fits turn-based and replayable games where every machine runs the same rules.
+- *Netcode* (`@synergy/netcode`, Unity's Netcode for GameObjects): state lives in
+  `NetworkVariable`s on components and only the host changes it. Fits real-time play,
+  hidden information, and Unity projects that already use `NetworkBehaviour`s.
+
+**Add a player action (commands).** Add a variant to `Command` in `game/src/rules/`, handle
+it in `check()` and `apply()`, add a rule test, then submit it from input or HUD code with
+`controller.submit(...)`. Never change game state outside `apply()`; that is what keeps
+this kind of multiplayer in sync.
+
+**Add a player action or networked object (netcode).** For real-time play, use
 `@synergy/netcode` (`docs/netcode.md`) instead of commands. One player hosts and is
 the server and a client at once. A `NetworkPrefab` holds `NetworkBehaviour`s whose
 `NetworkVariable` and RPC fields are declared as class fields; the host calls
@@ -152,9 +166,13 @@ export const SoldierPrefab = new NetworkPrefab('Soldier', (go) => { go.addCompon
    (copy the pattern in `game/test/scene.test.ts`).
 3. Anything visual: `bun run screenshot`, then look at the PNG. It can drive the game:
    `bun run screenshot --click 640,360 --key Space --eval "synergy.Time.frameCount"`.
+4. To see what is in the scene without an image, print `Debug.hierarchy()` in a test, or
+   run `bun run screenshot --hierarchy`: every GameObject with its components, position
+   and the values of its scripts' fields. Check it before guessing why something is missing.
 
-A passing type-check does not mean a script runs: a misspelled message name
-(`Update`, `onUpdate`) type-checks and never fires. Test or screenshot behaviour changes.
+A passing type-check does not mean a script runs. Unity-cased messages (`Update`) are
+caught, but a method the engine has no reason to call (`onUpdate`, `tick`) only draws a
+warning or nothing at all. Test or screenshot behaviour changes.
 
 ## Conventions
 
