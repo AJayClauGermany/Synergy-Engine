@@ -74,7 +74,7 @@ Read `docs/unity-to-synergy.md` for the full map. The ones that cause bugs:
 7. **Coroutines are generators**: `*run(): IEnumerator { yield new WaitForSeconds(1); }`, started
    with `this.startCoroutine(this.run())` (call it).
 8. **Lights aim along -Y.** Use `light.direction = ...`.
-9. **No rigidbody physics, animation, audio, sprites or particles yet.** Colliders are for
+9. **No rigidbody physics, animation, audio or particles yet.** Colliders are for
    raycasts only. Reach PlayCanvas directly via `gameObject.entity` / `engine.app` when needed.
    `docs/porting-notes.md` lists what is missing and in what order to build it.
 
@@ -111,6 +111,11 @@ For movement ranges and routes use `findReachable` / `findPath` with `Hex.neighb
 
 **Animate something.** Short one-off motion: `Tween.move(transform, target, 0.3)`.
 Multi-step sequences: a coroutine (which can `yield` a tween).
+
+**Mix 3D, sprites and UI images.** Meshes and `Assets.loadModel` models, `SpriteRenderer`
+(2D images in the world, facing +Z) and a `Canvas` with `Image` children (screen-space UI,
+laid out with `RectTransform`) all live in one scene; see `game/src/scenes/ShowcaseScene.ts`.
+Load images with `Assets.loadSprite(url)` (they load as sRGB colour textures).
 
 **Show something in the HUD.** Add an `Observable` to `game/src/hud.ts`, set `.value` from
 game code, read it in a component with `useObservable`. Replace objects/arrays rather than

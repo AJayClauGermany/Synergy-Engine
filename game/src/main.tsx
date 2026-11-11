@@ -1,11 +1,13 @@
 import * as synergy from '@synergy/engine';
 import { Engine, SceneManager } from '@synergy/engine';
 import { mountUI } from '@synergy/ui';
+import { buildShowcaseScene } from './scenes/ShowcaseScene';
 import { buildSkirmishScene } from './scenes/SkirmishScene';
 import { Hud } from './ui/Hud';
 
 // Scenes are registered by name, like Unity's "Scenes in Build" list.
 SceneManager.register('Skirmish', buildSkirmishScene);
+SceneManager.register('Showcase', buildShowcaseScene);
 
 async function main() {
   const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -15,11 +17,12 @@ async function main() {
   //   synergy.GameObject.find('Board'), synergy.engine.stop(), synergy.engine.step(), ...
   Object.assign(globalThis, { synergy: { ...synergy, engine } });
 
-  mountUI(<Hud />, { engine });
-
   // `?scene=Name` opens a different registered scene, handy while building new ones.
   const requested = new URLSearchParams(location.search).get('scene');
-  await SceneManager.loadScene(requested && SceneManager.isRegistered(requested) ? requested : 'Skirmish');
+  const scene = requested && SceneManager.isRegistered(requested) ? requested : 'Skirmish';
+  // The React HUD belongs to the Skirmish game; other scenes bring their own UI.
+  if (scene === 'Skirmish') mountUI(<Hud />, { engine });
+  await SceneManager.loadScene(scene);
   document.documentElement.dataset.ready = 'true';
 }
 

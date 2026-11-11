@@ -14,59 +14,10 @@ import {
 import { Color } from '../math/Color';
 import type { Vector3 } from '../math/Vector3';
 import { BoundsInt, type CellLike, cellKey, Vector3Int } from '../math/Vector3Int';
-import type { Texture } from '../components/rendering';
+import type { Sprite } from '../components/Sprite';
 import { Grid } from './Grid';
 
 const DEFAULT_SHAPE: Readonly<GridShape> = Object.freeze(defaultGridShape());
-
-/**
- * A rectangular piece of a texture. Unity: `Sprite`. Tiles use it for their artwork.
- *
- *   const sheet = await Assets.loadTexture(terrainUrl);
- *   const [grass, sand, water] = Sprite.slice(sheet, 3, 1);
- */
-export class Sprite {
-  /**
-   * Texture coordinates of the rectangle's edges: left, bottom, right, top. In PlayCanvas
-   * `v` is 0 at the TOP row of an image, so the bottom edge has the larger `v`.
-   */
-  readonly uv: readonly [left: number, bottom: number, right: number, top: number];
-
-  /**
-   * `rect` is in pixels with the origin at the image's TOP-left, as in image editors.
-   * (Unity measures sprite rects from the bottom-left.) Omit it to use the whole texture.
-   */
-  constructor(
-    readonly texture: Texture,
-    readonly rect?: { x: number; y: number; width: number; height: number },
-  ) {
-    if (!rect) {
-      this.uv = [0, 1, 1, 0];
-    } else {
-      const width = texture.width || 1;
-      const height = texture.height || 1;
-      this.uv = [
-        rect.x / width,
-        (rect.y + rect.height) / height,
-        (rect.x + rect.width) / width,
-        rect.y / height,
-      ];
-    }
-  }
-
-  /** Cuts a sprite sheet into `columns` x `rows` equal sprites, row by row from the top-left. */
-  static slice(texture: Texture, columns: number, rows: number): Sprite[] {
-    const width = texture.width / columns;
-    const height = texture.height / rows;
-    const sprites: Sprite[] = [];
-    for (let row = 0; row < rows; row++) {
-      for (let column = 0; column < columns; column++) {
-        sprites.push(new Sprite(texture, { x: column * width, y: row * height, width, height }));
-      }
-    }
-    return sprites;
-  }
-}
 
 /** What a tile looks like in one particular cell. Unity: `TileData`. */
 export interface TileData {

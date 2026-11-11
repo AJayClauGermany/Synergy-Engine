@@ -47,7 +47,7 @@ export class Spinner extends MonoBehaviour {
 | 11 | Euler order Z, X, Y | Euler order X, Y, Z | PlayCanvas convention. Single-axis rotations are identical. |
 | 12 | Mesh triangles are clockwise | Counter-clockwise | Follows from the right-handed world. |
 | 13 | Rigidbody physics, collisions, triggers | **Not available yet.** Colliders exist for raycasts and overlap queries only | Kept out of the core to stay small. |
-| 14 | UI: uGUI / UI Toolkit | React, via `@synergy/ui` | See below. |
+| 14 | UI: uGUI / UI Toolkit | In-scene `Canvas` + `Image` for UI images; React (`@synergy/ui`) for interactive HUDs | See below. |
 | 15 | `Invoke("Method", 2f)` | `this.invoke(this.method, 2)` | Pass the function, not its name. |
 | 16 | `[SerializeField] private` vs `private` | `instantiate` copies a script's fields except those starting with `_`, functions, and `UnityEvent`/`Observable`/`Map`/`Set` instances. Arrays and object literals are deep-copied | There is no serializer; this is the stand-in. |
 | 17 | `Random` is one global generator | `new Random(seed)` is an object you own | Deterministic rules need an explicit, seedable generator. Its numbers do not match Unity's. |
@@ -160,7 +160,19 @@ Iterate children with `for (const child of transform)`.
 | `new Material(shader)`, `material.color`, `mainTexture` | `new Material()`, `color`, `mainTexture`, `metallic`, `smoothness`, `emissionColor` |
 | `new Mesh { vertices, triangles }`, `RecalculateNormals()` | `new Mesh()`, `vertices`, `triangles`, `recalculateNormals()` |
 | `Light` (type, color, intensity, range, spotAngle, shadows) | same, plus `direction` |
-| `Resources.Load` / Addressables | `await Assets.loadModel(url)`, `Assets.loadTexture(url)` |
+| `Resources.Load` / Addressables | `await Assets.loadModel(url)`, `Assets.loadTexture(url)`, `Assets.loadSprite(url)` |
+
+### Sprites (2D in a 3D scene)
+
+| Unity | Synergy |
+|-------|---------|
+| `Sprite`, `Sprite.Create(texture, rect, pivot, pixelsPerUnit)` | `new Sprite(texture, rect?, { pivot, pixelsPerUnit })`, `Sprite.create(...)`, `Sprite.slice(texture, columns, rows)`. `rect` is measured from the image's **top**-left |
+| `SpriteRenderer` (`sprite`, `color`, `flipX`, `flipY`, `sortingOrder`, `bounds`) | same. Faces +Z (toward an unrotated camera); unlit, alpha-blended, depth-tested against 3D meshes |
+| Sorting layers | Not available; use `sortingOrder` (higher draws on top, before distance is considered) |
+
+Sprites, meshes and loaded models share one scene and one depth buffer, so a cube in
+front of a sprite hides it. `?scene=Showcase` in the sample game shows all three together
+with canvas UI.
 
 ### Tile maps
 
@@ -193,11 +205,21 @@ Unity has none built in; this covers the common DOTween calls.
 
 ### UI
 
-The HUD is React, drawn over the canvas (think Screen Space - Overlay).
+Two complementary ways, usable together:
+
+- **In-scene UI images**, the uGUI way: a `Canvas` GameObject with `Image` children laid
+  out by `RectTransform`. Drawn by PlayCanvas over the 3D world and sprites. Good for
+  icons, frames, bars and badges. Not clickable yet, and there is no `Text`.
+- **The React HUD** (`@synergy/ui`), drawn over the canvas as DOM: text, buttons, forms.
 
 | Unity | Synergy |
 |-------|---------|
-| Canvas + UI components | `mountUI(<Hud />, { engine })` |
+| `Canvas` (Screen Space - Overlay), `sortingOrder` | `Canvas` (overlay only), `sortingOrder` 0-127 |
+| `CanvasScaler` (Constant Pixel Size, Scale With Screen Size, `matchWidthOrHeight`) | same. One unit is one **CSS** pixel at `scaleFactor` 1 |
+| `RectTransform` (`anchorMin`, `anchorMax`, `pivot`, `anchoredPosition`, `sizeDelta`, `offsetMin`, `offsetMax`, `rect`) | same, but it is a component beside `transform`: `getComponent(RectTransform)`. `Image` adds it |
+| `Image` (`sprite`, `color`, `SetNativeSize()`) | same, Simple type only. No sprite = a flat coloured rectangle |
+| `transform.SetParent(canvas, false)`, `SetAsLastSibling()` | same; later siblings draw on top |
+| Canvas + interactive UI components | `mountUI(<Hud />, { engine })` |
 | Binding UI to game data | Game code writes an `Observable`; components read it with `useObservable(obs)` |
 | World Space canvas / `WorldToScreenPoint` for health bars | `<WorldAnchor target={gameObject}>` |
 | `EventSystem.IsPointerOverGameObject()` | Not needed: clicks on HUD controls never reach `Input` |
@@ -214,7 +236,7 @@ applies them in the same order: [multiplayer.md](multiplayer.md).
 ## Not implemented yet
 
 Rigidbodies and collision/trigger messages, animation (Animator), audio (AudioSource),
-SpriteRenderer, particles, NavMesh (grid pathfinding exists), skyboxes, post-processing
+particles, sorting layers, sliced/filled/clickable UI images, UI text, NavMesh (grid pathfinding exists), skyboxes, post-processing
 wrappers, gamepad and touch gestures. [porting-notes.md](porting-notes.md) lists these
 in priority order.
 

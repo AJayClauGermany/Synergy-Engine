@@ -30,7 +30,10 @@ export interface EngineOptions {
    * does not freeze the game, as in Unity).
    */
   throwOnError?: boolean;
-  /** Extra PlayCanvas component systems (e.g. `pc.SoundComponentSystem`). Render, camera and light are always on. */
+  /**
+   * Extra PlayCanvas component systems (e.g. `pc.SoundComponentSystem`). Render, camera,
+   * light, screen and element (the last two back `Canvas`/`Image`) are always on.
+   */
   componentSystems?: (typeof pc.ComponentSystem)[];
   /** Extra PlayCanvas resource handlers. Texture and container (glTF) are always on. */
   resourceHandlers?: (typeof pc.ResourceHandler)[];
@@ -133,6 +136,8 @@ export class Engine {
       pc.RenderComponentSystem,
       pc.CameraComponentSystem,
       pc.LightComponentSystem,
+      pc.ScreenComponentSystem,
+      pc.ElementComponentSystem,
       ...(options.componentSystems ?? []),
     ];
     appOptions.resourceHandlers = [

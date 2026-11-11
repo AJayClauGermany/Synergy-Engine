@@ -11,10 +11,12 @@ procedure and the traps.
 ## Procedure
 
 1. **Check the feature exists.** Not available yet: Rigidbody and collision/trigger
-   messages, Animator, AudioSource, SpriteRenderer, ParticleSystem, NavMesh, uGUI. Say so
-   up front and propose the substitute (kinematic movement with raycasts, PlayCanvas
-   directly through `gameObject.entity`, React for UI) instead of inventing an API.
-   Available and easy to miss: `Grid`/`Tilemap`/`Tile` (including Unity's hex layout),
+   messages, Animator, AudioSource, ParticleSystem, NavMesh, uGUI Text/Button/sliced
+   images. Say so up front and propose the substitute (kinematic movement with raycasts,
+   PlayCanvas directly through `gameObject.entity`, React for interactive UI) instead of
+   inventing an API.
+   Available and easy to miss: `SpriteRenderer`, `Canvas`/`CanvasScaler`/`RectTransform`/`Image`,
+   `Grid`/`Tilemap`/`Tile` (including Unity's hex layout),
    `Tween` for DOTween calls, seeded `Random`, grid pathfinding. `docs/porting-notes.md`
    maps the original Unity project's packages one by one.
 2. **Translate mechanically:**

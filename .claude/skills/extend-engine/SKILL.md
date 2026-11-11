@@ -52,7 +52,7 @@ Internal hooks (all optional): `_attach`, `_awake`, `_enable`, `_disable`,
 overrides these; it uses the public MonoBehaviour messages.
 
 If the feature needs a PlayCanvas component system that is not on by default (only
-render, camera and light are), add it in `Engine`'s constructor only if it is small and
+render, camera, light, screen and element are), add it in `Engine`'s constructor only if it is small and
 universally needed. Otherwise document that games pass it via
 `Engine.create({ componentSystems: [pc.SoundComponentSystem] })`.
 

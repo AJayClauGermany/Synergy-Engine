@@ -3,17 +3,20 @@ import { type GameObject, gameObjectOf } from '../core/GameObject';
 import { currentEngine } from '../core/runtime';
 import type { Transform } from '../core/Transform';
 import type { Texture } from '../components/rendering';
+import { Sprite, type SpriteOptions } from '../components/Sprite';
 
-function load<T>(url: string, type: string): Promise<pc.Asset & { resource: T }> {
+function load<T>(url: string, type: string, data: Record<string, unknown> = {}): Promise<pc.Asset & { resource: T }> {
   const engine = currentEngine();
-  const cacheKey = `asset:${type}:${url}`;
+  const cacheKey = `asset:${type}:${JSON.stringify(data)}:${url}`;
   const cached = engine.cache.get(cacheKey) as Promise<pc.Asset & { resource: T }> | undefined;
   if (cached) return cached;
   const promise = new Promise<pc.Asset & { resource: T }>((resolve, reject) => {
-    engine.app.assets.loadFromUrl(url, type, (error, asset) => {
-      if (error || !asset) reject(new Error(`Failed to load ${type} "${url}": ${error ?? 'unknown error'}`));
-      else resolve(asset as pc.Asset & { resource: T });
-    });
+    const name = url.startsWith('data:') ? type : (url.split(/[?#]/)[0]?.split('/').pop() ?? type);
+    const asset = new pc.Asset(name, type, { url }, data);
+    asset.once('load', () => resolve(asset as pc.Asset & { resource: T }));
+    asset.once('error', (error: unknown) => reject(new Error(`Failed to load ${type} "${url}": ${error ?? 'unknown error'}`)));
+    engine.app.assets.add(asset);
+    engine.app.assets.load(asset);
   });
   engine.cache.set(cacheKey, promise);
   // A failed load should be retried next time rather than cached forever.
@@ -61,9 +64,23 @@ export class Assets {
     return new Model(name, asset.resource);
   }
 
-  /** Loads an image as a texture, e.g. for `material.mainTexture`. */
-  static async loadTexture(url: string): Promise<Texture> {
-    return (await load<Texture>(url, 'texture')).resource;
+  /**
+   * Loads an image as a texture, e.g. for `material.mainTexture` or `new Sprite(texture)`.
+   *
+   * Images are colour data stored in sRGB by default, like Unity's "sRGB (Color Texture)"
+   * import setting, which every renderer (meshes, sprites, tiles, UI) decodes correctly.
+   * Pass `{ srgb: false }` for data textures such as normal maps or masks.
+   */
+  static async loadTexture(url: string, options: { srgb?: boolean } = {}): Promise<Texture> {
+    return (await load<Texture>(url, 'texture', { srgb: options.srgb ?? true })).resource;
+  }
+
+  /**
+   * Loads an image as a Sprite covering the whole image, for a `SpriteRenderer` or a UI
+   * `Image`. For sprite sheets, load the texture and use `Sprite.slice`.
+   */
+  static async loadSprite(url: string, options: SpriteOptions = {}): Promise<Sprite> {
+    return new Sprite(await Assets.loadTexture(url), undefined, options);
   }
 }
 
