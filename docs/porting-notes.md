@@ -16,7 +16,7 @@ same engine, so there is no second renderer to integrate.
 | Custom hex maths, weighted pathfinding | Movement, weapon patterns | `Hex`, `findPath`, `findReachable` in `@synergy/engine/grid` (pure, usable server-side) | **Built in** |
 | **DOTween / DOTween Pro** | UI transitions, fades, health-bar effects, camera tweens | `Tween` (`to`, `move`, `rotate`, `scale`, eases, loops, delay, `yield` in coroutines). CSS transitions for the React HUD | **Built in** (core subset) |
 | Unity `Random` in rules and generation | Combat rolls, map generation | Seeded `Random` class. Same seed gives the same sequence everywhere, but **not** Unity's sequence | **Built in**, see caveat below |
-| **uGUI, TextMesh Pro** | Menus, HUD, notifications | React via `@synergy/ui`; fonts and text are plain CSS | **Built in** (different approach) |
+| **uGUI, TextMesh Pro** | Menus, HUD, notifications | In-scene `Canvas`, `CanvasScaler`, `RectTransform`, `Image` for UI images; React via `@synergy/ui` for text and interactive UI | **Built in** (images in-scene; text and buttons in React) |
 | **Multiplayer Widgets** | Lobby, player list | Build from React + `ConvexLobby.watchOpenRooms` / `watchRoom` | Building blocks exist |
 | **Kamgam UI blur** | Blurred panel backgrounds | CSS `backdrop-filter` (the sample HUD uses it) | **Covered** |
 | **Newtonsoft.Json** | Transport, saves, schemas | Native JSON and TypeScript types; Convex validators on the server. Add Zod if client-side validation of untrusted data is needed | **Covered** |
@@ -27,7 +27,7 @@ same engine, so there is no second renderer to integrate.
 | **Unity Authentication / Multiplayer Services** | Identity for the campaign backend, sessions | Not built. Needs an auth provider on the Convex side | **To do**, see below |
 | **URP, custom shaders, post-processing** | Globe rendering and effects | PlayCanvas materials through `material.pcMaterial`; nothing Unity-specific carries over | **To rebuild** |
 | **All In 1 Sprite Shader** | Outlines, construction fade | Fade: `material.color` alpha or a `Tween`. Outline: not wrapped | **To do** |
-| **2D Sprites** (SpriteRenderer) | Units and props as sprites | `Sprite` exists for tiles; no `SpriteRenderer` yet. Meanwhile: a textured `Quad`, or tiles | **To do** |
+| **2D Sprites** (SpriteRenderer) | Units and props as sprites | `Sprite` (pivot, pixels per unit), `SpriteRenderer` (`color`, `flipX/Y`, `sortingOrder`), `Assets.loadSprite`. No sorting layers or sprite animation | **Built in** |
 | **Unity Audio** | Music, sound effects | Not wrapped | **To do** |
 | 2D Animation, Aseprite/PSD importers, SpriteShape, Tilemap Extras | Authoring pipeline | Export images and data; no runtime equivalent needed unless sprite animation is required | Later, if needed |
 | Timeline, Visual Scripting, Vivox | Installed; no clear use found | Nothing planned | Not needed |

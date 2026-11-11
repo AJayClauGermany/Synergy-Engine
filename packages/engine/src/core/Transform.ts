@@ -217,6 +217,16 @@ export class Transform extends Component implements Iterable<Transform> {
     return gameObjectOf(child as pc.Entity).transform;
   }
 
+  /** Moves this transform before its siblings (drawn first, i.e. underneath, in UI). */
+  setAsFirstSibling(): void {
+    this.setSiblingIndex(0);
+  }
+
+  /** Moves this transform after its siblings (drawn last, i.e. on top, in UI). */
+  setAsLastSibling(): void {
+    this.setSiblingIndex(Number.MAX_SAFE_INTEGER);
+  }
+
   /** Iterate direct children: `for (const child of transform) { ... }`. */
   *[Symbol.iterator](): IterableIterator<Transform> {
     // Copy first so children may be re-parented or destroyed while iterating.
@@ -248,6 +258,7 @@ export class Transform extends Component implements Iterable<Transform> {
     return this._node.parent ? this._node.parent.children.indexOf(this._node) : 0;
   }
 
+  /** Moves this transform among its siblings. Under a Canvas, later siblings draw on top. */
   setSiblingIndex(index: number): void {
     const parentNode = this._node.parent;
     if (!parentNode) return;

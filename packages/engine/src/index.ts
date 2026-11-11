@@ -43,12 +43,18 @@ export {
 export { Camera, CameraClearFlags } from './components/Camera';
 export { Light, LightType, LightShadows } from './components/Light';
 export { Mesh, Material, MeshFilter, MeshRenderer, type Texture } from './components/rendering';
+export { Sprite, type SpriteRect, type SpriteOptions } from './components/Sprite';
+export { SpriteRenderer } from './components/SpriteRenderer';
 import './components/primitives';
 
 export { Collider, BoxCollider, SphereCollider, CapsuleCollider, type RaycastHit } from './physics/Collider';
 export { Physics, LayerMask } from './physics/Physics';
 
 export { Assets, Model } from './assets/Assets';
+
+export { Canvas, CanvasScaler, RenderMode, ScaleMode } from './ui/Canvas';
+export { RectTransform, type Rect } from './ui/RectTransform';
+export { Image } from './ui/Image';
 
 export {
   CellLayout,
@@ -64,5 +70,5 @@ export {
   type PathResult,
 } from './grid';
 export { Grid, type GridHit } from './tilemap/Grid';
-export { Tilemap, TileBase, Tile, Sprite, type TileData } from './tilemap/Tilemap';
+export { Tilemap, TileBase, Tile, type TileData } from './tilemap/Tilemap';
 export { TilemapRenderer } from './tilemap/TilemapRenderer';

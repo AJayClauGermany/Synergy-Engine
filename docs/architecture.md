@@ -21,13 +21,15 @@ in a renderer: `@synergy/engine/math` (vectors, colours, `Random`) and
 
 | Synergy | PlayCanvas |
 |---------|------------|
-| `Engine` | `pc.AppBase` created with only the render, camera and light systems |
+| `Engine` | `pc.AppBase` created with only the render, camera, light, screen and element systems |
 | `GameObject` | wraps one `pc.Entity` (`gameObject.entity`) |
 | `Transform` | reads and writes that entity's graph node |
 | `Scene` | a root entity under `app.root`; `new GameObject()` is parented to the active scene's root |
 | `Camera`, `Light` | wrap the entity's `camera` / `light` component |
 | `MeshFilter` + `MeshRenderer` | share the entity's `render` component |
 | `Material` | wraps a `pc.StandardMaterial` |
+| `SpriteRenderer` | a `render` component with one quad and its own unlit `pc.StandardMaterial` |
+| `Canvas`, `RectTransform`, `Image` | wrap the entity's `screen` / `element` components (PlayCanvas UI, drawn on the UI layer) |
 | `Grid`, `Tilemap` | Synergy data structures over `grid/`; `TilemapRenderer` builds one `pc.Mesh` per texture |
 | `MonoBehaviour`, coroutines, `Time`, `Input`, `Physics` | implemented by Synergy, not PlayCanvas scripts |
 
