@@ -1,4 +1,4 @@
-import { Engine, MonoBehaviour } from '@synergy/engine';
+import { Engine, MonoBehaviour, type UseCamelCase } from '@synergy/engine';
 import type { NetworkManager } from './NetworkManager';
 import { NetworkObject } from './NetworkObject';
 import { NetworkVariableBase } from './NetworkVariable';
@@ -35,6 +35,15 @@ type NetworkMessage = 'onNetworkSpawn' | 'onNetworkDespawn' | 'onGainedOwnership
  * and give each a unique field name; that name identifies it on the wire.
  */
 export abstract class NetworkBehaviour extends MonoBehaviour {
+  /** @internal Adds the network messages to the ones the engine checks the spelling of. */
+  static override readonly _messageNames: readonly string[] = [
+    ...MonoBehaviour._messageNames,
+    'onNetworkSpawn',
+    'onNetworkDespawn',
+    'onGainedOwnership',
+    'onLostOwnership',
+  ];
+
   /** @internal */ _networkObject: NetworkObject | null = null;
   /** @internal */ _behaviourIndex = -1;
   /** @internal */ _variables = new Map<string, NetworkVariableBase>();
@@ -53,6 +62,16 @@ export abstract class NetworkBehaviour extends MonoBehaviour {
   protected onGainedOwnership?(): void;
   /** This machine's player stopped being the owner. */
   protected onLostOwnership?(): void;
+
+  // Unity's spellings are type errors, as in MonoBehaviour: they would never be called.
+  /** @deprecated Write `onNetworkSpawn()`. */
+  protected declare OnNetworkSpawn?: UseCamelCase<'onNetworkSpawn'>;
+  /** @deprecated Write `onNetworkDespawn()`. */
+  protected declare OnNetworkDespawn?: UseCamelCase<'onNetworkDespawn'>;
+  /** @deprecated Write `onGainedOwnership()`. */
+  protected declare OnGainedOwnership?: UseCamelCase<'onGainedOwnership'>;
+  /** @deprecated Write `onLostOwnership()`. */
+  protected declare OnLostOwnership?: UseCamelCase<'onLostOwnership'>;
 
   // ---- Where am I? ----------------------------------------------------------------------
 

@@ -8,6 +8,7 @@ export { EngineObject, isAlive } from './core/EngineObject';
 export { GameObject, gameObjectOf } from './core/GameObject';
 export { Component, Behaviour, type ComponentClass, type ConcreteComponentClass } from './core/Component';
 export { MonoBehaviour } from './core/MonoBehaviour';
+export type { UseCamelCase } from './core/messageNames';
 export { Transform, Space } from './core/Transform';
 export { PrimitiveType } from './core/hooks';
 export {
@@ -26,6 +27,7 @@ export {
 export { Time } from './core/Time';
 export { Input, KeyCode, Screen } from './core/Input';
 export { Debug } from './core/Debug';
+export type { HierarchyOptions } from './core/hierarchy';
 export { RenderSettings } from './core/RenderSettings';
 export { UnityEvent, Observable } from './core/events';
 export { Tween, Ease, LoopType, type EaseFunction } from './core/Tween';

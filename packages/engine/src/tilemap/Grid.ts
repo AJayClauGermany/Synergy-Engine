@@ -43,6 +43,12 @@ export class Grid extends Behaviour {
   /** @internal Bumped whenever the layout changes, so renderers know to rebuild. */
   _version = 0;
 
+  override _summary(): string {
+    const { x, y, z } = this.cellSize;
+    const size = [x, y, z].map((value) => Math.round(value * 1000) / 1000).join(', ');
+    return `${this.cellLayout} cells, swizzle ${this.cellSwizzle}, cellSize (${size})`;
+  }
+
   get cellSize(): Vector3 {
     return this._shape.cellSize;
   }

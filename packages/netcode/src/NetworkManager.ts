@@ -269,6 +269,14 @@ export class NetworkManager extends MonoBehaviour {
     return { tick, time: tick / rate };
   }
 
+  /** What `Debug.hierarchy()` says about the manager. */
+  override _summary(): string {
+    if (this.role === 'none') return 'not started';
+    if (!this.connected) return `${this.role}, connecting`;
+    const clients = this.isServer ? `, clients [${this.connectedClientsIds.join(', ')}]` : `, client id ${this.clientId}`;
+    return `${this.role}${clients}, ${this.spawnManager.spawnedObjects.size} spawned, tick ${this.tick}`;
+  }
+
   /** @internal Inside an RPC handler: the client that called it. -1 outside one. */
   get currentRpcSender(): number {
     return this.rpcSenders[this.rpcSenders.length - 1] ?? -1;

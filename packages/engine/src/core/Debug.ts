@@ -1,6 +1,7 @@
 import * as pc from 'playcanvas';
 import { Color } from '../math/Color';
 import type { Vector3 } from '../math/Vector3';
+import { describeHierarchy, type HierarchyOptions } from './hierarchy';
 import { currentEngineOrNull } from './runtime';
 
 const start = new pc.Vec3();
@@ -24,6 +25,26 @@ export class Debug {
   /** Logs an error (it does not throw) when `condition` is false. */
   static assert(condition: unknown, ...message: unknown[]): void {
     if (!condition) console.error('Assertion failed:', ...message);
+  }
+
+  /**
+   * What is in the scene right now, as text: Unity's Hierarchy window with the
+   * Inspector's values beside it. Every GameObject with its components, tag, position,
+   * and the public fields of its scripts.
+   *
+   *   console.log(Debug.hierarchy());
+   *
+   *   Scene "Skirmish" (active)
+   *     Camera Rig <CameraRig> at (0, 0, 0.8)
+   *       | CameraRig: distance=15, camera=Main Camera (Transform)
+   *       Main Camera <Camera> tag=MainCamera at (0, 10.6, 11.4) rot (-45, 0, 0)
+   *
+   * Use it in a test to see why something is not where you expect, or from the browser
+   * with `bun run screenshot --hierarchy`. Positions are world positions; they, rotation
+   * and scale are left out when they are the defaults. `root` narrows it to one object.
+   */
+  static hierarchy(options: HierarchyOptions = {}): string {
+    return describeHierarchy(options);
   }
 
   /** Draws a line for the current frame. Call it every frame to keep it visible. */

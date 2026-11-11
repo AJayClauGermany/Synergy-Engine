@@ -47,6 +47,14 @@ export class NetworkObject extends MonoBehaviour {
   /** @internal Sends held back until the spawn message has gone out. */
   _heldSends: (() => void)[] = [];
 
+  /** What `Debug.hierarchy()` says about this object. */
+  override _summary(): string {
+    if (!this._spawned) return 'not spawned';
+    const owner = this._owner === 0 ? 'the server' : `client ${this._owner}`;
+    const hidden = this._manager?.isServer ? `, visible to clients [${[...this._visibleTo].join(', ')}]` : '';
+    return `id ${this._id}, owned by ${owner}${this._player ? ', player object' : ''}${hidden}`;
+  }
+
   /** Unity: `NetworkObjectId`. 0 until spawned. */
   get networkObjectId(): number {
     return this._id;

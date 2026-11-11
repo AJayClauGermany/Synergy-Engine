@@ -6,6 +6,7 @@ import {
   type Yieldable,
 } from './Coroutine';
 import { Observable, UnityEvent } from './events';
+import { checkMessageNames, type UseCamelCase } from './messageNames';
 import { currentEngine } from './runtime';
 
 /**
@@ -24,6 +25,27 @@ import { currentEngine } from './runtime';
  * in a constructor.
  */
 export abstract class MonoBehaviour extends Behaviour {
+  /**
+   * @internal The messages the engine sends to this kind of script. Subclasses that add
+   * their own (netcode's `onNetworkSpawn`) extend the list, so a misspelling of those is
+   * caught too.
+   */
+  static readonly _messageNames: readonly string[] = [
+    'awake',
+    'onEnable',
+    'start',
+    'update',
+    'lateUpdate',
+    'fixedUpdate',
+    'onDisable',
+    'onDestroy',
+    'onMouseDown',
+    'onMouseUp',
+    'onMouseEnter',
+    'onMouseOver',
+    'onMouseExit',
+  ];
+
   /** @internal */
   _started = false;
   /** @internal */
@@ -60,6 +82,43 @@ export abstract class MonoBehaviour extends Behaviour {
   protected onMouseOver?(): void;
   /** Mouse moved off this object's Collider. */
   protected onMouseExit?(): void;
+
+  // ---- Unity's spellings --------------------------------------------------------------
+  // A method named `Update` would compile and never be called. These declarations turn
+  // that into a type error on the offending line; they produce no code. A check at
+  // run time (see messageNames.ts) covers code that is not type-checked before it runs.
+
+  /** @deprecated Write `awake()`. */
+  protected declare Awake?: UseCamelCase<'awake'>;
+  /** @deprecated Write `onEnable()`. */
+  protected declare OnEnable?: UseCamelCase<'onEnable'>;
+  /** @deprecated Write `start()`. */
+  protected declare Start?: UseCamelCase<'start'>;
+  /** @deprecated Write `update()`. */
+  protected declare Update?: UseCamelCase<'update'>;
+  /** @deprecated Write `lateUpdate()`. */
+  protected declare LateUpdate?: UseCamelCase<'lateUpdate'>;
+  /** @deprecated Write `fixedUpdate()`. */
+  protected declare FixedUpdate?: UseCamelCase<'fixedUpdate'>;
+  /** @deprecated Write `onDisable()`. */
+  protected declare OnDisable?: UseCamelCase<'onDisable'>;
+  /** @deprecated Write `onDestroy()`. */
+  protected declare OnDestroy?: UseCamelCase<'onDestroy'>;
+  /** @deprecated Write `onMouseDown()`. */
+  protected declare OnMouseDown?: UseCamelCase<'onMouseDown'>;
+  /** @deprecated Write `onMouseUp()`. */
+  protected declare OnMouseUp?: UseCamelCase<'onMouseUp'>;
+  /** @deprecated Write `onMouseEnter()`. */
+  protected declare OnMouseEnter?: UseCamelCase<'onMouseEnter'>;
+  /** @deprecated Write `onMouseOver()`. */
+  protected declare OnMouseOver?: UseCamelCase<'onMouseOver'>;
+  /** @deprecated Write `onMouseExit()`. */
+  protected declare OnMouseExit?: UseCamelCase<'onMouseExit'>;
+
+  constructor() {
+    super();
+    checkMessageNames(new.target);
+  }
 
   // ---- Coroutines -------------------------------------------------------------------
 

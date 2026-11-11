@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { destroy, GameObject, instantiate, isAlive, Quaternion, Vector3 } from '@synergy/engine';
-import { NetworkObject, NetworkPrefab } from '../src';
+import { Debug, destroy, GameObject, instantiate, isAlive, Quaternion, Vector3 } from '@synergy/engine';
+import { NetworkBehaviour, NetworkObject, NetworkPrefab } from '../src';
 import { Announcer, AnnouncerPrefab, CarPrefab, CratePrefab, NestedPrefab, TestNetwork, Unit, Wheel } from './harness';
 
 let net: TestNetwork;
@@ -14,6 +14,35 @@ function connected() {
   net.pump();
   return { host, alice, bob };
 }
+
+describe('developer feedback', () => {
+  test("Unity's spelling of a network message is refused, like the engine's own messages", () => {
+    class Shouter extends NetworkBehaviour {
+      // @ts-expect-error The type-checker refuses it too.
+      OnNetworkSpawn() {}
+    }
+    net = new TestNetwork();
+    const host = net.host();
+    expect(() => host.run(() => new GameObject('S').addComponent(Shouter))).toThrow(
+      'Shouter.OnNetworkSpawn() will never be called: message names are camelCase here. Rename it to onNetworkSpawn().',
+    );
+  });
+
+  test('Debug.hierarchy shows the values of network variables', () => {
+    net = new TestNetwork();
+    const host = net.host();
+    const crate = host.make(CratePrefab);
+    host.run(() => {
+      crate.spawn();
+      (crate.getComponent(Unit) as Unit).hp.value = 75;
+    });
+    const text = host.run(() => Debug.hierarchy({ root: crate.gameObject }));
+    expect(text).toContain('Crate <NetworkObject, Unit>');
+    expect(text).toContain('| NetworkObject: id 2, owned by the server, visible to clients []');
+    expect(text).toContain('hp=NetworkVariable(75)');
+    expect(text).toContain('tags=NetworkList(0 items)');
+  });
+});
 
 describe('spawning', () => {
   test('a spawned object appears on every machine with its transform, owner and variables', () => {

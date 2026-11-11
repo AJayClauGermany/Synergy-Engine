@@ -230,6 +230,13 @@ export class Tilemap extends Behaviour {
     return [...this._entries.values()].map((entry) => entry.cell);
   }
 
+  override _summary(): string {
+    const count = this._entries.size;
+    if (count === 0) return 'no tiles';
+    const { min, max } = this.cellBounds;
+    return `${count} tiles, cells (${min.x}, ${min.y}) to (${max.x - 1}, ${max.y - 1})`;
+  }
+
   /** The smallest box containing every painted cell. */
   get cellBounds(): BoundsInt {
     if (this._entries.size === 0) return new BoundsInt();

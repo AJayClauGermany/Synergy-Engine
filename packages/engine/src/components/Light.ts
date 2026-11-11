@@ -65,6 +65,10 @@ export class Light extends Behaviour {
     this.gameObject.entity.removeComponent('light');
   }
 
+  override _summary(): string {
+    return `${this.type}, intensity ${this.intensity}`;
+  }
+
   /** The world-space direction a directional or spot light shines in. Setting it rotates the transform. */
   get direction(): Vector3 {
     return this.transform.up.neg();

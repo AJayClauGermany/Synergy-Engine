@@ -77,6 +77,10 @@ export class Camera extends Behaviour {
     this.gameObject.entity.removeComponent('camera');
   }
 
+  override _summary(): string {
+    return this.orthographic ? `orthographic, size ${this.orthographicSize}` : `fieldOfView ${this.fieldOfView}`;
+  }
+
   /** Vertical field of view in degrees. */
   get fieldOfView(): number {
     return this.component.fov;

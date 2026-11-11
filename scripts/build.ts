@@ -1,6 +1,10 @@
 /**
- * Builds the game into a static site: `bun run build [--outdir dist]`.
+ * Builds the game into a static site: `bun run build [--outdir dist] [--keep-names]`.
  * The output can be hosted anywhere, wrapped by Electrobun, or served by the Cloudflare Worker.
+ *
+ * `--keep-names` leaves class and function names as written, so error messages
+ * ("Exception in UnitView.update") and `Debug.hierarchy()` are readable. The screenshot
+ * tool builds this way. It makes the download about a sixth larger, so releases do without.
  */
 import { cp, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -10,7 +14,7 @@ import { parseArgs } from 'node:util';
 const root = path.resolve(import.meta.dir, '..');
 const { values } = parseArgs({
   args: Bun.argv.slice(2),
-  options: { outdir: { type: 'string', default: 'dist' } },
+  options: { outdir: { type: 'string', default: 'dist' }, 'keep-names': { type: 'boolean', default: false } },
 });
 const outdir = path.resolve(root, values.outdir);
 
@@ -23,7 +27,7 @@ const result = await Bun.build({
   target: 'browser',
   // Dynamic `import()`s become separate files, so optional code (e.g. networking) loads on demand.
   splitting: true,
-  minify: true,
+  minify: values['keep-names'] ? { whitespace: true, syntax: true, identifiers: false } : true,
   sourcemap: 'linked',
   // Only variables starting with PUBLIC_ are inlined into the bundle. Never put secrets in them.
   env: 'PUBLIC_*',
