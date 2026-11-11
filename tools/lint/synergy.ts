@@ -195,6 +195,9 @@ function fileStem(filename: string): string {
  * and only ones that use `this`. Two calls bind the method themselves and are left alone:
  * the engine's `invoke` family, and any call that also receives `this` as an argument
  * (PlayCanvas's `on(name, callback, scope)`).
+ *
+ * `startCoroutine(this.run)` is the same slip with another cure (call the method), so it
+ * has its own message.
  */
 const noDetachedMethod: Rule = {
   meta: {

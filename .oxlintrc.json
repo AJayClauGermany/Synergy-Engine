@@ -1,6 +1,10 @@
+// Per-file lint (`bun run lint`). Rules are errors or off: a warning nobody must fix is
+// noise to whoever reads the output. docs/checks.md explains the choices; the checks
+// that need every file at once are in .fallowrc.jsonc.
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["typescript", "unicorn", "oxc", "import", "react", "promise"],
+  // The project's own rules, for the mistakes a Unity port makes.
   "jsPlugins": ["./tools/lint/synergy.ts"],
   "categories": {
     "correctness": "error"
@@ -10,6 +14,8 @@
     "reportUnusedDisableDirectives": "error"
   },
   "rules": {
+    // On top of oxlint's correctness set: the conventions in AGENTS.md, and the JavaScript
+    // behaviours that surprise someone coming from C#.
     "eslint/eqeqeq": ["error", "always", { "null": "ignore" }],
     "eslint/no-var": "error",
     "eslint/prefer-const": "error",
@@ -32,19 +38,27 @@
     "synergy/no-skipped-test": "error",
     "synergy/test-needs-expect": "error",
 
+    // Off, each for a reason:
+    // reports this.invoke(this.tick, 1), the engine's own API; no-detached-method covers the real mistake
     "typescript/unbound-method": "off",
+    // reports `await expect(promise).rejects...`, which bun:test types as not a promise
     "typescript/await-thenable": "off",
+    // reports `${vector}`, though the value types print themselves; no-base-to-string still catches [object Object]
     "typescript/restrict-template-expressions": "off",
+    // `let node = this` is how the engine walks up a hierarchy
     "typescript/no-this-alias": "off",
+    // `for (const x of [...set])` copies on purpose: the loop body changes the set
     "unicorn/no-useless-spread": "off"
   },
   "overrides": [
+    // Game scripts: one per file, named after the class.
     {
       "files": ["game/src/**"],
       "rules": {
         "synergy/behaviour-file-name": "error"
       }
     },
+    // Game rules run on every machine and must give the same answer on each.
     {
       "files": ["game/src/rules/**", "game/src/**/rules.ts", "game/src/**/rules/**"],
       "rules": {
@@ -87,6 +101,7 @@
         ]
       }
     },
+    // The engine defines the axes, and its tests assert the raw numbers.
     {
       "files": ["packages/engine/**"],
       "rules": {
@@ -94,5 +109,5 @@
       }
     }
   ],
-  "ignorePatterns": ["convex/_generated/**", "dist/**", "desktop/**"]
+  "ignorePatterns": ["convex/_generated/**", "dist/**", "desktop/**", ".claude/worktrees/**"]
 }

@@ -17,3 +17,6 @@ desktop/artifacts/
 
 # Agent screenshots
 .screenshots/
+
+# Worktrees that agent tools create for parallel work
+.claude/worktrees/
