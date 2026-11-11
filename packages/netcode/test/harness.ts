@@ -1,5 +1,5 @@
-import { Engine, GameObject, instantiate, Vector3 } from '@synergy/engine';
-import { LoopbackHub, type LoopbackTransport } from '@synergy/net';
+import { type Engine, GameObject, Vector3 } from '@synergy/engine';
+import type { LoopbackTransport } from '@synergy/net';
 import {
   NetworkBehaviour,
   NetworkList,
@@ -14,6 +14,7 @@ import {
   SendTo,
   Serializers,
 } from '../src';
+import { TestMachine, type TestMachineOptions, TestNetwork as BaseTestNetwork } from '../src/testing';
 
 /** A scripted unit that exercises every kind of replicated member. */
 export class Unit extends NetworkBehaviour {
@@ -110,34 +111,8 @@ export const NestedPrefab = new NetworkPrefab('Nested', (go) => {
   inner.addComponent(NetworkObject);
 });
 
-/** One simulated computer: its own engine, its own scene, its own NetworkManager. */
-export class Machine {
-  constructor(
-    readonly id: string,
-    readonly engine: Engine,
-    readonly manager: NetworkManager,
-    readonly transport: LoopbackTransport,
-  ) {}
-
-  run<T>(action: () => T): T {
-    return this.engine.run(action);
-  }
-
-  step(frames = 1, deltaTime = 1 / 30): void {
-    this.engine.stepFrames(frames, deltaTime);
-  }
-
-  /** Objects this machine has spawned, by NetworkObjectId. */
-  object(id: number): NetworkObject {
-    const found = this.manager.spawnManager.spawnedObjects.get(id);
-    if (!found) throw new Error(`${this.id} has no object ${id}`);
-    return found;
-  }
-
-  has(id: number): boolean {
-    return this.manager.spawnManager.spawnedObjects.has(id);
-  }
-
+/** A simulated machine with shortcuts for the test prefabs above. */
+export class Machine extends TestMachine {
   unit(id: number): Unit {
     const unit = this.object(id).getComponent(Unit);
     if (!unit) throw new Error(`${this.id}: object ${id} has no Unit`);
@@ -150,67 +125,20 @@ export class Machine {
     if (!object) throw new Error(`${this.id} has no player object for client ${clientId}`);
     return object.getComponent(Unit) as Unit;
   }
-
-  /** Makes an object from a prefab in this machine's scene (use before `spawn()`). */
-  make(prefab: NetworkPrefab, position = Vector3.zero): NetworkObject {
-    return this.run(() => instantiate(prefab, position).getComponent(NetworkObject) as NetworkObject);
-  }
 }
 
-export interface MachineOptions {
-  /** Called with the manager before anything starts, to change its configuration. */
-  configure?: (manager: NetworkManager) => void;
-}
+export type MachineOptions = TestMachineOptions;
 
-/** Several machines joined by an in-memory network that delivers only when told to. */
-export class TestNetwork {
-  readonly hub = new LoopbackHub({ manual: true });
-  readonly machines: Machine[] = [];
-
-  create(id: string, options: MachineOptions = {}): Machine {
-    const engine = Engine.createHeadless();
-    const transport = this.hub.connect(id);
-    const manager = engine.run(() => {
-      const manager = new GameObject('NetworkManager').addComponent(NetworkManager);
+/** The simulated network from `@synergy/netcode/testing`, with every test prefab registered on each machine. */
+export class TestNetwork extends BaseTestNetwork<Machine> {
+  constructor() {
+    super((manager) => {
       manager.networkConfig.playerPrefab = PlayerPrefab;
       manager.networkPrefabs.add(CratePrefab).add(AnnouncerPrefab).add(CarPrefab).add(NestedPrefab).add(MoverPrefab).add(OwnerMoverPrefab);
-      options.configure?.(manager);
-      return manager;
     });
-    const machine = new Machine(id, engine, manager, transport);
-    this.machines.push(machine);
-    return machine;
   }
 
-  host(id = 'host', options: MachineOptions = {}): Machine {
-    const machine = this.create(id, options);
-    machine.run(() => machine.manager.startHost(machine.transport));
-    return machine;
-  }
-
-  server(id = 'server', options: MachineOptions = {}): Machine {
-    const machine = this.create(id, options);
-    machine.run(() => machine.manager.startServer(machine.transport));
-    return machine;
-  }
-
-  client(id: string, serverId = 'host', options: MachineOptions = {}): Machine {
-    const machine = this.create(id, options);
-    machine.run(() => machine.manager.startClient(machine.transport, serverId));
-    return machine;
-  }
-
-  /** Runs frames on every machine, delivering messages between them each frame. */
-  pump(frames = 8, deltaTime = 1 / 30): void {
-    for (let i = 0; i < frames; i++) {
-      this.hub.flush();
-      for (const machine of this.machines) machine.step(1, deltaTime);
-    }
-    this.hub.flush();
-  }
-
-  dispose(): void {
-    for (const machine of this.machines) machine.engine.dispose();
-    this.machines.length = 0;
+  protected override wrap(id: string, engine: Engine, manager: NetworkManager, transport: LoopbackTransport): Machine {
+    return new Machine(id, engine, manager, transport);
   }
 }

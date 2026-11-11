@@ -16,3 +16,11 @@ function read(get: () => string | undefined): string | undefined {
 
 /** URL of the Convex deployment, e.g. https://happy-animal-123.convex.cloud. Optional. */
 export const convexUrl = read(() => process.env.PUBLIC_CONVEX_URL);
+
+/**
+ * Identifies this build of the game. `bun run build` sets it to a hash of the source, so
+ * two machines agree on it exactly when they run the same code; under `bun run dev` it
+ * is "dev". Give it to netcode as `networkConfig.protocolVersion`, which stops players on
+ * different builds from joining each other.
+ */
+export const buildId = read(() => process.env.PUBLIC_BUILD_ID) ?? 'dev';

@@ -12,6 +12,7 @@ export type {
   ConnectionApprovalResponse,
 } from './NetworkManager';
 export { NetworkObject } from './NetworkObject';
+export { NetworkSceneManager } from './NetworkSceneManager';
 export { NetworkBehaviour } from './NetworkBehaviour';
 export { NetworkPrefab, NetworkPrefabs } from './NetworkPrefab';
 export { NetworkTransform } from './NetworkTransform';

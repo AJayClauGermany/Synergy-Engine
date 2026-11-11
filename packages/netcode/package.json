@@ -6,7 +6,8 @@
   "description": "Netcode for GameObjects for Synergy Engine: NetworkManager, NetworkObject, NetworkBehaviour, NetworkVariable and RPCs, with one player hosting and the rest connecting to them.",
   "exports": {
     ".": "./src/index.ts",
-    "./lobby": "./src/lobby.ts"
+    "./lobby": "./src/lobby.ts",
+    "./testing": "./src/testing.ts"
   },
   "dependencies": {
     "@synergy/engine": "workspace:*",

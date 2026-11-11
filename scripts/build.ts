@@ -20,6 +20,24 @@ const outdir = path.resolve(root, values.outdir);
 
 await rm(outdir, { recursive: true, force: true });
 
+// A fingerprint of the source this build is made from, readable in the game as
+// `buildId` (game/src/env.ts). Netcode refuses to connect two different builds, so the
+// same source must give the same id on every machine: it is a hash of the files, not a
+// timestamp. Set PUBLIC_BUILD_ID yourself to use a release number instead.
+if (!process.env.PUBLIC_BUILD_ID) {
+  const hasher = new Bun.CryptoHasher('sha256');
+  const files: string[] = [];
+  for (const pattern of ['game/src/**/*', 'game/index.html', 'packages/*/src/**/*', 'bun.lock']) {
+    for await (const file of new Bun.Glob(pattern).scan({ cwd: root, onlyFiles: true })) files.push(file);
+  }
+  for (const file of files.sort()) {
+    hasher.update(file);
+    hasher.update(await Bun.file(path.join(root, file)).arrayBuffer());
+  }
+  process.env.PUBLIC_BUILD_ID = hasher.digest('hex').slice(0, 12);
+}
+const buildId = process.env.PUBLIC_BUILD_ID;
+
 const started = performance.now();
 const result = await Bun.build({
   entrypoints: [path.join(root, 'game/index.html')],
@@ -31,7 +49,7 @@ const result = await Bun.build({
   sourcemap: 'linked',
   // Only variables starting with PUBLIC_ are inlined into the bundle. Never put secrets in them.
   env: 'PUBLIC_*',
-  define: { 'process.env.NODE_ENV': '"production"' },
+  define: { 'process.env.NODE_ENV': '"production"', 'process.env.PUBLIC_BUILD_ID': JSON.stringify(buildId) },
 });
 
 if (!result.success) {
@@ -48,6 +66,6 @@ const script = result.outputs
   .filter((output) => output.path.endsWith('.js'))
   .reduce((total, output) => total + output.size, 0);
 console.log(
-  `Built ${path.relative(root, outdir)}/ in ${Math.round(performance.now() - started)} ms ` +
+  `Built ${path.relative(root, outdir)}/ (build ${buildId}) in ${Math.round(performance.now() - started)} ms ` +
     `(${result.outputs.length} files, ${(bytes / 1024).toFixed(0)} kB total, ${(script / 1024).toFixed(0)} kB of JavaScript)`,
 );
