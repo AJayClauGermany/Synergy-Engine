@@ -18,7 +18,8 @@ Project skills:
 | `tile-maps` | building maps and boards: hex or square tiles, layers, cell picking, pathfinding |
 | `port-from-unity` | translating Unity C# or a Unity tutorial into this engine |
 | `verify-changes` | checking a change: type-check, headless tests, screenshots |
-| `multiplayer` | adding commands, sessions, online play or Convex functions |
+| `multiplayer` | adding commands, command sessions, PeerJS or Convex functions |
+| `netcode` | networked objects, `NetworkVariable`s, RPCs, ownership, hosting and joining |
 | `ship-it` | deploying a Cloudflare preview or packaging the desktop app |
 | `extend-engine` | adding a component or API to `packages/engine` |
 

@@ -31,8 +31,10 @@ has the full map and the handful of deliberate differences.
 | **Tile maps** | Unity's `Grid`/`Tilemap`/`Tile` with square and hex cells, layers, mouse picking, hex maths and weighted pathfinding. |
 | **Tweens** | DOTween-style `Tween.move(...)`, eases, loops; usable from coroutines. |
 | **HUD** (`packages/ui`) | React over the canvas: `mountUI`, `useObservable`, `<WorldAnchor>` for health bars and labels. |
-| **Multiplayer** (`packages/net`) | Ordered command sessions: local, peer-to-peer over WebRTC (PeerJS), or persistent through Convex. |
-| **Backend** (`convex/`) | Room lobby and a server-ordered command log. |
+| **Netcode** (`packages/netcode`) | Unity's Netcode for GameObjects: `NetworkManager`, `NetworkObject`, `NetworkVariable`, RPCs, ownership. One player hosts, the rest connect to them. |
+| **Multiplayer** (`packages/net`) | Transports (WebRTC via PeerJS, in-memory), plus ordered command sessions for turn-based and asynchronous games. |
+| **Backend** (`convex/`) | The lobby (rooms, join codes, open-games list) and a server-ordered command log. |
+| **Configuration** (`.env.schema`) | Every environment variable in one committed, secret-free file, managed by [varlock](https://varlock.dev). |
 | **Previews** (`cloudflare/`) | Deploy to Cloudflare Workers behind a password. |
 | **Desktop** (`desktop/`) | Package with Electrobun; runs offline. |
 | **Sample game** (`game/`) | A small turn-based hex skirmish that uses all of the above. |
@@ -79,7 +81,8 @@ type-checks everything and runs the tests, with no browser needed.
 | `bun run build` | Production build into `dist/` |
 | `bun run start` | Serve `dist/` locally |
 | `bun run screenshot` | Capture the game in headless Chromium |
-| `bun run backend` | Start a Convex dev deployment |
+| `bun run backend` | Start a Convex dev deployment (writes its URL to `.env.local`) |
+| `bun run env` | Check the environment variables against `.env.schema` |
 | `bun run preview:local` | Try the password gate locally |
 | `bun run preview:deploy` | Deploy a preview link for the current branch |
 | `bun run deploy` | Deploy the main build |
@@ -90,7 +93,9 @@ type-checks everything and runs the tests, with no browser needed.
 - [Unity to Synergy](docs/unity-to-synergy.md): the API map and the differences
 - [Architecture](docs/architecture.md): how it sits on PlayCanvas, the frame loop, headless mode
 - [Tile maps](docs/tilemaps.md): grids, hex maps, layers, picking, pathfinding
-- [Multiplayer](docs/multiplayer.md): commands, sessions, PeerJS, Convex
+- [Netcode](docs/netcode.md): Netcode for GameObjects in TypeScript: spawning, variables, RPCs, lobby
+- [Multiplayer](docs/multiplayer.md): command sessions, PeerJS, Convex
+- [Environment](docs/environment.md): variables, secrets, setting up Convex
 - [Deploying](docs/deploying.md): password-protected Cloudflare previews
 - [Desktop](docs/desktop.md): Electrobun packaging
 - [Agent skills](docs/agent-skills.md): what agents get, and optional vendor skills
@@ -99,8 +104,10 @@ type-checks everything and runs the tests, with no browser needed.
 ## Status
 
 This is an early foundation (v0.1). Working and tested: the engine core, tile maps and
-pathfinding, tweens, React HUD, command sessions, the Cloudflare gate and the sample game. Type-checked but not tested
-against live services: PeerJS transport, Convex backend. Written from official templates
+pathfinding, tweens, React HUD, command sessions, netcode (tested with simulated machines),
+the Cloudflare gate and the sample game. Type-checked but not tested
+against live services: PeerJS transport, Convex backend. The sample game uses command
+sessions; it has not been ported to netcode. Written from official templates
 but not yet build-verified: the Electrobun desktop shell.
 
 Not built yet: sprite rendering, audio, rigidbody physics, animation and particles.

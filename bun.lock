@@ -55,6 +55,26 @@
         "peerjs",
       ],
     },
+    "packages/netcode": {
+      "name": "@synergy/netcode",
+      "version": "0.1.0",
+      "dependencies": {
+        "@synergy/engine": "workspace:*",
+        "@synergy/net": "workspace:*",
+      },
+      "devDependencies": {
+        "convex": "^1.49.0",
+        "peerjs": "^1.5.5",
+      },
+      "peerDependencies": {
+        "convex": "^1.49.0",
+        "peerjs": "^1.5.5",
+      },
+      "optionalPeers": [
+        "convex",
+        "peerjs",
+      ],
+    },
     "packages/ui": {
       "name": "@synergy/ui",
       "version": "0.1.0",
@@ -221,6 +241,8 @@
     "@synergy/engine": ["@synergy/engine@workspace:packages/engine"],
 
     "@synergy/net": ["@synergy/net@workspace:packages/net"],
+
+    "@synergy/netcode": ["@synergy/netcode@workspace:packages/netcode"],
 
     "@synergy/ui": ["@synergy/ui@workspace:packages/ui"],
 

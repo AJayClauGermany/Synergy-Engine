@@ -205,9 +205,11 @@ The HUD is React, drawn over the canvas (think Screen Space - Overlay).
 
 ### Multiplayer
 
-There is no Netcode-for-GameObjects equivalent (`NetworkBehaviour`, `NetworkVariable`).
-Instead, players exchange **commands** and every machine applies them in the same order.
-See [multiplayer.md](multiplayer.md).
+Netcode for GameObjects has an equivalent: `NetworkManager`, `NetworkObject`,
+`NetworkBehaviour`, `NetworkVariable`, RPCs and ownership, with a host that is server and
+client at once. See [netcode.md](netcode.md) for the map. For turn-based and asynchronous
+games there is also a simpler model where players exchange **commands** and every machine
+applies them in the same order: [multiplayer.md](multiplayer.md).
 
 ## Not implemented yet
 

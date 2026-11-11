@@ -5,6 +5,7 @@
 ```
 game/                 your game: scenes, behaviours, rules, HUD        (depends on everything below)
 packages/ui           React HUD helpers                                 (engine + react)
+packages/netcode      Netcode for GameObjects: objects, variables, RPCs (engine + net)
 packages/net          command sessions, transports, Convex lobby        (no engine dependency)
 packages/engine       Unity-style runtime                               (playcanvas only)
 PlayCanvas            rendering, scene graph, asset loading

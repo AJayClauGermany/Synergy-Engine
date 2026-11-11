@@ -5,8 +5,8 @@ PlayCanvas**. You clone it and build your game in `game/`. It targets strategy g
 (turn-based or real-time) but the engine itself is generic.
 
 Stack: Bun (runtime, bundler, test runner, package manager) · PlayCanvas (rendering) ·
-React (HUD) · PeerJS and Convex (multiplayer) · Cloudflare Workers (preview deploys) ·
-Electrobun (desktop).
+React (HUD) · PeerJS and Convex (multiplayer) · varlock (environment variables) ·
+Cloudflare Workers (preview deploys) · Electrobun (desktop).
 
 ## Commands
 
@@ -19,12 +19,14 @@ Electrobun (desktop).
 | `bun run typecheck` | Type-check only |
 | `bun run build` | Production build into `dist/` |
 | `bun run screenshot` | Build, open in headless Chromium, save `.screenshots/game.png`; fails on page errors |
-| `bun run backend` | Convex dev deployment (interactive login the first time) |
+| `bun run backend` | Convex dev deployment (interactive login the first time); writes its URL to `.env.local` |
+| `bun run env` | Check environment variables against `.env.schema` (secrets masked) |
 | `bun run preview:local` / `preview:deploy` / `deploy` | Cloudflare: local gate, branch preview, main deployment |
 | `bun run desktop:dev` / `desktop:build` | Electrobun desktop app |
 
 Use Bun, not Node/npm/Vite/Jest: `bun <file>`, `bun test`, `bun install`, `bunx <tool>`.
-Bun loads `.env` by itself.
+Environment variables are declared in `.env.schema` and loaded by varlock (the scripts run
+through `varlock run --`); see `docs/environment.md`.
 
 ## Layout
 
@@ -43,12 +45,15 @@ packages/engine/         Unity-style runtime on PlayCanvas   (@synergy/engine)
                          src/grid + src/math are pure: import as @synergy/engine/grid, /math
 packages/ui/             React helpers: mountUI, useObservable, WorldAnchor   (@synergy/ui)
 packages/net/            command sessions, transports, Convex lobby   (@synergy/net)
+packages/netcode/        Netcode for GameObjects on those transports  (@synergy/netcode)
 convex/                  backend functions; _generated/ is generated, never edit it
 cloudflare/worker.ts     password gate in front of the static build
 desktop/                 Electrobun shell
 scripts/                 dev server, build, screenshot tool
+.env.schema              every environment variable: type, comment, secret or not (varlock)
 docs/                    unity-to-synergy.md, architecture.md, tilemaps.md, multiplayer.md,
-                         deploying.md, desktop.md, porting-notes.md (roadmap from the Unity original)
+                         netcode.md, environment.md, deploying.md, desktop.md,
+                         porting-notes.md (roadmap from the Unity original)
 ```
 
 ## Unity knowledge transfers, with these differences
@@ -117,6 +122,22 @@ mutating them. Elements that should block clicks to the game need `data-interact
 `controller.submit(...)`. Never change game state outside `apply()`; that is what keeps
 multiplayer in sync.
 
+**Make something networked (the Netcode for GameObjects way).** For real-time play, use
+`@synergy/netcode` (`docs/netcode.md`) instead of commands. One player hosts and is
+the server and a client at once. A `NetworkPrefab` holds `NetworkBehaviour`s whose
+`NetworkVariable` and RPC fields are declared as class fields; the host calls
+`networkObject.spawn()`, and clients change things only by calling a `serverRpc`, whose
+handler validates its arguments:
+
+```ts
+export class Soldier extends NetworkBehaviour {
+  readonly health = new NetworkVariable(100);
+  readonly moveRpc = this.serverRpc((x: number, y: number) => { /* check, then change state */ });
+  onNetworkSpawn() { this.health.onValueChanged.add((_before, now) => showHealth(now)); }
+}
+export const SoldierPrefab = new NetworkPrefab('Soldier', (go) => { go.addComponent(Soldier); });
+```
+
 ## Verifying your work
 
 1. `bun run check` must pass.
@@ -134,8 +155,8 @@ A passing type-check does not mean a script runs: a misspelled message name
 
 - TypeScript strict mode. No `any`; no non-null `!` where a check is cheap.
 - Engine code in `packages/`, game code in `game/`. `packages/engine` may import only
-  `playcanvas`; `packages/net` imports nothing from the engine; `packages/engine/src/math`
-  imports nothing at all.
+  `playcanvas`; `packages/net` imports nothing from the engine; `packages/netcode` imports
+  only the engine and `packages/net`; `packages/engine/src/math` imports nothing at all.
 - One exported behaviour per file, named like the class.
 - Comments explain why, or map a concept to Unity. Public engine APIs get a doc comment.
 - Game rules are pure and deterministic: no `Math.random()`, `Date.now()` or scene access
@@ -147,15 +168,19 @@ A passing type-check does not mean a script runs: a misspelled message name
 
 - Do not edit `convex/_generated/`; `bun run backend` regenerates it.
 - Only `PUBLIC_*` environment variables reach the browser bundle. Never put a secret in
-  one, and never commit `.env` or `.dev.vars`.
+  one, and never commit `.env` or `.dev.vars`. Declare new variables in `.env.schema`
+  (mark secrets `@sensitive`). Do not read or edit `.env`, `.env.local` or `.dev.vars`:
+  they may hold secrets. `bun run env` shows what resolved, with secrets masked.
 - `desktop/` is not covered by `bun run typecheck` (its SDK types are generated on first
   desktop build) and its build has not been verified; see `docs/desktop.md`.
-- The PeerJS and Convex integrations have no automated tests (they need live services).
-  If you change them, say so and test by hand.
+- The PeerJS and Convex integrations (including `@synergy/netcode/lobby`) have no
+  automated tests (they need live services). If you change them, say so and test by hand.
+  The rest of netcode is tested with simulated machines (`packages/netcode/test`).
 - Do not add dependencies to `packages/engine` beyond `playcanvas`. Keep the core small.
 
 ## Skills
 
 Task playbooks live in `.claude/skills/<name>/SKILL.md`: `gameplay-scripting`,
-`tile-maps`, `port-from-unity`, `verify-changes`, `multiplayer`, `ship-it`, `extend-engine`.
+`tile-maps`, `port-from-unity`, `verify-changes`, `multiplayer`, `netcode`, `ship-it`,
+`extend-engine`.
 See `docs/agent-skills.md` for these and for the vendors' optional skills.
