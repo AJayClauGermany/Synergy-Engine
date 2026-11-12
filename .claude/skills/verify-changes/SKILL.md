@@ -1,6 +1,13 @@
 ---
 name: verify-changes
-description: Use after changing game or engine code, and before reporting work as done, to verify it with the automatic checks (format, lint, types, tests, project graph), headless tests, and browser screenshots.
+description: >
+  Verifies a change to game or engine code at three levels: the automatic checks (format,
+  lint, types, tests, the guides against the code, the project graph), headless tests that
+  run real scenes with simulated input and simulated networks, and screenshots of the
+  running game. Use when a change is finished and before reporting it as done, when
+  asked to test, check or prove something works, or when writing a test for a behaviour.
+  Not for finding out why something is broken (use `debug-a-problem`), or for deploying
+  (use `ship-it`).
 ---
 
 # Verifying changes
@@ -9,7 +16,8 @@ Three levels, cheapest first. Do the ones that apply; say which you did.
 
 ## 1. `bun run check` (always)
 
-Six checks in a few seconds: the lockfile, formatting, lint, types, every test, and the
+Seven checks in a few seconds: the lockfile, formatting, lint, types, every test, the
+guides against the code (a sample in `docs/` or a skill that no longer compiles), and the
 project graph (unused files, undeclared packages, import cycles, layering). It prints
 each failure with a "What to do", one line per check, and `PASSED` or `FAILED`.
 
@@ -17,6 +25,9 @@ each failure with a "What to do", one line per check, and `PASSED` or `FAILED`.
 bun run fix     # apply what a tool can fix (lint fixes, formatting), then run the checks
 bun run check   # the checks only; `bun run check lint types` runs the ones you name
 ```
+
+Only a run of all of them ends with `PASSED`. A run of some ends with `OK so far` and
+the names of the checks it left out: that is not a finished change.
 
 The loop: change one thing, `bun run fix`, read the **first** failure, fix that, repeat.
 Do not fix a failure by skipping a test, switching a rule off, or adding a disable
@@ -122,6 +133,37 @@ bun run screenshot --eval "JSON.stringify(synergy.Camera.main.worldToScreenPoint
 ```
 
 Use that to find where to click instead of guessing pixel positions.
+
+## Gotchas
+
+- **`OK so far` is not `PASSED`.** `bun run check lint types` skips the tests and the
+  rest. Run `bun run check` with no names before calling anything done.
+- **`NOT RUN` on the test line.** A test that was skipped or left as a todo checked
+  nothing. `test.skip`, `test.only`, `test.failing` and a `test.todo` with a body fail
+  lint; find the test and make it run.
+- **A test that passes whatever the code does.** `expect(x);` with no matcher compares
+  nothing (it is what `Assert.IsTrue(x)` becomes when ported word for word). Lint reports
+  it; write `expect(x).toBe(true)`.
+- **`engine.stepSeconds(1)` throws while the game is paused.** It counts game time, and
+  at `Time.timeScale = 0` none passes. Use `engine.stepFrames(n)`.
+- **A key press that presses nothing.** `engine.input.pressKey` takes a `KeyCode`
+  (`KeyCode.W`), not a letter; `'w'` is a type error.
+- **An input "down" read after the step.** `getKeyDown` and `getMouseButtonDown` are true
+  for one frame: read them inside a behaviour's `update`, or assert on what the
+  behaviour did.
+- **The test only looked at the host.** With `TestNetwork`, assert on a client's copy
+  too; the host has the original objects and would pass with values that never arrived.
+  (Values JSON cannot carry are refused when sent, so a test does see those.)
+- **A warning in the test output.** The engine warns once about a camera with no
+  `MainCamera` tag, a prefab that builds nothing, an Observable given back the object it
+  already held. Tests still pass; read the output.
+- **A screenshot of the wrong scene.** `--scene Name` with a name nobody registered now
+  fails with the list of scenes, where it used to show the default one.
+- **Software rendering is slow, not broken.** A screenshot run takes tens of seconds;
+  wait for it rather than starting another.
+- **Guards are not obstacles.** When the engine throws with a sentence about what to
+  write instead, do that. Catching the error, casting the type away or disabling the
+  rule puts the original bug back.
 
 ## Reporting
 

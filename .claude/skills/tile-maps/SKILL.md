@@ -1,6 +1,13 @@
 ---
 name: tile-maps
-description: Use when building or changing maps, grids or boards - hex or square tiles, terrain, map layers such as highlights and fog of war, picking a cell from the mouse, movement ranges, or pathfinding.
+description: >
+  Builds and changes maps, grids and boards on this engine: hex or square tiles, terrain
+  with data, layers such as highlights and fog of war, maps loaded from files, picking a
+  cell from the mouse, movement ranges and pathfinding. Use when a task mentions tiles, a
+  board, hexes, cells, a map file, reachable cells or a route, or when a tile is missing,
+  a unit stands on the wrong cell, or a path is wrong. Not for the opponent that decides
+  where to go (use `game-ai`), or for where the camera looks at the map (use
+  `camera-controls`).
 ---
 
 # Tile maps, grids and pathfinding
@@ -79,8 +86,12 @@ range.has(target); range.pathTo(target);
 Hex.range(center, 2); Hex.ring(center, 2); Hex.line(from, to); Hex.distance(a, b);
 ```
 
-## Traps
+## Gotchas
 
+- **A world position is not a cell.** `tilemap.getTile(unit.transform.position)` compiles
+  (a `Vector3` has `x` and `y`) and throws: "(2.5, 0, -3.5) is not a cell". Convert first:
+  `grid.worldToCell(position)`. The same error comes from a division: C#'s `7 / 2` is 3,
+  here it is 3.5, so `Math.trunc(a / b)` before it becomes a cell or a `Vector3Int`.
 - **Use `getCellCenterWorld`, not `cellToWorld`**, to position things. As in Unity,
   `cellToWorld` is the corner for square cells and the centre only for hexes.
 - **Never hand-roll hex neighbours** with `x ± 1, y ± 1`: in offset coordinates the
@@ -88,7 +99,13 @@ Hex.range(center, 2); Hex.ring(center, 2); Hex.line(from, to); Hex.distance(a, b
 - **Filter out-of-bounds cells yourself** in `neighbors` (or return `Infinity` from
   `cost`); the helpers do not know your map's size.
 - **Cells are compared with `.equals` or by `x`/`y`**, not `===`. For `Set`/`Map` keys
-  use `cellKey(cell)`.
+  use `cellKey(cell)`. `path.includes(cell)` and `indexOf(cell)` compare by identity too:
+  write `path.some((step) => step.x === cell.x && step.y === cell.y)`.
+- **A route that is not the cheapest.** `heuristic: Hex.distance` assumes every step
+  costs at least 1. With cheaper steps (a road at 0.5), scale it or leave it out.
+- **A layer that was renamed in the map file.** Look layers up with
+  `layerNamed(map, 'Terrain')`, which names the layers there are when it fails, not with
+  `map.layers[0]` or a cast.
 - **Layers on the same plane**: give each renderer a different `sortingOrder`, or they
   flicker.
 - **Translucent tiles** (alpha < 1) are blended automatically; for a texture's own alpha

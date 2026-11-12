@@ -1,6 +1,13 @@
 ---
 name: gameplay-scripting
-description: Use when writing or changing gameplay code in this repo - MonoBehaviour scripts, scenes, prefabs, input handling, coroutines, raycast picking, or HUD bindings under game/src.
+description: >
+  Writes and changes gameplay code on this engine: MonoBehaviour scripts, scenes, prefabs,
+  input handling, coroutines, tweens and raycast picking under game/src. Use when adding
+  or changing a behaviour, a scene or a prefab, reading the keyboard or mouse, or starting
+  a new mechanic. Not for maps and grids (use `tile-maps`), the HUD (use `hud-ui`), state
+  shared between players (use `multiplayer` or `netcode`), Unity code to translate (use
+  `port-from-unity`), or a script that will not run and you cannot see why (use
+  `debug-a-problem`).
 ---
 
 # Gameplay scripting
@@ -33,8 +40,8 @@ export class Turret extends MonoBehaviour {
   target: Enemy | null = null;    // references to other objects are fine
   private _cooldown = 0;          // leading underscore: not copied by instantiate()
 
-  awake() { /* get components, no cross-object assumptions */ }
-  start() { /* other objects are awake now */ }
+  awake() { /* get components here, not in a field: `x = this.getComponent(Y)` throws */ }
+  start() { /* other objects are awake now. `*start(): IEnumerator` runs as a coroutine */ }
 
   update() {
     if (!isAlive(this.target)) return;            // never `!= null` for destroyed checks
@@ -89,30 +96,76 @@ controller.board = board;   // visible in controller.awake()
 
 Outside those functions `addComponent` runs `awake` immediately, as in Unity.
 
+## Starting a new mechanic
+
+Build the smallest thing that can be played, in a scene of its own, before anything
+around it:
+
+1. Write down the one question it must answer ("is dragging units along a path fun?").
+2. A new scene (`SceneManager.register('Sketch', build)`, opened with `?scene=Sketch` or
+   `bun run screenshot --scene Sketch`) with a camera tagged `MainCamera`, a light, and
+   primitives: `GameObject.createPrimitive(PrimitiveType.Cube)`. No art, no menus, no saves.
+3. The numbers being judged are public fields at the top of the script, so a retune is
+   one line; show them in the HUD while you tune.
+4. A headless test for the rule at its centre, then ask the user to play it and say
+   whether to keep it. Only then build what surrounds it.
+
 ## HUD
 
-The HUD is **Preact, not React** (see "The HUD is Preact" in `AGENTS.md`). Game code
-writes an `Observable` (`game/src/hud.ts`); components read it with `useObservable`. HUD buttons call methods on a behaviour, usually through a singleton
-(`GameController.instance?.endTurn()`). Use `<WorldAnchor target={gameObject}>` for
-labels that follow objects.
+The HUD is **Preact, not React**, and has its own skill: `hud-ui`. Game code writes an
+`Observable` (`game/src/hud.ts`); components read it with `useObservable`; buttons call
+methods on a behaviour (`GameController.instance?.endTurn()`).
 
 ## Gotchas
 
-- The valid message names are: awake, onEnable, start, update, lateUpdate, fixedUpdate,
-  onDisable, onDestroy, onMouseDown, onMouseUp, onMouseEnter, onMouseOver, onMouseExit.
-  Unity's spelling (`Update`) fails the type-check and throws in tests. A near miss
-  (`onStart`) or a Unity message that is not sent (`onTriggerEnter`) logs a warning once
-  and is never called. Any other name is just a method: nothing calls it for you.
-- `this.startCoroutine(this.run())`: call the generator. Passing `this.run` throws.
-- `Vector3.forward` is `(0, 0, -1)`. Do not hard-code axes.
-- Lights aim along -Y; set `light.direction`.
-- An object needs a Collider to be hit by `Physics.raycast` or to get `onMouse*`.
+Most of these are caught for you: by the type checker, by `bun run check`, or by an error
+whose message says what to write. They are here so the message makes sense when it comes.
+
+- **A method the engine never calls.** The messages are: awake, onEnable, start, update,
+  lateUpdate, fixedUpdate, onDisable, onDestroy, onMouseDown, onMouseUp, onMouseEnter,
+  onMouseOver, onMouseExit. Unity's spelling (`Update`) is a type error. A near miss
+  (`onStart`) or a Unity message that is not sent (`onTriggerEnter`, `onPointerClick`)
+  fails lint. Any other name (`tick`, `init`) is just a method: nothing calls it.
+- **`*update()` or `async update()`** is a type error: a message returns nothing. Only
+  `*start()` and the mouse messages may be coroutines, as in Unity. From anywhere else:
+  `this.startCoroutine(this.run())`, calling the generator (passing `this.run` throws).
+- **A line that does nothing.** `this.transform.position.add(step);` computes a new
+  vector and drops it. Assign it: `transform.position = transform.position.add(step)`.
+- **W walks backward.** `new Vector3(h, 0, v)` from the input axes: forward is -Z. Write
+  `Vector3.right.mul(h).add(Vector3.forward.mul(v))`. Never hard-code an axis.
+- **It turns or tilts the wrong way.** A positive angle about X or Y is the reverse of
+  Unity's: `Quaternion.euler(45, 0, 0)` looks up. Aim with `transform.lookAt` or
+  `Quaternion.lookRotation`; keep a turning angle in a field of your own rather than
+  reading `eulerAngles` back.
+- **A field that looks up a component** (`private body = this.getComponent(MeshRenderer)`)
+  throws: fields are set before the other components exist. Do it in `awake`.
+- **Clicks do nothing.** The object needs a Collider to be hit by `Physics.raycast` or to
+  get `onMouse*`, and the scene needs a camera tagged exactly `MainCamera` (a warning
+  says so when one is enabled without the tag). Colliders are not registered until
+  `awake` has run, so a raycast inside the scene builder itself finds nothing.
+- **A prefab whose instances are empty.** The build function is given the instance and
+  adds to it: `new Prefab('Enemy', (go) => { go.addComponent(...) })`. One that makes and
+  returns its own `new GameObject` is refused.
+- **A listener that will not go away.** `event.removeListener(() => this.onHit())`
+  removes nothing: a new arrow is a new function. Keep what `addListener` returned and
+  call it, or declare the handler as a field (`onHit = () => { ... }`).
+- **A private field that stops the script.** Name private fields with a leading
+  underscore (they are then not copied by `instantiate`), but not with a name the engine
+  uses itself (`_started`, `_enabled`, `_destroy`, ...): lint lists them.
+- **A coroutine or `invoke` that stops by itself.** Both end when the GameObject is
+  deactivated, and are not resumed when it comes back. Restart them in `onEnable`.
+- **`Tween.to(...)` after its object is gone.** `Tween.move/scale/rotate` end with their
+  object; a bare `Tween.to` does not: add `.setTarget(this.gameObject)`.
+- Lights aim along -Y; set `light.direction` rather than rotating the light.
 - `GameObject.find` and `findObjectOfType` walk the scene: call them in `start`, cache
   the result.
-- `transform.translate(v)` moves in world units along the object's own axes;
-  `translate(v, Space.World)` along world axes.
+- `transform.translate(v)` moves along the object's own axes; `translate(v, Space.World)`
+  along world axes.
 - `instantiate` copies a script's public fields (deep-copying arrays and object
-  literals) but not functions, events or `_private` fields.
+  literals) but not functions, events, Maps, Sets or `_private` fields; class instances
+  other than vectors are shared between the original and the copy.
+- `Input.mousePosition` is `(0, 0)` until the pointer has been over the game:
+  `Input.mousePresent` says whether it has.
 
 ## When something does not show up or does not move
 

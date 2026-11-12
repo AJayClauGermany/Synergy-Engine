@@ -1,6 +1,12 @@
 ---
 name: port-from-unity
-description: Use when translating Unity C# scripts, Unity tutorials, or Unity-style designs into this TypeScript engine, or when asked how a Unity feature maps to Synergy.
+description: >
+  Translates Unity C# into this TypeScript engine: MonoBehaviour scripts, a Unity
+  tutorial, ScriptableObject data, tilemaps and NGO netcode, one script at a time with
+  its test. Use when given C# or a Unity project to port, when asked how a Unity feature
+  maps to Synergy, or when ported code compiles and then behaves differently from the
+  original. Not for writing new gameplay from scratch (use `gameplay-scripting`), or for
+  adding a Unity API the engine lacks (use `extend-engine`).
 ---
 
 # Porting from Unity
@@ -80,9 +86,22 @@ a whole project (what to export, what to port first).
    - `tilemap.SetTile(new Vector3Int(x, y, 0), tile)` → `tilemap.setTile({ x, y }, tile)`.
      Hex cell coordinates are the same as Unity's.
    - Mouse buttons keep Unity's numbering (1 is right).
-   - Rotation signs: positive rotation about Y turns counter-clockwise seen from above
-     (right-handed), the opposite of Unity. Prefer `lookAt` / `Quaternion.lookRotation`
-     over hand-written angles.
+   - Rotation signs: a positive rotation about X or Y turns the opposite way to Unity's
+     (the world is right-handed). `Quaternion.Euler(45, 0, 0)` on a camera looked down
+     there and looks up here; `Rotate(Vector3.up, 90)` turned right and turns left. Negate
+     ported pitch and yaw, or better, use `lookAt` / `Quaternion.lookRotation`, which need
+     no angles. `Vector3.cross` and `signedAngle` change sign for the same reason.
+   - `transform.eulerAngles` read back: yaw comes back within -90 to 90, so
+     `eulerAngles = new Vector3(0, eulerAngles.y + 10, 0)` never completes a turn. Keep
+     the angle in a field, or use `transform.rotate`.
+   - `new Vector3(h, 0, v)` from `Input.GetAxis` → `Vector3.right.mul(h).add(Vector3.forward.mul(v))`.
+     *(checked)*
+   - `IEnumerator Start()` → `*start(): IEnumerator`: it runs as a coroutine here too.
+   - `Mathf.SmoothDamp(a, b, ref v, t)` → `[a, v] = Mathf.smoothDamp(a, b, v, t, Infinity, Time.deltaTime)`.
+   - `list.Remove(x)` → `const i = list.indexOf(x); if (i >= 0) list.splice(i, 1);`
+     (`splice(-1, 1)` deletes the last item).
+   - `x.Changed -= Handler` → call what `addListener` returned; a new arrow given to
+     `removeListener` removes nothing. *(checked)*
 7. **Replace editor work with code, and editor data with files.** Inspector references
    become assignments in the scene builder; prefabs become `new Prefab(...)`; scenes
    become `SceneBuilder`s; tags are plain strings; layers are named with
@@ -164,3 +183,51 @@ Look at the engine source rather than guessing: every public class in
 `packages/engine/src` has a doc comment stating its Unity counterpart and any deviation.
 If an API is missing and small, add it (see the `extend-engine` skill) rather than
 working around it in game code.
+
+## Gotchas
+
+What a port gets wrong after it compiles. The first group is reported by `bun run check`
+or by an error when the code runs; the second no tool can see.
+
+Reported, with what to write instead:
+
+- **A method that is never called**: `OnTriggerEnter`, `onStart`, `OnPointerClick`,
+  `OnValidate`. There are no triggers, uGUI events or editor messages.
+- **A unit on a cell that equals no cell**: `new Vector3Int(x / 2, y, 0)`. C# cut the
+  division to a whole number; here it is 3.5, and the vector refuses it.
+- **A tile lookup that finds nothing**: `tilemap.GetTile(transform.position)` was a
+  compile error in C#; here a world position has `x` and `y`, so it compiles, and throws.
+- **The same dice every game**: `new Random()` needs a seed, and a whole number.
+- **An index that is not a whole number**: `list[random.range(0, list.length)]`.
+  `Random.Range(int, int)` is `rangeInt`; or `random.pick(list)`.
+- **A vector that did not move**: `transform.position.add(v);` with the result dropped.
+- **A value the HUD never shows**: `inventory.value.items.push(x)`. Observables and
+  NetworkVariables hold read-only values; assign a new one.
+- **`[ServerRpc] void FireServerRpc()` as a method**: an RPC is a field,
+  `readonly fireRpc = this.serverRpc(...)`.
+
+Not reported: yours to find.
+
+- **The camera looks at the sky**, or a unit turns left for right: pitch and yaw signs
+  (step 6).
+- **`if (target != null)`** on a destroyed object is still true. Search the port for
+  `!= null` and `== null` on anything that can be destroyed: `isAlive(target)`.
+- **`a == b` between two vectors or cells that are not constants.** Always false.
+- **`mousePosition.y`** compared with the screen height: the origin is the top left.
+- **A struct that was copied by assignment** is now one shared object.
+- **Execution order.** Unity's Script Execution Order settings do not exist: wire things
+  between objects in `start`, which runs after every `awake`.
+- **A `static` field that survived "play mode"** in Unity is reset there on each run;
+  here it lives as long as the page, across scene loads and across tests.
+
+## Verify
+
+Per script, as you go: `bun run fix` until it says `PASSED`, with the script's test in
+the same change. A ported file that nothing imports and no test covers is reported as
+unused, which is the reminder to write the test.
+
+For the port as a whole: every Unity EditMode test has a counterpart that passes; then
+`bun run screenshot` of each ported scene, compared by eye with a screenshot from Unity,
+looking first at what the list above says no tool sees (which way things face, which way
+the camera tilts, which side "up" is on the screen). Say which scenes you compared and
+which you could not.

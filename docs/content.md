@@ -128,10 +128,10 @@ terrain.loadLayer(layerData, palette) // paint one layer into an existing Tilema
 Rules that run without the engine read the same files through pure helpers:
 
 ```ts
-import { Catalog, layerTileAt, type TilemapData, type TilePaletteData } from '@synergy/engine/data';
+import { Catalog, layerNamed, layerTileAt, type TilemapData, type TilePaletteData } from '@synergy/engine/data';
 
 const terrainTypes = new Catalog('tile', (tiles as TilePaletteData<Terrain>).tiles);
-const ground = (map as TilemapData).layers[0];
+const ground = layerNamed(map as TilemapData, 'Terrain');   // throws, naming the layers, if there is none
 
 export function moveCost(cell: Cell): number {
   const id = layerTileAt(ground, cell);            // null outside the map or on an empty cell
@@ -147,8 +147,9 @@ into a layer.
 A wrong id or a miscounted row should fail a test, not show up as a blank tile.
 `checkTilePaletteData(palette)` and `checkTilemapData(map, tileIds)` return a list of
 plain-language problems (empty when the data is sound); `TilePalette` and
-`createTilemaps` run them and refuse bad data with every problem listed. Add one test
-that checks every content file you ship:
+`createTilemaps` run them and refuse bad data with every problem listed. They take the
+file as it comes (a JSON import, before any cast). Add one test that checks every content
+file you ship:
 
 ```ts
 test('the shipped map and palette are sound', () => {

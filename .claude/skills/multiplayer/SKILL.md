@@ -1,6 +1,13 @@
 ---
 name: multiplayer
-description: Use when adding or changing player actions (commands), game rules that must stay in sync, online sessions (PeerJS or Convex), lobby features, or Convex backend functions.
+description: >
+  Builds multiplayer the command way on this engine: game state as plain data, player
+  actions as commands, check() and apply() rules that every machine runs identically,
+  command sessions over PeerJS or Convex, ticks for simultaneous play, and the Convex
+  lobby functions. Use when adding or changing a player action or a rule that must stay
+  in sync, hosting or joining a session, or when two players see different games. Not for
+  replicated objects, NetworkVariables and RPCs (use `netcode`), a computer opponent (use
+  `game-ai`), or saving a game (use `save-load`).
 ---
 
 # Multiplayer
@@ -28,6 +35,9 @@ deterministic `apply`.
   quirks you do not control, or floating-point paths that differ between machines.
   Random outcomes come from a seed stored in the state:
   `const random = new Random(state.seed); ...; return { ...state, seed: random.state }`.
+- `check()` and `apply()` read the state and the command, and nothing else: not
+  `session.players`, not a variable at the top of the file, not the clock. Whatever they
+  need to know is in the state, put there by an earlier command.
 - Import grid maths, pathfinding and `Random` from `@synergy/engine/grid` (pure), never
   from `@synergy/engine` (which brings the renderer).
 - Pure: no engine, DOM or network access. State is plain JSON-serialisable data.
@@ -52,19 +62,6 @@ stores cooldowns as "ready at tick N". Never use a local clock for game time. Se
 
 Game code should depend only on `Session<C>`.
 
-## Testing sync
-
-```ts
-const hub = new LoopbackHub({ manual: true });   // nothing is delivered until flush()
-const host = CommandSession.host<Command>(hub.connect('host'));
-const guest = CommandSession.join<Command>(hub.connect('guest'), 'host');
-hub.flush();
-guest.submit(...); host.submit(...); hub.flush();
-// assert both sides computed the same state
-```
-
-Loopback serialises messages through JSON, so non-serialisable commands fail in tests.
-
 ## Convex functions (`convex/`)
 
 - New syntax only: `query({ args, returns, handler })` with validators from `convex/values`.
@@ -85,3 +82,56 @@ Convex's own guidelines and skills can be installed with `bunx convex ai-files i
 - Player ids are unauthenticated. No real security until Convex Auth is added.
 - The server orders commands but does not validate them against game rules.
 - No host migration for peer-to-peer sessions; no hidden information support.
+
+## Gotchas
+
+- **Two players see different games after the same moves.** Something outside the state
+  decided an outcome. Lint reports the usual ones in rules files (`Math.random`, `Date`,
+  `crypto`, `localeCompare` and the other locale functions, a `let` at the top of the
+  file). Not reported: sorting or changing the state itself inside `check()`
+  (`state.units.sort(...)` sorts in place, and a guest that only asked "may I?" now has
+  another order), and reading `session.players`.
+- **`session.submit()` throws "is a Vector3" / "is Infinity" / "is a Map".** A command
+  is sent as JSON, and those would arrive as something else on the other machines. Send
+  plain data: `{ x, y }`, `null`, an array.
+- **It works alone and breaks with a guest.** The host used to apply the very object it
+  submitted while guests got a copy; now every machine applies a copy, so this shows up
+  alone too. If it still differs, look for state kept in a behaviour instead of the rules.
+- **A late joiner sees an older or different game.** They replay the log from the
+  start. Anything not derived from the log (who sits where, read from `session.players`
+  as the sample's `teamOf` does) is replayed against today's players. With more than two
+  participants, record seats in the state through a command.
+- **The state changed without a command** (a click handler set `unit.hp`). The next
+  command overwrites it on this machine and never reaches the others.
+- **A new command type that does nothing.** `check()` and `apply()` switch on the
+  type; the type checker reports a `switch` that misses a case, but an `if` chain falls
+  through silently. Prefer the `switch`.
+- **Applying after `submit()`**: on the host the command has already been applied when
+  `submit` returns; on a guest it has not. React in `onCommand`, never right after
+  `submit`.
+- **A local clock in the rules** for cooldowns or turn timers. Count ticks in the state
+  (`startTicker`).
+
+## Verify
+
+```ts
+const hub = new LoopbackHub({ manual: true });   // nothing is delivered until flush()
+const host = CommandSession.host<Command>(hub.connect('host'));
+const guest = CommandSession.join<Command>(hub.connect('guest'), 'host');
+hub.flush();
+guest.submit({ type: 'endTurn' }); host.submit({ type: 'endTurn' }); hub.flush();
+// assert both sides computed the same state
+```
+
+Loopback serialises messages through JSON, so non-serialisable commands fail in tests.
+
+Assert on **both** sides, not just the host. Loopback serialises messages through JSON
+as a real connection does, and `submit` refuses a command JSON would change.
+
+Then the rules themselves: a test for the legal case, each illegal case, and that the
+input state is unchanged (`const before = structuredClone(state); apply(state, c);
+expect(state).toEqual(before)`). If the game has a computer opponent, letting it play
+itself for a few hundred turns exercises every command (`game-ai` skill).
+
+A pass is `bun run check` ending in `PASSED`. PeerJS and Convex need live services and
+have no automated tests: say so, and ask the user to try a two-browser game.

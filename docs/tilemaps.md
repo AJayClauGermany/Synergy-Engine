@@ -162,19 +162,23 @@ Hex.distance(a, b)           // steps between two cells
 Hex.range(center, 2)         // every cell within 2 steps
 Hex.ring(center, 2)          // cells exactly 2 steps away
 Hex.line(a, b)               // cells on the straight line between
-Hex.toAxial(cell) / Hex.fromAxial(q, r)
+Hex.toAxial(cell)            // offset cell -> axial { q, r }
+Hex.fromAxial(q, r)          // and back
 
-Square.neighbors4(cell)  Square.neighbors8(cell)  Square.manhattan(a, b)  Square.chebyshev(a, b)
+Square.neighbors4(cell)      // up, down, left, right
+Square.neighbors8(cell)      // and the diagonals
+Square.manhattan(a, b)       // steps without diagonals
+Square.chebyshev(a, b)       // steps with diagonals
 ```
 
 ## Pathfinding
 
 ```ts
-import { findPath, findReachable, Hex } from '@synergy/engine/grid';
+import { findPath, findReachable, Hex, type PathfindingOptions } from '@synergy/engine/grid';
 
-const options = {
+const options: PathfindingOptions = {
   neighbors: (cell) => Hex.neighbors(cell).filter(inBounds),
-  cost: (from, to) => (isBlocked(to) ? Infinity : terrainCost(to)),   // defaults to 1
+  cost: (_from, to) => (isBlocked(to) ? Infinity : terrainCost(to)),   // defaults to 1
 };
 
 // A unit's movement range for 3 points, with routes:
@@ -188,6 +192,11 @@ route?.path; route?.cost;
 
 Results are deterministic (ties are broken by a fixed order), so they are safe to use
 inside multiplayer rules.
+
+The heuristic only makes the search faster while it never overestimates. `Hex.distance`
+counts steps, so it is right when every step costs at least 1. If a step can cost less (a
+road at 0.5), scale it, `(a, b) => Hex.distance(a, b) * 0.5`, or leave it out: with too
+large a heuristic `findPath` returns a route that is not the cheapest.
 
 ## Differences from Unity
 

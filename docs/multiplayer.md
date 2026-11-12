@@ -55,12 +55,12 @@ function apply(state: State, command: Command): State {
   if (command.type === 'fire') {
     return { ...state, units: update(state.units, command.unit, { readyAtTick: state.tick + 3 }) };
   }
-  ...
+  return state;   // ... and the other commands
 }
 
 function check(state: State, command: Command, team: Team): string | null {
   if (command.type === 'fire' && unit.readyAtTick > state.tick) return 'Still cooling down.';
-  ...
+  return null;    // ... and the other rules
 }
 ```
 
@@ -109,7 +109,7 @@ const session = CommandSession.join<Command>(transport, transport.hostId);
 const lobby = new ConvexLobby(convexUrl, { playerName: 'Ada' });
 const room = await lobby.createRoom({ name: "Ada's game" });   // or lobby.joinRoom(code)
 const session = lobby.openSession<Command>(room.code);
-lobby.watchOpenRooms((rooms) => ...);                           // a live room browser
+lobby.watchOpenRooms((rooms) => showRooms(rooms));              // a live room browser
 ```
 
 Set-up, once:

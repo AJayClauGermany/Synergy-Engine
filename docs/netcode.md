@@ -1,5 +1,7 @@
 # Netcode for GameObjects
 
+<!-- check: manager: NetworkManager -->
+
 `@synergy/netcode` is Unity's **Netcode for GameObjects** (NGO) in TypeScript: a
 `NetworkManager`, `NetworkObject`s you spawn, `NetworkVariable`s that replicate, RPCs,
 ownership, a player prefab. If you have used NGO you already know it; the differences
@@ -75,7 +77,7 @@ export class Soldier extends NetworkBehaviour {
 
   onNetworkSpawn() {
     // Runs on every machine, the host included, when the value changes.
-    this.cell.onValueChanged.add((_before, now) => this.walkTo(now));
+    this.cell.onValueChanged.add((_before, now) => Tween.move(this.transform, worldOf(now), 0.3));
   }
 }
 

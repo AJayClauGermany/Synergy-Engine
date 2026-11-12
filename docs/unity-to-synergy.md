@@ -39,13 +39,13 @@ export class Spinner extends MonoBehaviour {
 | 2 | Generics: `GetComponent<Health>()` | Pass the class: `getComponent(Health)` | Types do not exist at runtime in TypeScript. |
 | 3 | Operators: `a + b`, `v * 2`, `q * v` | Methods: `a.add(b)`, `v.mul(2)`, `q.rotate(v)` | No operator overloading. See the table below. |
 | 4 | `Vector3` is a mutable struct | `Vector3`, `Quaternion`, `Color` are **immutable**; every operation returns a new value | Gives struct-like value semantics. `transform.position.x = 5` is a compile error in both. |
-| 5 | Left-handed, forward is `+Z` | **Right-handed, forward is `-Z`** | Matches PlayCanvas and glTF. Use `Vector3.forward` / `transform.forward`, never literal axes, and code ports unchanged. |
+| 5 | Left-handed, forward is `+Z` | **Right-handed, forward is `-Z`** | Matches PlayCanvas and glTF. Use `Vector3.forward` / `transform.forward`, never literal axes: positions and directions then port unchanged. **Angles do not.** A positive rotation about X or Y turns the other way: `Quaternion.euler(45, 0, 0)` tilts *up* (Unity: down), `transform.rotate(Vector3.up, 90)` turns *left* (Unity: right), and `Vector3.cross` and `Vector3.signedAngle` change sign. Negate a ported pitch and yaw, or better, aim with `transform.lookAt` / `Quaternion.lookRotation`, which need no angles. |
 | 6 | Screen origin bottom-left, Y up | **Screen origin top-left, Y down**, in CSS pixels | Same space as the DOM and the Preact HUD. Affects `Input.mousePosition`, `Camera.worldToScreenPoint`. |
 | 7 | `Physics.Raycast(ray, out hit)` returns bool | `Physics.raycast(ray)` returns the hit or `null` | No `out` parameters. |
 | 8 | `if (target != null)` is false for destroyed objects | `if (isAlive(target))` | `==` cannot be overloaded. |
 | 9 | Scenes and prefabs are assets made in the editor | Scenes and prefabs are **functions** (`SceneManager.register`, `new Prefab`) | There is no editor. Code is easy to diff and generate. |
 | 10 | Lights shine along `transform.forward` | Directional and spot lights shine along `-transform.up` | PlayCanvas convention. Set `light.direction` and forget about it. |
-| 11 | Euler order Z, X, Y | Euler order X, Y, Z | PlayCanvas convention. Single-axis rotations are identical. |
+| 11 | Euler order Z, X, Y | Euler order X, Y, Z | PlayCanvas convention. About X and Y the direction is also reversed (row 5). `eulerAngles` read back differently too: yaw comes back within -90 to 90 (135 reads as `(180, 45, 180)`), so `eulerAngles = new Vector3(0, eulerAngles.y + 10, 0)` never completes a turn. Keep the angle in a field of your own (as `CameraRig` does) or use `transform.rotate`. |
 | 12 | Mesh triangles are clockwise | Counter-clockwise | Follows from the right-handed world. |
 | 13 | Rigidbody physics, collisions, triggers | **Not available yet.** Colliders exist for raycasts and overlap queries only | Kept out of the core to stay small. |
 | 14 | UI: uGUI / UI Toolkit | In-scene `Canvas` + `Image` for UI images; Preact (`@synergy/ui`) for interactive HUDs | See below. |
@@ -82,12 +82,12 @@ structs, only a test can show.
 | `int / int` truncates: `7 / 2` is `3` | `Math.trunc(7 / 2)` | `/` always gives `3.5`. Damage, costs and grid indices drift |
 | `(int)value`, `Mathf.FloorToInt` | `Math.trunc(value)`, `Mathf.floorToInt` | `(int)` drops the fraction toward zero; `floor` differs for negatives |
 | `Mathf.RoundToInt(2.5f)` is `2` | `Mathf.roundToInt(2.5)` is `2` | Same as Unity (halfway goes to the even number). JavaScript's own `Math.round(2.5)` is `3` |
-| `struct` values are copied on assignment | objects are shared: copy with `{ ...value }` | Two units end up editing one stats object. Engine vectors and colours are immutable, so they are safe to share |
+| `struct` values are copied on assignment | objects are shared: copy with `{ ...value }`, or `structuredClone(value)` when it holds arrays or objects | Two units end up editing one stats object. `{ ...value }` copies one level only. Engine vectors and colours are immutable, so they are safe to share |
 | `Dictionary<Vector3Int, T>`, `HashSet<Vector2Int>` | `Map<string, T>` keyed by `cellKey(cell)` | `Map` and `Set` compare object keys by identity, so an equal cell is never found |
 | `dict[key]` throws when missing | `map.get(key)` returns `undefined` | Handle the missing case; the type-checker asks you to |
 | `a == b` on structs and strings | `===` for numbers and strings, `a.equals(b)` for vectors and cells | `===` on two equal vectors is `false` |
 | `list.Sort()`, `OrderBy(x => x.cost)` | `list.toSorted((a, b) => a.cost - b.cost)` | `sort()` changes the array in place and, with no comparer, sorts numbers as text (`10` before `9`) |
-| `List<T>`: `Add`, `Remove(x)`, `Count`, `Contains` | `T[]`: `push`, `splice(indexOf(x), 1)`, `length`, `includes` | |
+| `List<T>`: `Add`, `Remove(x)`, `Count`, `Contains` | `T[]`: `push`, `const i = list.indexOf(x); if (i >= 0) list.splice(i, 1)`, `length`, `includes` | `splice(-1, 1)` deletes the *last* item, so test the index: C#'s `Remove` of something absent does nothing. `indexOf` and `includes` find objects by identity; for cells and vectors use `findIndex((c) => c.equals(x))` and `some((c) => c.equals(x))` |
 | LINQ: `Where`, `Select`, `Any`, `All`, `First`, `FirstOrDefault`, `Sum` | `filter`, `map`, `some`, `every`, `find`, `find`, `reduce` | `find` returns `undefined` rather than throwing as `First` does |
 | `foreach (var pair in dict)` | `for (const [key, value] of map)` | |
 | `public int Hp { get; private set; }` | `private _hp = 0; get hp() { return this._hp; }` | |
@@ -99,7 +99,7 @@ structs, only a test can show.
 | `enum Team { Red, Blue }` | `enum Team { Red, Blue }` | Same numbering, so serialized numbers keep their meaning |
 | `uint`, overflow, `long` | every number is a 64-bit float; bit operators work on 32 bits | Hashes and bit masks ported literally can differ |
 | `namespace`, `using` | one class per file, `import { X } from './X'` | |
-| NUnit: `[Test]`, `[SetUp]`, `Assert.AreEqual(expected, actual)` | `test(...)`, `beforeEach(...)`, `expect(actual).toBe(expected)` | The arguments swap places. `Assert.AreEqual(a, b, 0.01f)` is `expect(b).toBeCloseTo(a, 2)` |
+| NUnit: `[Test]`, `[SetUp]`, `Assert.AreEqual(expected, actual)` | `test(...)`, `beforeEach(...)`, `expect(actual).toBe(expected)` | The arguments swap places. `Assert.AreEqual(a, b, 0.01f)` is `expect(Math.abs(b - a)).toBeLessThanOrEqual(0.01)`; `toBeCloseTo(a, 2)` allows only half of that. `Assert.IsTrue(x)` is `expect(x).toBe(true)`: `expect(x)` alone compares nothing |
 
 ## API map
 
@@ -145,7 +145,10 @@ Do setup in `awake`/`start`, never in a constructor. Components cannot be create
   yield this.startCoroutine(this.other());
   yield fetch('/data.json');          // TypeScript extra: wait for a promise
 }
-this.startCoroutine(this.fadeOut());  // note the call: pass the generator object
+
+start() {
+  this.startCoroutine(this.fadeOut());  // note the call: pass the generator object
+}
 ```
 
 `yield return x` becomes `yield x`. Also available: `WaitForSecondsRealtime`,
@@ -178,9 +181,9 @@ Iterate children with `for (const child of transform)`.
 | `Screen.width`, `Screen.height` | same (CSS pixels) |
 | `Debug.Log`, `LogWarning`, `LogError`, `DrawLine`, `DrawRay` | `Debug.log`, `logWarning`, `logError`, `drawLine`, `drawRay` |
 | The Hierarchy and Inspector windows | `Debug.hierarchy()`: the loaded scenes as text, with each script's field values |
-| `Mathf.*` | `Mathf.*` in camelCase; `Mathf.SmoothDamp(..., ref v, ...)` returns `[value, velocity]`. `round` and `roundToInt` send halfway values to the even number, as Unity does |
+| `Mathf.*` | `Mathf.*` in camelCase, for what Unity adds to the language: `clamp`, `clamp01`, `lerp`, `inverseLerp`, `moveTowards`, `smoothStep`, `repeat`, `pingPong`, `deltaAngle`, `lerpAngle`, `approximately`, `floorToInt`, `roundToInt` and the like. `Mathf.smoothDamp(current, target, velocity, smoothTime, maxSpeed, deltaTime)` returns `[value, velocity]` in place of `ref`, and needs its last two arguments (`Infinity`, `Time.deltaTime`). `round` and `roundToInt` send halfway values to the even number, as Unity does. Not there: `acos`, `asin`, `atan`, `exp`, `log`, `log10` (use `Math.acos` and so on, in radians) and `perlinNoise` |
 | `SceneManager.LoadScene("Main")` | `await SceneManager.loadScene('Main')` after `SceneManager.register('Main', build)`. For scenes that need assets, register `{ preload, build }` |
-| `Random.Range`, `Random.value` | `new Random(seed)`: `range`, `rangeInt`, `value`, `pick`, `shuffle`, `state` |
+| `Random.Range`, `Random.value` | `new Random(seed)` (the seed is required and a whole number): `Random.Range(int, int)` is `rangeInt(min, maxExclusive)`, `Random.Range(float, float)` is `range(min, max)`; also `value`, `pick`, `shuffle`, `state`. `list[random.range(0, list.length)]` is `undefined`: an index needs `rangeInt`, or `random.pick(list)` |
 | `RenderSettings.ambientLight` | same |
 | `Camera.main`, `ScreenPointToRay`, `WorldToScreenPoint`, `ScreenToWorldPoint` | same in camelCase |
 | `LayerMask.GetMask("Units")`, `NameToLayer` | `LayerMask.getMask('Units')`, `nameToLayer`; name layers with `LayerMask.define(8, 'Units')` |
