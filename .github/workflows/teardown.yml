@@ -10,8 +10,9 @@ name: Teardown
 #             deletes it. The name is asked for so that a run started in the wrong
 #             repository deletes nothing.
 #   convex    also empties every table of the Convex deployment that the optional secret
-#             CONVEX_DEPLOY_KEY belongs to (Convex dashboard, Settings, Deploy keys). The
-#             project, its functions and its address stay.
+#             CONVEX_DEPLOY_KEY belongs to (Convex dashboard, Settings, Deploy keys; it needs
+#             data:view, data:write, backups:view and backups:import). The project, its
+#             functions and its address stay.
 #
 # A pull request opened afterwards deploys everything again.
 

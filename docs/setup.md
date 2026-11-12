@@ -428,8 +428,12 @@ application, it serves everyone.
   production deployment. Or the same command: `bun run cloudflare:teardown --confirm <name>
   --convex dev` empties every table of `convex/schema.ts` in your development deployment,
   `--convex prod` in the production one. In the Teardown workflow, tick *convex*; that
-  needs a repository secret `CONVEX_DEPLOY_KEY` (Convex dashboard, the production
-  deployment, *Settings*, *Deploy keys*).
+  needs a repository secret `CONVEX_DEPLOY_KEY`: Convex dashboard, the production
+  deployment, *Settings*, *Deploy keys*, with exactly these four permissions ticked:
+  `deployment:data:view`, `deployment:data:write`, `deployment:backups:view` and
+  `deployment:backups:import` (emptying a table goes through Convex's import, which
+  counts as restoring a backup). A key made only for deploying lacks them, and the run
+  then names the one that is missing.
 - *Drop the project:* only you can, in the dashboard: *Project settings*, *Delete project*.
   Then remove the `CONVEX_*` lines from `.env.local` (or delete the file) and run
   `bun run backend` again.
@@ -454,13 +458,19 @@ avoid; the last column says what has been run since.
 | 5, opening the link | **Failed.** Access offered only "Sign in with Cloudflare"; after signing in, the Worker answered "Preview locked". Cloudflare does not tell a Worker with static assets that Access admitted the visitor | the deploy now tells the Worker (`ACCESS_AUD`). **Confirmed the same day:** a pull-request preview opened after signing in, by emailed code (One-time PIN added by hand) and with "Sign in with Cloudflare". An address that is not on the list received no code |
 | 6 | `bun run deploy` deployed and reported; the address was locked for the same reason | same fix; not run again |
 | 7 | The commit hook refused a failing commit; `bun run desktop:dev` opened the game; `varlock scan` works | |
-| Clearing the test run | Not part of that run | `bun run cloudflare:teardown` and the *Teardown* workflow added. **Confirmed the same day**, started by an agent with no Cloudflare login: the listing run found the Worker, the Access application and the bucket; the run with `confirm` deleted all three (the bucket held 1 object) and ended with `CLEAN`; a third run found nothing. The token of step 5A was enough |
+| Clearing the test run | Not part of that run | `bun run cloudflare:teardown` and the *Teardown* workflow added. **Confirmed the same day**, started by an agent with no Cloudflare login: the listing run found the Worker, the Access application and the bucket; the run with `confirm` deleted all three (the bucket held 1 object) and ended with `CLEAN`; a third run found nothing. The token of step 5A was enough. A pull request opened afterwards created the bucket, the Worker and the Access application again with nothing done by hand, and a second teardown removed them. With `convex` ticked it emptied `rooms` and `commands` in the production deployment, once the deploy key had the four permissions listed above (with three, Convex answered `You do not have permission to perform this operation (deployment:backups:view)`) |
+
+A deploy also passed a `PREVIEW_PASSWORD` repository secret on to the Worker ("stored with
+the Worker, but not asked for", since Access was in front). That run showed why the
+password must be long: GitHub hides a secret's value wherever it occurs in a log, so a
+short one blanks out parts of ordinary words, which gives it away, and the pull request
+loses its "View deployment" link because the address contains it.
 
 Not run yet: a deploy switching on emailed codes by itself (the test token lacked that
-permission), a deploy passing `PREVIEW_PASSWORD` on, multiplayer on a deployed preview and
-between two networks, the `PUBLIC_CONVEX_URL=... bun run deploy` form reaching production
-Convex, a deploy after a teardown creating everything again, and, of the clean-up:
-emptying a bucket of more than a handful of objects, emptying the Convex tables
-(`--convex`; it needs a `CONVEX_DEPLOY_KEY`), and the by-hand and Convex dashboard routes. When a step
+permission), the password prompt on a deployment without Access, multiplayer on a deployed
+preview and between two networks, the `PUBLIC_CONVEX_URL=... bun run deploy` form reaching
+production Convex, a deploy after a rename or from a new repository, and, of the clean-up:
+emptying a bucket of more than a handful of objects, `--convex dev`, and the by-hand and
+Convex dashboard routes. When a step
 disagrees with this page, the command's last lines say which part failed; please correct
 the page.
