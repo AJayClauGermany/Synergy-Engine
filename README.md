@@ -92,7 +92,7 @@ Coming from an existing Unity project? Start at
 | Command | |
 |---|---|
 | `bun run dev` | Dev server with hot reload |
-| `bun run check` | Every check: format, lint, types, tests, project graph |
+| `bun run check` | Every check: format, lint, types, tests, the guides against the code, project graph |
 | `bun run fix` | Fix what a tool can, then check |
 | `bun test` | Tests only |
 | `bun run build` | Production build into `dist/` |
