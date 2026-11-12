@@ -724,14 +724,14 @@ A second complete run was made later the same day, by a person following this pa
 written, on a new repository made from the template and renamed with `bun run rename`. It
 went from start to end with nothing to correct. The Cloudflare account was the one of the
 first run, so the subdomain, R2 and Zero Trust were already on: step 5A on a new account
-has been run only once. In the same run, multiplayer connected between two machines on
-the same network. Frontier hosted and joined with a VPN switched on, but the two machines
+has been run only once. In the same run, multiplayer on a pull-request preview connected
+between two machines on the same network. Frontier hosted and joined with a VPN switched on, but the two machines
 could have found each other on the local network without going through it, so that
 shows nothing about different networks.
 
 Not run yet: a deploy switching on emailed codes by itself (the test token lacked that
-permission), the password prompt on a deployment without Access, multiplayer on a deployed
-preview and between two networks, the `PUBLIC_CONVEX_URL=... bun run deploy` form reaching
+permission), the password prompt on a deployment without Access, multiplayer between two
+networks, the `PUBLIC_CONVEX_URL=... bun run deploy` form reaching
 production Convex, and, of the clean-up:
 emptying a bucket of more than a handful of objects, `--convex dev`, and the by-hand and
 Convex dashboard routes. When a step
