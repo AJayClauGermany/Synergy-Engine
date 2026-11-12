@@ -29,6 +29,10 @@ A first run takes about an hour, most of it in step 5. Steps 1 and 2 need no acc
 the rest still works (without Convex the game is single-player and peer-to-peer; without
 Cloudflare the preview workflow passes and does nothing).
 
+A coding agent can do most of this for you, and every check has a command you can run
+as well: [If an agent does the set-up](#if-an-agent-does-the-set-up) says which parts
+are yours and which commands do the rest.
+
 ## 1. Local development
 
 Install [Bun](https://bun.sh). The version the project is tested with is in `.bun-version`.
@@ -334,6 +338,256 @@ the address asks you to sign in like a preview does. It stays private until you 
   ([environment.md](environment.md)). It looks for the values in `.env.local` anywhere in
   the files you commit, so a short everyday word used as a test password (`test`) is
   reported wherever that word appears. Use long random values.
+
+## If an agent does the set-up
+
+The steps above are written for a person clicking through dashboards. An agent (Claude
+Code, Codex and the like) working in a clone of the repository can run nearly all of it
+from a shell, but it cannot create accounts, pay, approve a login or read your email. This
+section splits the work and gives the commands; they work just as well typed by you.
+
+### Yours, whoever runs the rest
+
+No command replaces these: each needs a browser, a login, a payment method or a decision.
+
+- **The name** (step 3) and **who may open previews** (`PREVIEW_ALLOWED_EMAILS`).
+- **Cloudflare, step 5A, items 1, 2, 3 and 5:** the account, the `workers.dev`
+  subdomain, switching on R2 (a payment method) and Zero Trust, and creating the API token.
+- **Convex, step 4:** approving the login, which the agent can start for you (below), and,
+  only if you want the Teardown workflow to empty tables, the deploy key.
+- **Writing `.env.local`.** The project's rules for agents (`AGENTS.md`, "Boundaries")
+  forbid them to read or edit it, because it holds the token. You write it; the agent
+  runs the commands that load it (`bun run env`, `bun run cloudflare:check`, the deploys),
+  which never print a secret.
+- **The GitHub repository's settings,** unless the agent's GitHub login is an admin of the
+  repository: secrets, variables, rulesets and switching Actions on all need admin.
+- **Signing in to a preview.** The code is emailed to you. The agent can prove the
+  gate is up (below), not that it lets you through.
+
+### What the agent needs
+
+| | |
+|---|---|
+| Programs | Bun at the version in `.bun-version`, git, the [GitHub CLI](https://cli.github.com) logged in (`gh auth status`), and Chromium with Playwright for `bun run screenshot`. wrangler and the Convex CLI come with `bun install` |
+| Network | GitHub, the npm registry, `api.cloudflare.com` (wrangler, R2 and Access all go through it), Convex's servers, and `0.peerjs.com` for peer-to-peer play |
+| Credentials of its own | none. Cloudflare's come from your `.env.local` and the repository's secrets, Convex's from the login you approve |
+
+An agent whose network blocks Cloudflare and Convex (some cloud sandboxes do) can still
+take the [GitHub-only route](#the-github-only-route).
+
+### Step by step
+
+**1. Local development.** All the agent's, except trying *Host* and *Join* in two windows.
+
+```bash
+bun install
+```
+
+```bash
+bun run check
+```
+
+```bash
+bun run screenshot
+```
+
+The last one builds the game, opens it in headless Chromium and ends with
+`Saved .screenshots/game.png`; it fails if the page logs an error.
+
+**2. CI.** The agent pushes, then reads the latest run, which should say `completed` and
+`success`:
+
+```bash
+gh run list --workflow ci.yml --limit 1
+```
+
+If workflows are switched off for the repository (admin):
+
+```bash
+gh api -X PUT "repos/{owner}/{repo}/actions/permissions" -F enabled=true
+```
+
+The `main` protection of step 2, as one command (admin; run CI once first so the check
+`check` exists):
+
+```bash
+gh api -X POST "repos/{owner}/{repo}/rulesets" --input - <<'EOF'
+{
+  "name": "main",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": { "ref_name": { "include": ["~DEFAULT_BRANCH"], "exclude": [] } },
+  "rules": [
+    { "type": "pull_request", "parameters": {
+        "required_approving_review_count": 0, "dismiss_stale_reviews_on_push": false,
+        "require_code_owner_review": false, "require_last_push_approval": false,
+        "required_review_thread_resolution": false } },
+    { "type": "required_status_checks", "parameters": {
+        "strict_required_status_checks_policy": false,
+        "required_status_checks": [{ "context": "check" }] } },
+    { "type": "non_fast_forward" }
+  ]
+}
+EOF
+```
+
+**3. Names.** You choose; the agent runs `bun run rename`, `bun run check`, commits and
+pushes.
+
+**4. Convex.** The agent starts the login; it prints a link and waits until you open it
+and approve:
+
+```bash
+bunx convex login --login-flow poll --no-open
+```
+
+Then, without questions (the team's slug is listed by `bunx convex login status`):
+
+```bash
+bunx convex dev --once --configure new --team <team-slug> --project <name> --dev-deployment cloud
+```
+
+```bash
+bunx convex deploy
+```
+
+The last line of `bunx convex deploy` is the production address that step 5C needs. To
+check, list the game's buttons once the online panel is open: with Convex set up,
+`Host (persistent)` is among them.
+
+```bash
+bun run screenshot --eval "[...document.querySelectorAll('button')].find(b => b.textContent === 'Play online').click()" --eval "[...document.querySelectorAll('button')].map(b => b.textContent)"
+```
+
+Click it and read the newest row of the `rooms` table, which should hold the room code
+the game shows:
+
+```bash
+bun run screenshot --eval "[...document.querySelectorAll('button')].find(b => b.textContent === 'Play online').click()" --eval "[...document.querySelectorAll('button')].find(b => b.textContent === 'Host (persistent)').click()" --wait 3000 --eval "document.querySelector('.network code')?.textContent"
+```
+
+```bash
+bunx convex data rooms --limit 1
+```
+
+**5A. Cloudflare.** Yours, then `.env.local`. The agent checks; it must end with `READY`:
+
+```bash
+bun run cloudflare:check
+```
+
+**5B. A preview from the agent's machine.**
+
+```bash
+bun run preview:deploy --name setup-test
+```
+
+That the gate is up: the address answers with a redirect to your Zero Trust team's
+sign-in page (`https://<team>.cloudflareaccess.com/...`), never with the game.
+
+```bash
+curl -sI https://setup-test-<name>.<subdomain>.workers.dev | grep -i '^location'
+```
+
+You sign in by emailed code; then the agent deletes the test preview (it asks for
+confirmation unless told not to):
+
+```bash
+bunx wrangler preview delete --name setup-test --skip-confirmation
+```
+
+**5C. GitHub.** With an admin login, this copies the values from `.env.local` into the
+repository's secrets and variables without showing them to the agent, the screen or the
+shell history:
+
+```bash
+bunx varlock run -- sh -c 'printf %s "$CLOUDFLARE_API_TOKEN" | gh secret set CLOUDFLARE_API_TOKEN && printf %s "$CLOUDFLARE_ACCOUNT_ID" | gh secret set CLOUDFLARE_ACCOUNT_ID && gh variable set PREVIEW_ALLOWED_EMAILS --body "$PREVIEW_ALLOWED_EMAILS"'
+```
+
+`PUBLIC_CONVEX_URL` is not copied: in `.env.local` it is your development address, and
+GitHub needs the production one from step 4:
+
+```bash
+gh variable set PUBLIC_CONVEX_URL --body "https://happy-animal-123.convex.cloud"
+```
+
+```bash
+gh secret list
+```
+
+```bash
+gh variable list
+```
+
+The check, by the agent: open a pull request, wait for *Preview*, read its three lines.
+
+```bash
+gh pr create --fill
+```
+
+```bash
+gh run list --workflow preview.yml --limit 1
+```
+
+```bash
+gh run watch <run-id> --exit-status
+```
+
+```bash
+gh run view <run-id> --log | grep -E 'Deployed|Assets:|Cloudflare Access:'
+```
+
+Then the same `curl` as in 5B on `https://pr-<number>-<name>.<subdomain>.workers.dev`,
+your sign-in, and `gh pr close <number>`, after which *Preview* runs once more and
+deletes it.
+
+**6. Main deployment.** The agent runs it; you sign in.
+
+```bash
+PUBLIC_CONVEX_URL=https://happy-animal-123.convex.cloud bun run deploy
+```
+
+**Clearing up.** The *Teardown* workflow, started from the command line. Without
+`confirm` it only lists:
+
+```bash
+gh workflow run teardown.yml
+```
+
+```bash
+gh workflow run teardown.yml -f confirm=<name> -f convex=true
+```
+
+```bash
+gh run list --workflow teardown.yml --limit 1
+```
+
+```bash
+gh run view <run-id> --log | tail -n 20
+```
+
+The log ends with `CLEAN` or `NOT CLEAN`. Leave out `-f convex=true` to keep the Convex
+tables.
+
+### The GitHub-only route
+
+An agent that can reach GitHub but not Cloudflare or Convex skips step 5B and every
+command that talks to them. You do steps 4 and 5A and enter the values of 5C in the
+repository's settings; the agent does steps 1 to 3, opens the pull request, reads the
+*Preview* run, and starts and reads *Teardown*. Nothing about Cloudflare needs to be on
+its machine: the workflows use the repository's secrets. The clean-up recorded below was
+done this way.
+
+### Which of these commands have been run
+
+On 12 November 2026, in a cloud sandbox: `bun install`, `bun run check` and
+`bun run screenshot`, including the first `--eval` command of step 4 (without Convex it
+lists `Close`, `Host`, `Join` and `End turn`), and `bunx varlock run -- sh -c` handing
+values to the command inside. The flags of the Convex and wrangler commands were checked
+against their `--help`. Not run yet: every `gh` command above against a real repository
+(that sandbox's GitHub access could not set secrets or rulesets), the Convex login and
+`--configure new` without questions, the `rooms` check, the `curl` gate check, and an
+agent going through the whole page from start to finish.
 
 ## Where each value lives
 
