@@ -81,19 +81,14 @@ deployment nobody configured is locked, not open):
    main deployment only; previews do not inherit it.
 2. **Cloudflare Access** is in front of it. While `PUBLIC_ACCESS` is `"false"`, Access
    covers the main deployment and every preview; once it is `"true"`, only the previews.
-3. The visitor knows the **password**, if you set one. This is the fallback for a
-   deployment without Access, and for scripts. It is a secret of the Worker, kept by
-   Cloudflare; a GitHub secret or variable of this name does nothing:
-
-   ```bash
-   bunx wrangler preview base-config secret put PREVIEW_PASSWORD
-   ```
-
-   ```bash
-   bunx wrangler secret put PREVIEW_PASSWORD
-   ```
-
-   (the first for all previews, the second for the main deployment). A correct password
+3. The visitor knows the **password**, if you set one. This is only ever the
+   fallback, for a deployment without Access: when both are set, Access is the gate and
+   the password is not asked for. Set `PREVIEW_PASSWORD` where the other values live (a
+   GitHub repository *secret* for pull-request previews, `.env.local` for deploys by
+   hand) and each deploy stores it with the Worker as a secret. Neither it nor the list of
+   emails has to be set; with neither, the deployment is locked. Removing the value does
+   not remove the secret from Cloudflare (`bunx wrangler secret delete PREVIEW_PASSWORD` does, and
+   `bunx wrangler preview secret --help` shows the same for previews). A correct password
    sets a cookie for 7 days, derived from the password, so changing it signs everyone
    out; `curl -u x:"$PASSWORD" https://...` works too. It is one shared password with
    no rate limiting: use a long random one. Behind Access the password is never asked
@@ -113,8 +108,9 @@ checks every visitor to any of its addresses before the Worker runs. A deploy
    admits exactly `PREVIEW_ALLOWED_EMAILS`;
 2. makes sure visitors can sign in with a code mailed to them. A new Zero Trust account
    offers only "Sign in with Cloudflare", which needs a Cloudflare login. The deploy adds
-   the *One-time PIN* method when the token has *Access: Organizations, Identity
-   Providers, and Groups: Edit*, and otherwise says where to add it by hand
+   the *One-time PIN* method, with the token's *Access: Organizations, Identity
+   Providers, and Groups: Edit*; a token made before that permission was part of the
+   set-up still deploys, and the deploy says where to add the method by hand
    (*Zero Trust > Integrations > Identity providers*);
 3. uploads the Worker with the variable `ACCESS_AUD` (the application's audience tag).
 

@@ -13,6 +13,7 @@ import {
   deployedUrl,
   moveAssetsToBucket,
   parseAllowed,
+  passwordSecrets,
   planUpload,
   protectWithAccess,
   type WorkerConfig,
@@ -56,6 +57,11 @@ describe('who may open a preview', () => {
     const application = accessApplication('my-game', 'abc123', parseAllowed('ada@studio.com'), true);
     expect(application).toMatchObject({ destinations: [{ type: 'preview_worker', worker_id: 'abc123' }] });
   });
+});
+
+test('a password reaches wrangler as written, whatever characters it holds', () => {
+  const password = 'p$HOME "quoted"\n#日本';
+  expect(JSON.parse(passwordSecrets(password))).toEqual({ PREVIEW_PASSWORD: password });
 });
 
 describe('assets', () => {
@@ -121,7 +127,7 @@ describe('against Cloudflare (a stand-in for its API)', () => {
       const resource = pathname.replace('/accounts/acct', '');
       const json = (result: unknown, status = 200) => Response.json({ success: status < 400, result }, { status });
       const token = request.headers.get('Authorization');
-      // A token as docs/setup.md describes it, and the same without the optional permission.
+      // A token as docs/setup.md describes it, and one from an older set-up, without the permission to add sign-in methods.
       if (token !== 'Bearer secret-token' && token !== 'Bearer no-sign-in-methods') return json(null, 403);
       if (resource === '/access/identity_providers') {
         if (token !== 'Bearer secret-token') return json(null, 403);

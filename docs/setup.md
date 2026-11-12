@@ -70,8 +70,23 @@ The *Preview* workflow also runs on pull requests. Until step 5 it passes with t
 
 From here on, work on a branch and open a pull request rather than pushing to `main`:
 previews exist per pull request, and CI then checks a change before it lands. Nothing
-breaks if a set-up commit goes straight to `main`. To make GitHub enforce it, protect
-`main` under *Settings > Branches* and require the *CI* check.
+breaks if a set-up commit goes straight to `main`.
+
+**Recommended: protect `main`.** It makes GitHub refuse a change to `main` that did not
+come through a pull request with a green *CI* run, so a broken build cannot land by
+accident, by you, a teammate or an agent. Two minutes, once:
+
+1. *Settings > Branches > Add branch ruleset* (or *Add classic branch protection rule*).
+   Name it `main`; under *Target branches* choose *Include default branch*; set
+   *Enforcement status* to *Active*.
+2. Tick **Require a pull request before merging**. Working alone, set *Required
+   approvals* to 0: the rule then only asks for the pull request, not for a second person.
+3. Tick **Require status checks to pass** and add the check called `check` (it is the job
+   of the *CI* workflow, and appears in the list once CI has run).
+4. Leave *Block force pushes* ticked. Save.
+
+On a free plan this is available for public repositories; a private one needs GitHub Pro
+or Team. Without it, the habit above is all there is, and that works too.
 
 ## 3. Names
 
@@ -163,11 +178,11 @@ All of it is in the [Cloudflare dashboard](https://dash.cloudflare.com).
 2. **R2.** Open *R2 Object Storage* and enable it. It asks for a payment method; the free
    allowance is 10 GB.
 3. **Zero Trust.** Open *Zero Trust*, pick a team name and the free plan (50 people).
-4. **Sign-in by emailed code.** In *Zero Trust > Integrations > Identity providers*, choose
-   *Add new identity provider*, then **One-time PIN**. A new Zero Trust account offers
-   only "Sign in with Cloudflare", which works for you but not for a tester without a
-   Cloudflare login. (Skip this if you give the token the optional permission below: the
-   first deploy then does it.)
+4. **Sign-in by emailed code: nothing to do.** A new Zero Trust account offers only "Sign
+   in with Cloudflare", which works for you but not for a tester without a Cloudflare
+   login. The first deploy adds sign-in by a code mailed to the tester, using the last
+   permission of the token below. (By hand, should you ever need it: *Zero Trust >
+   Integrations > Identity providers*, *Add new identity provider*, **One-time PIN**.)
 5. **API token.** *My Profile > API Tokens > Create Token*, then *Use template* next to
    **Edit Cloudflare Workers**. On the form:
 
@@ -175,7 +190,7 @@ All of it is in the [Cloudflare dashboard](https://dash.cloudflare.com).
    |-------|----------------|
    | Permissions, already listed | leave them. *Workers R2 Storage: Edit* is among them; *Edit* includes reading, so *Read* stays unticked |
    | Permissions, *Add more* | *Account* / **Access: Apps and Policies** / *Edit* |
-   | Permissions, *Add more* (optional) | *Account* / **Access: Organizations, Identity Providers, and Groups** / *Edit*. Lets a deploy do item 4 for you, and lets `bun run cloudflare:check` see whether it is done |
+   | Permissions, *Add more* | *Account* / **Access: Organizations, Identity Providers, and Groups** / *Edit*. This is what lets a deploy do item 4, so that people without a Cloudflare login can sign in |
    | Account Resources | *Include* / your account |
    | Zone Resources | *Include* / *All zones*. The form will not continue without a choice; the game uses no zone |
 
@@ -286,8 +301,9 @@ gh variable set PUBLIC_CONVEX_URL --body "https://happy-animal-123.convex.cloud"
 - Close the pull request: the workflow runs once more and deletes the preview.
 
 To change who gets in, edit the variable; the next deploy applies it. A password
-(`PREVIEW_PASSWORD`) is a different, optional gate that lives in Cloudflare, not in
-GitHub: see [deploying.md](deploying.md), "Who gets in".
+(`PREVIEW_PASSWORD`, a repository *secret*) is an optional fallback for deployments
+without Access; with a list of emails set, Access comes first and the password is never
+asked for. See [deploying.md](deploying.md), "Who gets in".
 
 ## 6. The main deployment (optional)
 
@@ -328,7 +344,7 @@ Useful when something is missing, and when moving to another repository or machi
 | Names (`wrangler.jsonc`, `PEER_PREFIX`, title), written by `bun run rename` | the repository | yes |
 | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | GitHub repository secrets; `.env.local` for deploys by hand | no: per repository, per machine |
 | `PREVIEW_ALLOWED_EMAILS`, `PUBLIC_CONVEX_URL` | GitHub repository variables; `.env.local` for deploys by hand | no: per repository, per machine |
-| `PREVIEW_PASSWORD` (optional) | a Cloudflare secret on the Worker, set with wrangler | no |
+| `PREVIEW_PASSWORD` (optional fallback) | a GitHub repository secret; `.env.local` for deploys by hand. A deploy stores it with the Worker | no: per repository, per machine |
 | Sign-in by emailed code | the Zero Trust account, once | no |
 | `CONVEX_DEPLOYMENT`, `CONVEX_URL` | `.env.local`, written by `bun run backend` | no: per developer |
 | Convex and wrangler logins | your machine | no |
@@ -439,7 +455,7 @@ avoid; the last column says what has been run since.
 | 6 | `bun run deploy` deployed and reported; the address was locked for the same reason | same fix; not run again |
 | 7 | The commit hook refused a failing commit; `bun run desktop:dev` opened the game; `varlock scan` works | |
 
-Not run yet: a deploy switching on emailed codes by itself (the token lacked the optional
+Not run yet: a deploy switching on emailed codes by itself (the token lacked that
 permission), multiplayer on a deployed preview and between two networks, the `PUBLIC_CONVEX_URL=... bun run deploy` form reaching
 production Convex, and everything under "Clearing what the test run created". When a step
 disagrees with this page, the command's last lines say which part failed; please correct

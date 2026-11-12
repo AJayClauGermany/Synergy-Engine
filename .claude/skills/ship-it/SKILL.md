@@ -58,8 +58,9 @@ bunx wrangler deploy --dry-run
 ```
 
 Secrets are entered by the user, never by you and never in files that get committed
-(GitHub repository secrets for CI, `.env.local` locally, `wrangler secret put` for the
-optional password).
+(GitHub repository secrets for CI, `.env.local` locally). The optional `PREVIEW_PASSWORD`
+lives in the same two places; a deploy hands it to wrangler (`--secrets-file`), and the
+Worker asks for it only where Access is not in front.
 
 Deploying publishes content to the internet and needs the user's Cloudflare credentials.
 Ask before running `preview:deploy` or `deploy` unless they already told you to.
