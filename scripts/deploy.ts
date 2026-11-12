@@ -139,9 +139,11 @@ export interface Account {
   api: string;
 }
 
-class ApiError extends Error {}
+/** Cloudflare refused a call; the message carries its answer. */
+export class ApiError extends Error {}
 
-async function call(account: Account, method: string, resource: string, body?: BodyInit, type?: string) {
+/** One call to the account's part of the API. Throws an ApiError unless it worked or found nothing (404). */
+export async function call(account: Account, method: string, resource: string, body?: BodyInit, type?: string) {
   const response = await fetch(`${account.api}/accounts/${account.id}${resource}`, {
     method,
     body,
@@ -153,14 +155,23 @@ async function call(account: Account, method: string, resource: string, body?: B
 }
 
 /** A JSON call. Gives null for "no such thing" (404). */
-async function api<Result>(account: Account, method: string, resource: string, body?: object): Promise<Result | null> {
+export async function api<Result>(
+  account: Account,
+  method: string,
+  resource: string,
+  body?: object,
+): Promise<Result | null> {
   const response = await call(account, method, resource, body && JSON.stringify(body), 'application/json');
   if (response.status === 404) return null;
   return ((await response.json()) as { result: Result }).result;
 }
 
 /** Runs `work` over `items`, a few at a time: fast, without opening a connection per file. */
-async function inParallel<Item>(items: Item[], limit: number, work: (item: Item) => Promise<void>): Promise<void> {
+export async function inParallel<Item>(
+  items: Item[],
+  limit: number,
+  work: (item: Item) => Promise<void>,
+): Promise<void> {
   const queue = [...items];
   await Promise.all(
     Array.from({ length: Math.min(limit, queue.length) }, async () => {
@@ -229,7 +240,7 @@ export async function moveAssetsToBucket(account: Account, bucket: string, dist:
 }
 
 /** Whether Cloudflare already has a Worker of this name, and its id if so. */
-async function findWorker(account: Account, name: string): Promise<string | null> {
+export async function findWorker(account: Account, name: string): Promise<string | null> {
   return (await api<{ id: string }>(account, 'GET', `/workers/workers/${name}`))?.id ?? null;
 }
 
@@ -259,6 +270,18 @@ export async function allowEmailCodes(account: Account): Promise<string> {
   }
 }
 
+/** The Access application that guards a Worker, if the account has it. */
+export async function findAccessApplication(account: Account, worker: string): Promise<{ id: string } | null> {
+  const name = accessApplicationName(worker);
+  for (let page = 1; ; page++) {
+    const apps =
+      (await api<{ id: string; name: string }[]>(account, 'GET', `/access/apps?per_page=50&page=${page}`)) ?? [];
+    const found = apps.find((app) => app.name === name);
+    if (found) return found;
+    if (apps.length < 50) return null;
+  }
+}
+
 /**
  * Step 3: Cloudflare Access in front of the Worker, for exactly the people on the list.
  * `aud` is the application's audience tag, which the deploy hands to the Worker.
@@ -272,13 +295,7 @@ export async function protectWithAccess(
   if (!workerId) throw new Error(`Cloudflare has no Worker called "${config.name}", so Access has nothing to protect.`);
 
   const name = accessApplicationName(config.name);
-  let existing: { id: string } | undefined;
-  for (let page = 1; !existing; page++) {
-    const apps =
-      (await api<{ id: string; name: string }[]>(account, 'GET', `/access/apps?per_page=50&page=${page}`)) ?? [];
-    existing = apps.find((app) => app.name === name);
-    if (apps.length < 50) break;
-  }
+  const existing = await findAccessApplication(account, config.name);
 
   const application = accessApplication(config.name, workerId, allowed, config.vars?.PUBLIC_ACCESS === 'true');
   let saved: { id: string; aud?: string } | null;

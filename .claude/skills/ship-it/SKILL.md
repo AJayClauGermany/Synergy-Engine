@@ -30,6 +30,12 @@ clear what a test run created: `docs/setup.md`. The moving parts:
   which does not pass `ctx.access` on. Access still checks every visitor before the
   Worker; the Worker just cannot see it. Do not "fix" this by trusting a request header.
 - `.github/workflows/preview.yml` → a preview per non-draft pull request, deleted on close.
+- `scripts/teardown.ts` (`bun run cloudflare:teardown`) → the opposite of a deploy: lists
+  the Worker, the Access application and the bucket, and with `--confirm <worker name>`
+  deletes them, Worker first (a Worker without its Access application serves everyone).
+  `.github/workflows/teardown.yml` runs it with the repository's secrets, started by hand
+  or by an agent: you need no Cloudflare login to clean up. It deletes for good, so start
+  it only when the user asked for a clean-up, and list (empty `confirm`) before deleting.
 
 Commands:
 

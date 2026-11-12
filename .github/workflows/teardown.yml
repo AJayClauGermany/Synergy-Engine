@@ -1,0 +1,63 @@
+name: Teardown
+
+# Removes what deploys of this game created on Cloudflare: the Worker with its previews,
+# the Access application and the R2 bucket (scripts/teardown.ts; docs/setup.md, "Clearing
+# what a test run created"). It never runs by itself: start it from the Actions tab, or
+# have an agent start it. It uses the secrets the Preview workflow uses, so whoever starts
+# it needs no Cloudflare login.
+#
+#   confirm   empty: only lists what exists. The Worker's name ("name" in wrangler.jsonc):
+#             deletes it. The name is asked for so that a run started in the wrong
+#             repository deletes nothing.
+#   convex    also empties every table of the Convex deployment that the optional secret
+#             CONVEX_DEPLOY_KEY belongs to (Convex dashboard, Settings, Deploy keys). The
+#             project, its functions and its address stay.
+#
+# A pull request opened afterwards deploys everything again.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'The Worker name from wrangler.jsonc, to delete. Empty: only list what exists.'
+        required: false
+        default: ''
+      convex:
+        description: 'Also empty the Convex tables (needs the secret CONVEX_DEPLOY_KEY)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: teardown
+
+jobs:
+  teardown:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile
+      - name: List, or delete, what the deploys created
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+          # Through the environment, never pasted into the script: an input is free text.
+          CONFIRM: ${{ inputs.confirm }}
+          CONVEX: ${{ inputs.convex }}
+        run: |
+          args=()
+          if [ -n "$CONFIRM" ]; then args+=(--confirm "$CONFIRM"); fi
+          if [ "$CONVEX" = "true" ]; then
+            if [ -z "$CONVEX_DEPLOY_KEY" ]; then
+              echo "::error::Convex was asked for, but the secret CONVEX_DEPLOY_KEY is not set (docs/setup.md)."
+              exit 1
+            fi
+            args+=(--convex prod)
+          fi
+          bun run cloudflare:teardown "${args[@]}"

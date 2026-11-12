@@ -31,6 +31,7 @@
     "preview:deploy": "varlock run -- bun scripts/deploy.ts preview",
     "deploy": "varlock run -- bun scripts/deploy.ts production",
     "cloudflare:check": "varlock run -- bun scripts/deploy.ts check",
+    "cloudflare:teardown": "varlock run -- bun scripts/teardown.ts",
     "desktop:dev": "varlock run -- bun run scripts/build.ts --outdir desktop/dist && cd desktop && bun ../node_modules/electrobun/bin/electrobun.cjs dev",
     "desktop:build": "varlock run -- bun run scripts/build.ts --outdir desktop/dist && cd desktop && bun ../node_modules/electrobun/bin/electrobun.cjs build --env=stable",
     "env": "varlock load"

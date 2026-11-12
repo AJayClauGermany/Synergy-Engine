@@ -25,6 +25,7 @@ Cloudflare Workers (preview deploys) · Electrobun (desktop).
 | `bun run env` | Check environment variables against `.env.schema` (secrets masked) |
 | `bun run preview:local` / `preview:deploy` / `deploy` | Cloudflare: local gate, branch preview, main deployment. The deploys move hashed assets to R2 and set up Cloudflare Access (`docs/deploying.md`) |
 | `bun run cloudflare:check` | Reads the Cloudflare account, changes nothing: is everything a deploy needs switched on? |
+| `bun run cloudflare:teardown` | Lists what deploys created on Cloudflare (Worker, Access application, R2 bucket); with `--confirm <name>` deletes it. The Teardown workflow runs it with the repository's secrets (`docs/setup.md`) |
 | `bun run rename <name> ["Title"]` | Writes the game's name into every file that carries one (`docs/setup.md`, step 3) |
 | `bun run desktop:dev` / `desktop:build` | Electrobun desktop app |
 
