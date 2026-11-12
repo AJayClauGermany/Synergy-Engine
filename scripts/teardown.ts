@@ -124,12 +124,12 @@ export async function teardown(account: Account, config: WorkerConfig, remove: b
         const count = (await objectsOf(account, bucket)).length;
         return [
           'found',
-          `would be emptied (${count === PAGE ? `${PAGE} objects or more` : `${count} objects`}) and deleted`,
+          `would be emptied (${count === PAGE ? `${PAGE} objects or more` : `${count} object${count === 1 ? '' : 's'}`}) and deleted`,
         ];
       }
       const count = await emptyBucket(account, bucket);
       await api(account, 'DELETE', `/r2/buckets/${bucket}`);
-      return ['deleted', `after deleting its ${count} objects`];
+      return ['deleted', `after deleting its ${count} object${count === 1 ? '' : 's'}`];
     });
   }
   return steps;
