@@ -13,16 +13,22 @@ clear what a test run created: `docs/setup.md`. The moving parts:
 - `bun run build` → `dist/` (static site). Imported files land in `dist/assets/` under a
   content-hashed name; the game asks for `./assets/<name>-<hash>.<ext>`.
 - `scripts/deploy.ts` (`bun run preview:deploy`, `bun run deploy`) → build, move
-  `dist/assets/` to the R2 bucket (only files it lacks; never deletes), run wrangler, make
-  Cloudflare Access admit `PREVIEW_ALLOWED_EMAILS`. The R2 and Access steps need
-  `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`; without them it deploys the old way.
+  `dist/assets/` to the R2 bucket (only files it lacks; never deletes), make Cloudflare
+  Access admit `PREVIEW_ALLOWED_EMAILS` (and switch on sign-in by emailed code), run
+  wrangler with `--var ACCESS_AUD:<tag>`. The R2 and Access steps need
+  `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`; without them the deployment is
+  locked unless it has a password. `bun run cloudflare:check` reads the account and says
+  what is missing, changing nothing.
 - `wrangler.jsonc` → Worker with static assets; `run_worker_first: true` sends every
   request through `cloudflare/worker.ts`. The `ASSET_BUCKET` R2 binding appears twice
   (top level and `previews`), because previews inherit nothing.
 - `cloudflare/worker.ts` → the gate. Serves when `PUBLIC_ACCESS` is `"true"`, or Cloudflare
-  Access authenticated the request (`context.access`), or the visitor knows the
-  `PREVIEW_PASSWORD` secret. It fails closed when none is set. `/assets/*` is read from
-  R2 first, then from the Worker's own files.
+  Access is in front (`ACCESS_AUD`, set by the deploy; or `context.access`), or the visitor
+  knows the `PREVIEW_PASSWORD` secret. It fails closed when none is set. `/assets/*` is
+  read from R2 first, then from the Worker's own files.
+- Why `ACCESS_AUD`: a Worker with static assets runs behind Cloudflare's asset router,
+  which does not pass `ctx.access` on. Access still checks every visitor before the
+  Worker; the Worker just cannot see it. Do not "fix" this by trusting a request header.
 - `.github/workflows/preview.yml` → a preview per non-draft pull request, deleted on close.
 
 Commands:
@@ -54,12 +60,13 @@ Ask before running `preview:deploy` or `deploy` unless they already told you to.
 
 Changing the gate: edit `cloudflare/worker.ts`, keep `cloudflare/worker.test.ts` passing
 (`bun test cloudflare`), and keep these properties: assets are gated as well as HTML,
-nothing configured → nothing served, only `context.access` (never a request header) counts
-as Access, the cookie never contains the password, comparisons are constant-time.
+nothing configured → nothing served, only `ACCESS_AUD` or `context.access` (never a request
+header) counts as Access, `ACCESS_AUD` is set only by `scripts/deploy.ts` after the Access
+application exists, the cookie never contains the password, comparisons are constant-time.
 
 Changing the deploy: `scripts/deploy.test.ts` runs the upload and the Access calls against
-a stand-in for Cloudflare's API. Neither has been run against a real account here; say so
-when you change them. Assets must keep working from disk for the desktop build, so never
+a stand-in for Cloudflare's API. `docs/setup.md`, "What a real run has confirmed", records
+what has run against a real account; say which side of that line a change is on. Assets must keep working from disk for the desktop build, so never
 make the game depend on an absolute asset URL.
 
 `wrangler preview` is in open beta; check `bunx wrangler preview --help` rather than
@@ -83,7 +90,7 @@ bun run desktop:build
 - The web build is copied from `desktop/dist` to `views/game` and loaded from
   `views://game/index.html`. Asset URLs in the build are relative, which that requires.
 - Builds target the current OS only.
-- This setup was written from the official 2.0.6 templates but not build-verified. If a
+- `desktop:dev` has run on macOS; `desktop:build` is not verified. If a
   build fails, compare with `bunx electrobun init --template=vanilla-vite` output and fix
   the config; then update the status note in `docs/desktop.md`.
 

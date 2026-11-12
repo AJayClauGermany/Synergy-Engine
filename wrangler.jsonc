@@ -1,6 +1,6 @@
 {
   // Cloudflare Worker that serves the built game from dist/ to the people allowed to see it.
-  // See docs/deploying.md. Rename this to something unique for your game.
+  // See docs/deploying.md. `bun run rename <name>` changes "name" and both bucket names together.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "synergy-game",
   "main": "cloudflare/worker.ts",
@@ -13,6 +13,8 @@
     // Send every request through the Worker first, so nothing is served before the password check.
     "run_worker_first": true
   },
+  // No usage reports from wrangler to Cloudflare for this project.
+  "send_metrics": false,
   "workers_dev": true,
   "preview_urls": true,
   // Production settings. Flip to "true" when the game should be open to everyone.
@@ -26,8 +28,9 @@
   "r2_buckets": [{ "binding": "ASSET_BUCKET", "bucket_name": "synergy-game-assets" }],
   // Settings for `wrangler preview` (per-branch and per-pull-request links). Previews do not
   // inherit the production vars, secrets or bindings above. With no PUBLIC_ACCESS they stay
-  // locked to everyone but the people Cloudflare Access admits (PREVIEW_ALLOWED_EMAILS) and
-  // those who know a PREVIEW_PASSWORD secret, if one is set for them.
+  // locked to everyone but the people Cloudflare Access admits (PREVIEW_ALLOWED_EMAILS; the
+  // deploy script passes ACCESS_AUD once Access is in place) and those who know a
+  // PREVIEW_PASSWORD secret, if one is set for them.
   "previews": {
     // The same bucket on purpose: a hashed file is the same file for every build.
     "r2_buckets": [{ "binding": "ASSET_BUCKET", "bucket_name": "synergy-game-assets" }]

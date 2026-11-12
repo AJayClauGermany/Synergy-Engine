@@ -6,8 +6,9 @@
  * one of these holds, tried in this order:
  *
  *   1. PUBLIC_ACCESS is "true": the gate is off (a public launch).
- *   2. Cloudflare Access let the request through. Access asks each visitor to sign in and
- *      admits only the emails on your list; `bun run preview:deploy` sets it up.
+ *   2. Cloudflare Access is in front. Access asks each visitor to sign in and admits only
+ *      the emails on your list, before this Worker runs; a deploy sets it up and then tells
+ *      the Worker so (ACCESS_AUD).
  *   3. The visitor knows PREVIEW_PASSWORD (a login page, or HTTP Basic auth).
  *
  * It fails closed: when none of the three is configured, nothing is served.
@@ -17,6 +18,8 @@
  * Worker's own static files otherwise. The bucket is private; this Worker is the only way in.
  *
  * Configuration (see docs/deploying.md):
+ *   ACCESS_AUD        var      Set by scripts/deploy.ts, never by hand: the Access application
+ *                              that guards this deployment.
  *   PREVIEW_PASSWORD  secret   The password. Use a long random one.
  *   PUBLIC_ACCESS     var      Set to "true" to switch the gate off.
  *   ASSET_BUCKET      R2       Optional. Where deploys keep the hashed assets.
@@ -34,6 +37,12 @@ interface StoredAsset {
 export interface Env {
   ASSETS: { fetch(request: Request): Promise<Response> };
   ASSET_BUCKET?: { get(key: string, options: { onlyIf: Headers; range: Headers }): Promise<StoredAsset | null> };
+  /**
+   * The audience tag of the Access application in front of this deployment. A deploy passes
+   * it once that application exists (scripts/deploy.ts), which is how the Worker knows that
+   * every request it sees was let through by Access.
+   */
+  ACCESS_AUD?: string;
   PREVIEW_PASSWORD?: string;
   PUBLIC_ACCESS?: string;
 }
@@ -41,6 +50,10 @@ export interface Env {
 /**
  * What the Worker reads of its execution context. `access` is set by Cloudflare, and only
  * when Cloudflare Access authenticated the request; a visitor cannot forge it with a header.
+ *
+ * A Worker with static assets, as this one is, runs behind Cloudflare's asset router, and
+ * the router does not hand `access` on (Cloudflare's "ctx.access limitations"). Access
+ * still checks every visitor first; the Worker only cannot see that it did. Hence ACCESS_AUD.
  */
 export interface Context {
   readonly access?: unknown;
@@ -206,8 +219,9 @@ async function serve(request: Request, env: Env): Promise<Response> {
 
 export async function handleRequest(request: Request, env: Env, context?: Context): Promise<Response> {
   if (env.PUBLIC_ACCESS === 'true') return serve(request, env);
-  // Cloudflare Access already checked who this is against the list of allowed emails.
-  if (context?.access !== undefined) return privately(await serve(request, env));
+  // Cloudflare Access already checked who this is against the list of allowed emails:
+  // either Cloudflare says so on this request, or the deploy that put Access in front did.
+  if (context?.access !== undefined || env.ACCESS_AUD) return privately(await serve(request, env));
 
   const password = env.PREVIEW_PASSWORD;
   if (!password) {
@@ -215,8 +229,9 @@ export async function handleRequest(request: Request, env: Env, context?: Contex
       'Preview locked',
       `<h1>Preview locked</h1>
 <p>Nobody has been given access to this deployment yet, so nothing is being served.
-Set <code>PREVIEW_ALLOWED_EMAILS</code> and deploy again, or set the
-<code>PREVIEW_PASSWORD</code> secret (see docs/deploying.md).</p>`,
+Deploy with <code>PREVIEW_ALLOWED_EMAILS</code> set (<code>bun run preview:deploy</code>, or a
+pull request), or give the Worker a <code>PREVIEW_PASSWORD</code> secret with wrangler.
+docs/deploying.md, "Who gets in", has both.</p>`,
       503,
     );
   }

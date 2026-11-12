@@ -6,6 +6,8 @@ import path from 'node:path';
 import {
   accessApplication,
   accessApplicationName,
+  allowEmailCodes,
+  checkAccount,
   type Account,
   assetBucket,
   deployedUrl,
@@ -67,8 +69,10 @@ describe('assets', () => {
 
   test('wrangler.jsonc gives previews and the main deployment the same bucket', () => {
     // Shared on purpose: names are content hashes, so builds never overwrite each other.
-    expect(assetBucket(config, 'preview')).toBe(`${config.name}-assets`);
-    expect(assetBucket(config, 'production')).toBe(`${config.name}-assets`);
+    // `bun run rename <name>` writes all three; by hand it is easy to change only "name".
+    const fix = `wrangler.jsonc: both "bucket_name"s must be "${config.name}-assets", after "name". Run: bun run rename ${config.name}`;
+    expect(assetBucket(config, 'preview'), fix).toBe(`${config.name}-assets`);
+    expect(assetBucket(config, 'production'), fix).toBe(`${config.name}-assets`);
     expect(assetBucket({ name: 'no-r2' }, 'preview')).toBeNull();
   });
 
@@ -107,6 +111,7 @@ describe('against Cloudflare (a stand-in for its API)', () => {
   const buckets = new Set<string>();
   const objects = new Map<string, { type: string | null; bytes: number }>();
   const apps: { id: string; name: string; body: unknown }[] = [];
+  const signIns: object[] = [{ type: 'cloudflare' }];
   const changes: string[] = [];
 
   const server = Bun.serve({
@@ -115,7 +120,15 @@ describe('against Cloudflare (a stand-in for its API)', () => {
       const { pathname } = new URL(request.url);
       const resource = pathname.replace('/accounts/acct', '');
       const json = (result: unknown, status = 200) => Response.json({ success: status < 400, result }, { status });
-      if (request.headers.get('Authorization') !== 'Bearer secret-token') return json(null, 403);
+      const token = request.headers.get('Authorization');
+      // A token as docs/setup.md describes it, and the same without the optional permission.
+      if (token !== 'Bearer secret-token' && token !== 'Bearer no-sign-in-methods') return json(null, 403);
+      if (resource === '/access/identity_providers') {
+        if (token !== 'Bearer secret-token') return json(null, 403);
+        if (request.method === 'POST') signIns.push((await request.json()) as object);
+        return json(signIns);
+      }
+      if (resource === '/workers/subdomain') return json({ subdomain: 'studio' });
       if (request.method !== 'GET') changes.push(`${request.method} ${resource}`);
 
       const object = /^\/r2\/buckets\/([^/]+)\/objects\/(.+)$/.exec(resource);
@@ -143,12 +156,12 @@ describe('against Cloudflare (a stand-in for its API)', () => {
       if (resource === '/access/apps') {
         const body = (await request.json()) as { name: string };
         apps.push({ id: 'app-1', name: body.name, body });
-        return json({ id: 'app-1' });
+        return json({ id: 'app-1', aud: 'aud-tag-1' });
       }
       const app = apps.find((candidate) => resource === `/access/apps/${candidate.id}`);
       if (app && request.method === 'PUT') {
         app.body = await request.json();
-        return json({ id: app.id });
+        return json({ id: app.id, aud: 'aud-tag-1' });
       }
       return json(null, 400);
     },
@@ -200,13 +213,43 @@ describe('against Cloudflare (a stand-in for its API)', () => {
 
   test('Access is created once, then updated in place when the list changes', async () => {
     const created = await protectWithAccess(account, { name: 'my-game' }, parseAllowed('ada@studio.com'));
-    expect(created).toBe('created, admitting ada@studio.com');
+    expect(created.summary).toStartWith('created, admitting ada@studio.com; ');
+    // What the deploy hands to the Worker, so that it serves the people Access admits.
+    expect(created.aud).toBe('aud-tag-1');
     const updated = await protectWithAccess(account, { name: 'my-game' }, parseAllowed('bob@studio.com @partner.org'));
-    expect(updated).toBe('updated, admitting bob@studio.com, anyone @partner.org');
+    expect(updated.summary).toStartWith('updated, admitting bob@studio.com, anyone @partner.org; ');
     expect(apps).toHaveLength(1);
     expect(apps[0]?.body).toEqual(
       accessApplication('my-game', 'worker-id-1', parseAllowed('bob@studio.com @partner.org'), false),
     );
+  });
+
+  test('sign-in by emailed code is switched on once; a token that may not do it gets instructions', async () => {
+    // The first deploy above found only "Sign in with Cloudflare" and added the emailed code.
+    expect(signIns).toEqual([{ type: 'cloudflare' }, { name: 'One-time PIN', type: 'onetimepin', config: {} }]);
+    changes.length = 0;
+    expect(await allowEmailCodes(account)).toBe('testers sign in with a code mailed to them');
+    expect(changes).toEqual([]);
+    const limited = await allowEmailCodes({ ...account, token: 'no-sign-in-methods' });
+    expect(limited).toContain('Zero Trust > Integrations > Identity providers');
+  });
+
+  test('the account check reads only, and says what is missing', async () => {
+    changes.length = 0;
+    const ready = await checkAccount(account, { ...config, name: 'my-game' });
+    expect(ready.map((finding) => [finding.what, finding.ok])).toEqual([
+      ['API token and account id', true],
+      ['workers.dev subdomain', true],
+      ['R2', true],
+      ['Zero Trust (Cloudflare Access)', true],
+      ['Sign-in by emailed code', true],
+    ]);
+    expect(ready[1]?.detail).toBe('studio.workers.dev');
+    const stranger = await checkAccount({ ...account, token: 'wrong' }, { ...config, name: 'my-game' });
+    expect(stranger.every((finding) => !finding.ok)).toBe(true);
+    expect(stranger[0]?.detail).toContain('Copy both again');
+    expect(stranger[0]?.detail).toContain('Cloudflare answered 403');
+    expect(changes).toEqual([]);
   });
 
   test('errors say what to do', async () => {

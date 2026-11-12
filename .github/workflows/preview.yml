@@ -10,13 +10,16 @@ name: Preview
 # Each deploy uploads only the assets that changed to R2 and makes Cloudflare Access admit
 # exactly the people in PREVIEW_ALLOWED_EMAILS.
 #
-# The one-time setup (docs/setup.md) is these values, under Settings > Secrets and variables > Actions:
+# The one-time setup (docs/setup.md, step 5) is these values, under Settings > Secrets and
+# variables > Actions. All four are REPOSITORY secrets and variables, not environment ones:
+# the first job below runs outside the "preview" environment and would not see those.
 #   secret    CLOUDFLARE_API_TOKEN     Workers Scripts: Edit, Workers R2 Storage: Edit,
 #                                      Access: Apps and Policies: Edit
 #   secret    CLOUDFLARE_ACCOUNT_ID
 #   variable  PREVIEW_ALLOWED_EMAILS   e.g. "ada@studio.com, bob@studio.com, @studio.com"
 #   variable  PUBLIC_CONVEX_URL        optional: the production Convex deployment, for the lobby
-# Until the two secrets exist this workflow does nothing and passes.
+# Until the two secrets exist this workflow does nothing and passes. PREVIEW_PASSWORD is
+# not read here: it is a secret of the Worker, set with wrangler (docs/deploying.md).
 
 on:
   pull_request:

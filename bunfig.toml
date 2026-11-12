@@ -13,7 +13,7 @@ env = "PUBLIC_*"
 # Markdown keeps its hand-wrapped prose and tables, and JSON keeps the row layout of maps.
 printWidth = 120
 singleQuote = true
-ignorePatterns = ["**/*.md", "**/*.json", "**/*.jsonc", "**/*.yml", "**/*.toml", "convex/_generated/"]
+ignorePatterns = ["**/*.md", "**/*.json", "**/*.jsonc", "**/*.yml", "**/*.yaml", "**/*.toml", "convex/_generated/"]
 
 [test]
 # `bun run coverage` reports on the code under test, not on the tests.

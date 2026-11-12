@@ -4,15 +4,21 @@
  *   bun run preview:deploy [--name pr-12]   a Preview of the current branch (or the name given)
  *   bun run deploy                          the main deployment
  *
+ *   bun run cloudflare:check                changes nothing: is the account ready to deploy to?
+ *
  *   1. Builds the game into dist/.
  *   2. Moves the content-hashed files in dist/assets/ (images, models, sounds) to the R2
  *      bucket named in wrangler.jsonc. Only files the bucket does not hold yet are
  *      uploaded, so a change to code uploads no assets at all. Nothing is ever deleted
  *      from the bucket: an older build keeps finding the files it was built with.
- *   3. Runs wrangler, which uploads the page and its scripts.
- *   4. Puts Cloudflare Access in front, admitting the emails in PREVIEW_ALLOWED_EMAILS.
+ *   3. Puts Cloudflare Access in front, admitting the emails in PREVIEW_ALLOWED_EMAILS, and
+ *      switches on sign-in by emailed code where the account lacks it.
+ *   4. Runs wrangler, which uploads the page and its scripts, and tells the Worker that
+ *      Access guards it (ACCESS_AUD in cloudflare/worker.ts). The very first deploy runs
+ *      wrangler twice: Access needs the Worker to exist, and the Worker stays locked until
+ *      Access does.
  *
- * Steps 2 and 4 call Cloudflare's API and so need CLOUDFLARE_API_TOKEN and
+ * Steps 2 and 3 call Cloudflare's API and so need CLOUDFLARE_API_TOKEN and
  * CLOUDFLARE_ACCOUNT_ID (CI has them; `wrangler login` alone does not provide them).
  * Without them the deploy still works: the assets travel with the Worker and the password
  * gate applies. docs/deploying.md has the whole picture.
@@ -222,10 +228,48 @@ export async function moveAssetsToBucket(account: Account, bucket: string, dist:
   return `${upload.length} uploaded to R2 (${megabytes(bytes)}), ${kept.length} already there`;
 }
 
-/** Step 4: Cloudflare Access in front of the Worker, for exactly the people on the list. */
-export async function protectWithAccess(account: Account, config: WorkerConfig, allowed: Allowed): Promise<string> {
-  const worker = await api<{ id: string }>(account, 'GET', `/workers/workers/${config.name}`);
-  if (!worker) throw new Error(`Cloudflare has no Worker called "${config.name}", so Access has nothing to protect.`);
+/** Whether Cloudflare already has a Worker of this name, and its id if so. */
+async function findWorker(account: Account, name: string): Promise<string | null> {
+  return (await api<{ id: string }>(account, 'GET', `/workers/workers/${name}`))?.id ?? null;
+}
+
+/** What Cloudflare calls sign-in by a code mailed to the visitor. */
+const EMAIL_CODE = 'onetimepin';
+const EMAIL_CODE_BY_HAND =
+  'in the Cloudflare dashboard open Zero Trust > Integrations > Identity providers > Add new identity provider > One-time PIN';
+
+/**
+ * Makes sure visitors can sign in with a code mailed to them. A new Zero Trust account
+ * offers only "Sign in with Cloudflare", which a tester without a Cloudflare account
+ * cannot use. Never fails a deploy: when the token may not do this, it says how to by hand.
+ */
+export async function allowEmailCodes(account: Account): Promise<string> {
+  try {
+    const methods = (await api<{ type: string }[]>(account, 'GET', '/access/identity_providers')) ?? [];
+    if (methods.some((method) => method.type === EMAIL_CODE)) return 'testers sign in with a code mailed to them';
+    await api(account, 'POST', '/access/identity_providers', { name: 'One-time PIN', type: EMAIL_CODE, config: {} });
+    return 'switched on sign-in by a code mailed to the tester';
+  } catch (error) {
+    if (!(error instanceof ApiError)) throw error;
+    return (
+      'could not check that testers can sign in with a code mailed to them. If the sign-in page offers ' +
+      `only "Sign in with Cloudflare", ${EMAIL_CODE_BY_HAND} (or add "Access: Organizations, Identity ` +
+      'Providers, and Groups: Edit" to the API token and deploy again)'
+    );
+  }
+}
+
+/**
+ * Step 3: Cloudflare Access in front of the Worker, for exactly the people on the list.
+ * `aud` is the application's audience tag, which the deploy hands to the Worker.
+ */
+export async function protectWithAccess(
+  account: Account,
+  config: WorkerConfig,
+  allowed: Allowed,
+): Promise<{ summary: string; aud: string }> {
+  const workerId = await findWorker(account, config.name);
+  if (!workerId) throw new Error(`Cloudflare has no Worker called "${config.name}", so Access has nothing to protect.`);
 
   const name = accessApplicationName(config.name);
   let existing: { id: string } | undefined;
@@ -236,10 +280,12 @@ export async function protectWithAccess(account: Account, config: WorkerConfig, 
     if (apps.length < 50) break;
   }
 
-  const application = accessApplication(config.name, worker.id, allowed, config.vars?.PUBLIC_ACCESS === 'true');
+  const application = accessApplication(config.name, workerId, allowed, config.vars?.PUBLIC_ACCESS === 'true');
+  let saved: { id: string; aud?: string } | null;
   try {
-    if (existing) await api(account, 'PUT', `/access/apps/${existing.id}`, application);
-    else await api(account, 'POST', '/access/apps', application);
+    saved = existing
+      ? await api(account, 'PUT', `/access/apps/${existing.id}`, application)
+      : await api(account, 'POST', '/access/apps', application);
   } catch (error) {
     throw new Error(
       'Could not set up Cloudflare Access. It needs Zero Trust switched on once for the account (Cloudflare ' +
@@ -247,8 +293,91 @@ export async function protectWithAccess(account: Account, config: WorkerConfig, 
       { cause: error },
     );
   }
+  if (!saved) throw new Error(`The Access application "${name}" disappeared while it was being updated. Deploy again.`);
   const people = [...allowed.emails, ...allowed.domains.map((domain) => `anyone @${domain}`)];
-  return `${existing ? 'updated' : 'created'}, admitting ${people.join(', ')}`;
+  return {
+    summary: `${existing ? 'updated' : 'created'}, admitting ${people.join(', ')}; ${await allowEmailCodes(account)}`,
+    aud: saved.aud ?? saved.id,
+  };
+}
+
+// ---- Is the account ready? -------------------------------------------------------------------
+
+/** One line of `bun run cloudflare:check`. */
+export interface Finding {
+  ok: boolean;
+  what: string;
+  /** What was found, or what to do about it. */
+  detail: string;
+}
+
+/**
+ * Looks at the account without changing it, so that a missing switch or permission shows up
+ * here rather than halfway through a deploy. It only reads, so it cannot tell "Read" from
+ * "Edit" on the token; the first deploy does that.
+ */
+export async function checkAccount(account: Account, config: WorkerConfig): Promise<Finding[]> {
+  const findings: Finding[] = [];
+  const look = async (what: string, fix: string, read: () => Promise<string | null>) => {
+    try {
+      const found = await read();
+      findings.push(found === null ? { ok: false, what, detail: fix } : { ok: true, what, detail: found });
+    } catch (error) {
+      if (!(error instanceof ApiError)) throw error;
+      const answer = error.message.split('\n').slice(0, 2).join(' ').slice(0, 300);
+      findings.push({ ok: false, what, detail: `${fix}\n(${answer})` });
+    }
+  };
+
+  await look(
+    'API token and account id',
+    'Cloudflare does not accept this token for this account. Copy both again: the token is shown once, when it ' +
+      'is created; the account id is on the Workers & Pages overview. The token needs "Workers Scripts: Edit".',
+    async () => {
+      const worker = await findWorker(account, config.name);
+      return worker ? `accepted; the Worker "${config.name}" exists` : `accepted; "${config.name}" is not deployed yet`;
+    },
+  );
+  await look(
+    'workers.dev subdomain',
+    'Open Workers & Pages in the Cloudflare dashboard once: a new account is asked to choose its subdomain.',
+    async () => {
+      const found = await api<{ subdomain?: string }>(account, 'GET', '/workers/subdomain');
+      return found?.subdomain ? `${found.subdomain}.workers.dev` : null;
+    },
+  );
+  const bucket = assetBucket(config, 'preview');
+  if (bucket) {
+    await look(
+      'R2',
+      'Switch R2 on (Cloudflare dashboard, R2 Object Storage; it asks for a payment method) and give the token ' +
+        '"Workers R2 Storage: Edit".',
+      async () => {
+        const found = await api(account, 'GET', `/r2/buckets/${bucket}`);
+        return found ? `on; the bucket "${bucket}" exists` : `on; the first deploy creates "${bucket}"`;
+      },
+    );
+  }
+  await look(
+    'Zero Trust (Cloudflare Access)',
+    'Open Zero Trust in the Cloudflare dashboard once (pick a team name and the free plan) and give the token ' +
+      '"Access: Apps and Policies: Edit".',
+    async () => {
+      const apps = (await api<{ name: string }[]>(account, 'GET', '/access/apps?per_page=50')) ?? [];
+      const ours = apps.some((app) => app.name === accessApplicationName(config.name));
+      return ours ? 'on; this game has its Access application' : 'on; the first deploy creates the Access application';
+    },
+  );
+  await look(
+    'Sign-in by emailed code',
+    `Optional. Without it, testers need a Cloudflare account to sign in. To switch it on, ${EMAIL_CODE_BY_HAND}; ` +
+      'or give the token "Access: Organizations, Identity Providers, and Groups: Edit" and a deploy does it.',
+    async () => {
+      const methods = (await api<{ type: string }[]>(account, 'GET', '/access/identity_providers')) ?? [];
+      return methods.some((method) => method.type === EMAIL_CODE) ? 'on' : 'off; a deploy switches it on';
+    },
+  );
+  return findings;
 }
 
 // ---- The deploy ---------------------------------------------------------------------------
@@ -275,8 +404,8 @@ async function main(): Promise<number> {
     allowPositionals: true,
   });
   const target = positionals[0];
-  if (target !== 'preview' && target !== 'production') {
-    console.error('Usage: bun scripts/deploy.ts preview [--name <preview-name>] | production');
+  if (target !== 'preview' && target !== 'production' && target !== 'check') {
+    console.error('Usage: bun scripts/deploy.ts preview [--name <preview-name>] | production | check');
     return 1;
   }
 
@@ -288,6 +417,38 @@ async function main(): Promise<number> {
   const account = token && id ? { token, id, api } : null;
   const allowed = parseAllowed(process.env.PREVIEW_ALLOWED_EMAILS ?? '');
   const hasAllowed = allowed.emails.length + allowed.domains.length > 0;
+
+  if (target === 'check') {
+    if (!account) {
+      console.error(
+        'CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are not set. Put them in .env.local (docs/setup.md, step 5).',
+      );
+      return 1;
+    }
+    const findings = await checkAccount(account, config);
+    const people = [...allowed.emails, ...allowed.domains.map((domain) => `anyone @${domain}`)];
+    findings.push({
+      ok: hasAllowed,
+      what: 'PREVIEW_ALLOWED_EMAILS',
+      detail: hasAllowed
+        ? people.join(', ')
+        : 'Empty, so nobody could open a deployment. Add your own address in .env.local.',
+    });
+    for (const finding of findings) {
+      console.log(
+        `${finding.ok ? 'ok     ' : 'MISSING'}  ${finding.what}: ${finding.detail.replaceAll('\n', '\n         ')}`,
+      );
+    }
+    // Sign-in by emailed code is a convenience: a deploy works without it.
+    const blocking = findings.filter((finding) => !finding.ok && finding.what !== 'Sign-in by emailed code');
+    console.log(
+      blocking.length === 0
+        ? '\nREADY. Next: bun run preview:deploy --name setup-test'
+        : '\nNOT READY. Fix what is MISSING, then run this again.',
+    );
+    return blocking.length === 0 ? 0 : 1;
+  }
+
   const bucket = assetBucket(config, target);
   const report: string[] = [];
 
@@ -309,25 +470,40 @@ async function main(): Promise<number> {
     }
   }
 
-  const wrangler = [process.execPath, 'x', 'wrangler'];
-  let url: string | null = null;
-  if (target === 'preview') {
-    const output = await run([...wrangler, 'preview', ...(values.name ? ['--name', values.name] : []), '--json'], true);
-    url = deployedUrl(output);
-    if (!url) console.log(output);
-  } else {
-    await run([...wrangler, 'deploy']);
-  }
+  /** Runs wrangler and gives a Preview's address. `aud` set means Access is in front, and the Worker is told so. */
+  const publish = async (aud: string | null): Promise<string | null> => {
+    const wrangler = [process.execPath, 'x', 'wrangler'];
+    const vars = aud ? ['--var', `ACCESS_AUD:${aud}`] : [];
+    if (target === 'preview') {
+      const name = values.name ? ['--name', values.name] : [];
+      const output = await run([...wrangler, 'preview', ...name, ...vars, '--json'], true);
+      const address = deployedUrl(output);
+      if (!address) console.log(output);
+      return address;
+    }
+    await run([...wrangler, 'deploy', ...vars]);
+    return null;
+  };
 
-  // After wrangler, because the first deploy is what creates the Worker. Until Access is in
-  // place the Worker answers nobody (it fails closed), so there is no open window.
+  let url: string | null;
   if (hasAllowed && account) {
-    report.push(`Cloudflare Access: ${await protectWithAccess(account, config, allowed)}.`);
-  } else if (hasAllowed) {
-    report.push('Cloudflare Access: NOT set up, because CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are not set.');
+    // Access attaches to the Worker, so the Worker has to exist first. A Worker deployed
+    // without ACCESS_AUD answers nobody (it fails closed), so there is no open window.
+    if (!(await findWorker(account, config.name))) {
+      console.log(`First deploy of "${config.name}": creating the Worker, then putting Access in front.`);
+      await publish(null);
+    }
+    const access = await protectWithAccess(account, config, allowed);
+    url = await publish(access.aud);
+    report.push(`Cloudflare Access: ${access.summary}.`);
   } else {
+    url = await publish(null);
     report.push(
-      'Cloudflare Access: left as it is, because PREVIEW_ALLOWED_EMAILS is empty. The password gate applies.',
+      hasAllowed
+        ? 'Cloudflare Access: NOT set up, because CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are not set. ' +
+            'This deployment is locked unless it has a PREVIEW_PASSWORD secret.'
+        : 'Cloudflare Access: NOT set up, because PREVIEW_ALLOWED_EMAILS is empty (in CI it is a repository ' +
+            'variable, not a secret). This deployment is locked unless it has a PREVIEW_PASSWORD secret.',
     );
   }
 
