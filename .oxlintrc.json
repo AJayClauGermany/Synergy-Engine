@@ -27,10 +27,20 @@
     "typescript/switch-exhaustiveness-check": ["error", { "considerDefaultExhaustiveForUnions": true }],
     "typescript/only-throw-error": "error",
     "typescript/require-array-sort-compare": "error",
+    // A check that is silenced says why, or it is not silenced: `// @ts-expect-error <reason>`.
+    // (oxlint-disable comments are held to the same by tools/lint/suppressions.test.ts.)
+    "typescript/ban-ts-comment": [
+      "error",
+      { "ts-expect-error": "allow-with-description", "ts-ignore": true, "ts-nocheck": true, "minimumDescriptionLength": 10 }
+    ],
     "react/rules-of-hooks": "error",
     "react/exhaustive-deps": "error",
 
+    "synergy/network-members": "error",
     "synergy/no-detached-method": "error",
+    "synergy/no-discarded-result": "error",
+    "synergy/no-engine-member": "error",
+    "synergy/no-inline-remove": "error",
     "synergy/no-identity-compare": "error",
     "synergy/no-value-keys": "error",
     "synergy/no-unsent-message": "error",
@@ -91,9 +101,20 @@
             "message": "Game rules are deterministic, so every machine gets the same result. Use new Random(state.seed) from @synergy/engine/math and store random.state back."
           },
           {
-            "object": "performance",
-            "property": "now",
-            "message": "Game rules are deterministic: the clock differs between machines. Pass time in as part of the command or the state."
+            "property": "localeCompare",
+            "message": "Game rules are deterministic: the order depends on each player's language settings. Compare with < and >, or by a number."
+          },
+          {
+            "property": "toLocaleString",
+            "message": "Game rules are deterministic: the text depends on each player's language settings. Format in the view, not in the rules."
+          },
+          {
+            "property": "toLocaleLowerCase",
+            "message": "Game rules are deterministic: the result depends on each player's language settings. Use toLowerCase()."
+          },
+          {
+            "property": "toLocaleUpperCase",
+            "message": "Game rules are deterministic: the result depends on each player's language settings. Use toUpperCase()."
           }
         ],
         "eslint/no-restricted-globals": [
@@ -101,8 +122,29 @@
           {
             "name": "Date",
             "message": "Game rules are deterministic: the clock differs between machines. Pass time in as part of the command or the state."
-          }
-        ]
+          },
+          {
+            "name": "performance",
+            "message": "Game rules are deterministic: the clock differs between machines. Pass time in as part of the command or the state."
+          },
+          {
+            "name": "crypto",
+            "message": "Game rules are deterministic, so every machine gets the same result. Use new Random(state.seed) from @synergy/engine/math and store random.state back."
+          },
+          {
+            "name": "Intl",
+            "message": "Game rules are deterministic: Intl reads each player's language settings. Format and sort by language in the view, not in the rules."
+          },
+          {
+            "name": "globalThis",
+            "message": "Game rules are pure: no globals. (globalThis.Math.random() and globalThis.Date are the same clock and dice as without it.)"
+          },
+          { "name": "window", "message": "Game rules are pure: they run in tests and on servers, where there is no window." },
+          { "name": "document", "message": "Game rules are pure: they run in tests and on servers, where there is no document." },
+          { "name": "localStorage", "message": "Game rules are pure: no storage. Save from the view (the save-load skill)." },
+          { "name": "navigator", "message": "Game rules are pure: nothing that differs from one machine to the next." }
+        ],
+        "synergy/no-module-state": "error"
       }
     },
     // The engine defines the axes, and its tests assert the raw numbers.
@@ -110,6 +152,13 @@
       "files": ["packages/engine/**"],
       "rules": {
         "synergy/no-z-axis-literal": "off"
+      }
+    },
+    // The packages are where the engine's own members are declared.
+    {
+      "files": ["packages/**"],
+      "rules": {
+        "synergy/no-engine-member": "off"
       }
     }
   ],

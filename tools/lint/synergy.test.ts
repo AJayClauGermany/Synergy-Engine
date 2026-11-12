@@ -2,10 +2,12 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { Engine } from '../../packages/engine/src/core/Engine';
+import { GameObject } from '../../packages/engine/src/core/GameObject';
 import { NOT_SENT as ENGINE_NOT_SENT } from '../../packages/engine/src/core/messageNames';
 import { MonoBehaviour } from '../../packages/engine/src/core/MonoBehaviour';
 import { NetworkBehaviour } from '../../packages/netcode/src/NetworkBehaviour';
-import { MESSAGES, NOT_SENT, rules } from './synergy';
+import { ENGINE_MEMBERS, MESSAGES, NOT_SENT, rules } from './synergy';
 
 // Each rule runs on small snippets: code it must accept, and code it must report. The
 // snippets go through the real linter (one run for all of them), so this also proves
@@ -168,11 +170,29 @@ const CASES: Record<RuleName, { valid: (string | Snippet)[]; invalid: Snippet[] 
         code: 'class Unit extends MonoBehaviour {} class Archer extends Unit { onStart() {} }',
         errors: ['Archer.onStart()'],
       },
+      // So is one whose base is imported, when it declares a message the engine sends.
+      {
+        code: "import { UnitView } from './UnitView'; export class Archer extends UnitView { update() {} onTriggerEnter() {} }",
+        errors: ['Archer.onTriggerEnter()'],
+      },
+      // A message written as a field is no more a message.
+      {
+        code: 'class Unit extends MonoBehaviour { onStart = () => { this.ready = true; }; }',
+        errors: ['Unit.onStart()'],
+      },
+      {
+        code: 'class Coin extends MonoBehaviour { onPointerClick() {} onValidate() {} }',
+        errors: ['uGUI pointer events', 'there is no editor'],
+      },
+      { code: 'class Crate extends NetworkBehaviour { onOwnershipChanged() {} }', errors: ['onGainedOwnership()'] },
     ],
   },
 
   'no-z-axis-literal': {
     valid: [
+      // Negated, or spelled with directions: W goes forward.
+      "new Vector3(Input.getAxis('Horizontal'), 0, -Input.getAxis('Vertical'));",
+      "Vector3.right.mul(Input.getAxis('Horizontal')).add(Vector3.forward.mul(Input.getAxis('Vertical')));",
       'const d = Vector3.forward;',
       'const p = new Vector3(0, 0, 10);',
       'const p = new Vector3(0, 1, 0);',
@@ -186,11 +206,18 @@ const CASES: Record<RuleName, { valid: (string | Snippet)[]; invalid: Snippet[] 
         code: 'transform.translate(new Vector3(0, 0, -1).mul(speed));',
         errors: ['new Vector3(0, 0, -1) is Vector3.forward here'],
       },
+      // The first script of every Unity tutorial: W walks backward.
+      {
+        code: "const move = new Vector3(Input.getAxis('Horizontal'), 0, Input.getAxisRaw('Vertical'));",
+        errors: ["The 'Vertical' axis is +1 for W"],
+      },
     ],
   },
 
   'no-skipped-test': {
     valid: [
+      // A name with no body is a test still to be written.
+      "test.todo('the opponent retreats when outnumbered');",
       "test('moves', () => { expect(1).toBe(1); });",
       "describe('board', () => { it('loads', () => { expect(1).toBe(1); }); });",
       // A test still to be written, and one that cannot run everywhere, are honest about it.
@@ -209,11 +236,27 @@ const CASES: Record<RuleName, { valid: (string | Snippet)[]; invalid: Snippet[] 
         code: "test.skip.each([1, 2])('doubles %d', (n) => { expect(n).toBe(n); });",
         errors: ['test.skip.each switches this test off'],
       },
+      // The same thing under other names.
+      {
+        code: "test.skipIf(true)('moves', () => { expect(1).toBe(2); });",
+        errors: ['test.skipIf with a fixed condition'],
+      },
+      { code: "test.if(false)('moves', () => { expect(1).toBe(2); });", errors: ['test.if with a fixed condition'] },
+      {
+        code: "test.failing('moves', () => { expect(1).toBe(2); });",
+        errors: ['test.failing passes while the test fails'],
+      },
+      {
+        code: "test.todo('moves', () => { expect(1).toBe(2); });",
+        errors: ['test.todo with a body is a skipped test'],
+      },
     ],
   },
 
   'test-needs-expect': {
     valid: [
+      "test('counts', () => { expect.assertions(1); run((n) => expect(n).toBe(1)); });",
+      "test('same state', () => { expectSameState(host, guest); });",
       "test('adds', () => { expect(1 + 1).toBe(2); });",
       "test('loads', async () => { await expect(load()).resolves.toBe(1); });",
       "it('does not throw', () => { expect(() => run()).not.toThrow(); });",
@@ -228,9 +271,113 @@ const CASES: Record<RuleName, { valid: (string | Snippet)[]; invalid: Snippet[] 
       { code: "test('moves', () => { const unit = move(state); });", errors: ['This test has no expect(...)'] },
       { code: "it('runs', async () => { await engine.step(); });", errors: ['This test has no expect(...)'] },
       { code: "test('moves', () => {});", errors: ['This test has no expect(...)'] },
+      // NUnit's Assert.IsTrue(x), ported word for word: nothing is compared.
+      { code: "test('adds', () => { expect(1 + 1 === 3); });", errors: ['This test has no expect(...)'] },
     ],
   },
 
+  'no-inline-remove': {
+    valid: [
+      // The function that was added, kept in a field.
+      'class A { onAlarm = () => { this.n++; }; onEnable() { alarm.addListener(this.onAlarm); } onDisable() { alarm.removeListener(this.onAlarm); } }',
+      // What adding returned.
+      'class A { onEnable() { this.stop = alarm.addListener(() => this.n++); } onDisable() { this.stop(); } }',
+      'class A { tick() {} stop() { this.cancelInvoke(this.tick); this.cancelInvoke(); } }',
+      'window.removeEventListener("resize", onResize);',
+    ],
+    invalid: [
+      {
+        code: 'class A { onDisable() { alarm.removeListener((level) => this.onAlarm(level)); } }',
+        errors: ['removeListener() is given a function written right here'],
+      },
+      { code: 'class A { stop() { this.cancelInvoke(() => this.fire()); } }', errors: ['cancelInvoke()'] },
+      { code: 'window.removeEventListener("resize", function () { layout(); });', errors: ['removeEventListener()'] },
+      { code: "app.off('update', () => tick());", errors: ['off()'] },
+    ],
+  },
+  'no-discarded-result': {
+    valid: [
+      'transform.position = transform.position.add(step);',
+      'const next = a.sub(b).mul(2);',
+      // Real changes that happen to share a name.
+      'seen.add(cell); list.add(item);',
+      'context.scale(2, 2); this.transform.rotate(Vector3.up, 90);',
+      'bounds = bounds.encapsulate(point);',
+      'return velocity.mul(Time.deltaTime);',
+    ],
+    invalid: [
+      { code: 'this.transform.position.add(step);', errors: ['.add() returns a new value'] },
+      { code: 'velocity.mul(0.5);', errors: ['.mul() returns a new value'] },
+      { code: 'bounds.encapsulate(point);', errors: ['.encapsulate()'] },
+      { code: 'unit.transform.localScale.scale(Vector3.one.mul(2));', errors: ['.scale()'] },
+      { code: 'Vector3.zero.add(offset); target.sub(origin);', errors: ['.add()', '.sub()'] },
+      { code: 'color.withAlpha(0.5);', errors: ['.withAlpha()'] },
+    ],
+  },
+  'no-engine-member': {
+    valid: [
+      'class A extends MonoBehaviour { private _cooldown = 0; private _hasStarted = false; update() {} }',
+      // Not a script: the names mean nothing here.
+      'class Pool { _started = false; _destroy() {} }',
+      // Engine code overriding its own hooks says so.
+      'class Light extends Behaviour { override _attach() {} override _destroy() {} }',
+    ],
+    invalid: [
+      {
+        code: 'class A extends MonoBehaviour { _started = false; start() { this._started = true; } }',
+        errors: ['A._started has the name of a member the engine keeps'],
+      },
+      {
+        code: 'class A extends NetworkBehaviour { _live = true; _destroy() { this.cleanUp(); } }',
+        errors: ['A._live', 'A._destroy'],
+      },
+      {
+        code: "import { UnitView } from './UnitView'; class Archer extends UnitView { _enabled = true; update() {} }",
+        errors: ['Archer._enabled'],
+      },
+    ],
+  },
+  'network-members': {
+    valid: [
+      'class Unit extends NetworkBehaviour { readonly hp = new NetworkVariable(10); readonly healRpc = this.serverRpc(() => { this.hp.value += 1; }); }',
+      'class Unit extends NetworkBehaviour { private readonly hp = new NetworkVariable(10); heal() { this.healRpc(); } }',
+      // One variable holding a collection is fine.
+      'class Unit extends NetworkBehaviour { readonly stock = new NetworkVariable({ wood: 0, ore: 0 }); readonly squad = new NetworkList<number>(); }',
+      // Not networked: a method may be called anything.
+      'class Radio { pingRpc() {} }',
+    ],
+    invalid: [
+      {
+        code: 'class Unit extends NetworkBehaviour { requestHealServerRpc() { this.hp.value += 1; } showHitClientRpc(amount: number) {} }',
+        errors: ['requestHealServerRpc() is a method', 'showHitClientRpc() is a method'],
+      },
+      {
+        code: 'class Unit extends NetworkBehaviour { readonly #stamina = new NetworkVariable(50); readonly #pingRpc = this.clientRpc(() => {}); }',
+        errors: ['#stamina is a #private field', '#pingRpc is a #private field'],
+      },
+      {
+        code: 'class Health extends MonoBehaviour { readonly hp = new NetworkVariable(100); }',
+        errors: ['hp is a network member on a class that does not extend NetworkBehaviour'],
+      },
+      {
+        code: 'class Unit extends NetworkBehaviour { readonly resources = [new NetworkVariable(0), new NetworkVariable(0)]; readonly orders = { stopRpc: this.serverRpc(() => {}) }; }',
+        errors: ['inside an array or object', 'inside an array or object'],
+      },
+    ],
+  },
+  'no-module-state': {
+    valid: [
+      'export const MAX_HP = 5; const COSTS = { plain: 1, forest: 2 };',
+      'export function apply(state: State) { let total = 0; for (const unit of state.units) total += unit.hp; return total; }',
+    ],
+    invalid: [
+      {
+        code: 'let nextId = 100; export function spawn() { return nextId++; }',
+        errors: ['`let nextId` at the top of a rules file'],
+      },
+      { code: 'var turn = 0;', errors: ['`var turn`'] },
+    ],
+  },
   'behaviour-file-name': {
     valid: [
       { code: 'export class Health extends MonoBehaviour {}', filename: 'Health.ts' },
@@ -356,5 +503,26 @@ describe('the plugin agrees with the engine', () => {
 
   test('about which Unity messages are not', () => {
     expect(NOT_SENT).toEqual(ENGINE_NOT_SENT);
+  });
+
+  test('about which names the engine keeps on a script', () => {
+    const engine = Engine.createHeadless();
+    try {
+      class Plain extends MonoBehaviour {}
+      const script = new GameObject('Probe').addComponent(Plain);
+      const kept = new Set<string>();
+      for (
+        let part: object | null = script;
+        part && part !== Object.prototype;
+        part = Object.getPrototypeOf(part) as object | null
+      ) {
+        for (const name of Object.getOwnPropertyNames(part)) if (name.startsWith('_')) kept.add(name);
+      }
+      // Fields of EngineObject that TypeScript already guards with `private`/`readonly` are in the list too.
+      const listed: string[] = [...ENGINE_MEMBERS];
+      expect(listed.toSorted()).toEqual([...kept].toSorted());
+    } finally {
+      engine.dispose();
+    }
   });
 });
