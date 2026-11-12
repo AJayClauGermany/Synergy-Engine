@@ -230,7 +230,7 @@ export async function handleRequest(request: Request, env: Env, context?: Contex
       `<h1>Preview locked</h1>
 <p>Nobody has been given access to this deployment yet, so nothing is being served.
 Deploy with <code>PREVIEW_ALLOWED_EMAILS</code> set (<code>bun run preview:deploy</code>, or a
-pull request), or give the Worker a <code>PREVIEW_PASSWORD</code> secret with wrangler.
+pull request), or with <code>PREVIEW_PASSWORD</code> set for a password instead.
 docs/deploying.md, "Who gets in", has both.</p>`,
       503,
     );

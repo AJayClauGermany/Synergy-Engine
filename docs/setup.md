@@ -70,8 +70,23 @@ The *Preview* workflow also runs on pull requests. Until step 5 it passes with t
 
 From here on, work on a branch and open a pull request rather than pushing to `main`:
 previews exist per pull request, and CI then checks a change before it lands. Nothing
-breaks if a set-up commit goes straight to `main`. To make GitHub enforce it, protect
-`main` under *Settings > Branches* and require the *CI* check.
+breaks if a set-up commit goes straight to `main`.
+
+**Recommended: protect `main`.** It makes GitHub refuse a change to `main` that did not
+come through a pull request with a green *CI* run, so a broken build cannot land by
+accident, by you, a teammate or an agent. Two minutes, once:
+
+1. *Settings > Branches > Add branch ruleset* (or *Add classic branch protection rule*).
+   Name it `main`; under *Target branches* choose *Include default branch*; set
+   *Enforcement status* to *Active*.
+2. Tick **Require a pull request before merging**. Working alone, set *Required
+   approvals* to 0: the rule then only asks for the pull request, not for a second person.
+3. Tick **Require status checks to pass** and add the check called `check` (it is the job
+   of the *CI* workflow, and appears in the list once CI has run).
+4. Leave *Block force pushes* ticked. Save.
+
+On a free plan this is available for public repositories; a private one needs GitHub Pro
+or Team. Without it, the habit above is all there is, and that works too.
 
 ## 3. Names
 
@@ -163,11 +178,11 @@ All of it is in the [Cloudflare dashboard](https://dash.cloudflare.com).
 2. **R2.** Open *R2 Object Storage* and enable it. It asks for a payment method; the free
    allowance is 10 GB.
 3. **Zero Trust.** Open *Zero Trust*, pick a team name and the free plan (50 people).
-4. **Sign-in by emailed code.** In *Zero Trust > Integrations > Identity providers*, choose
-   *Add new identity provider*, then **One-time PIN**. A new Zero Trust account offers
-   only "Sign in with Cloudflare", which works for you but not for a tester without a
-   Cloudflare login. (Skip this if you give the token the optional permission below: the
-   first deploy then does it.)
+4. **Sign-in by emailed code: nothing to do.** A new Zero Trust account offers only "Sign
+   in with Cloudflare", which works for you but not for a tester without a Cloudflare
+   login. The first deploy adds sign-in by a code mailed to the tester, using the last
+   permission of the token below. (By hand, should you ever need it: *Zero Trust >
+   Integrations > Identity providers*, *Add new identity provider*, **One-time PIN**.)
 5. **API token.** *My Profile > API Tokens > Create Token*, then *Use template* next to
    **Edit Cloudflare Workers**. On the form:
 
@@ -175,7 +190,7 @@ All of it is in the [Cloudflare dashboard](https://dash.cloudflare.com).
    |-------|----------------|
    | Permissions, already listed | leave them. *Workers R2 Storage: Edit* is among them; *Edit* includes reading, so *Read* stays unticked |
    | Permissions, *Add more* | *Account* / **Access: Apps and Policies** / *Edit* |
-   | Permissions, *Add more* (optional) | *Account* / **Access: Organizations, Identity Providers, and Groups** / *Edit*. Lets a deploy do item 4 for you, and lets `bun run cloudflare:check` see whether it is done |
+   | Permissions, *Add more* | *Account* / **Access: Organizations, Identity Providers, and Groups** / *Edit*. This is what lets a deploy do item 4, so that people without a Cloudflare login can sign in |
    | Account Resources | *Include* / your account |
    | Zone Resources | *Include* / *All zones*. The form will not continue without a choice; the game uses no zone |
 
@@ -286,8 +301,9 @@ gh variable set PUBLIC_CONVEX_URL --body "https://happy-animal-123.convex.cloud"
 - Close the pull request: the workflow runs once more and deletes the preview.
 
 To change who gets in, edit the variable; the next deploy applies it. A password
-(`PREVIEW_PASSWORD`) is a different, optional gate that lives in Cloudflare, not in
-GitHub: see [deploying.md](deploying.md), "Who gets in".
+(`PREVIEW_PASSWORD`, a repository *secret*) is an optional fallback for deployments
+without Access; with a list of emails set, Access comes first and the password is never
+asked for. See [deploying.md](deploying.md), "Who gets in".
 
 ## 6. The main deployment (optional)
 
@@ -328,7 +344,7 @@ Useful when something is missing, and when moving to another repository or machi
 | Names (`wrangler.jsonc`, `PEER_PREFIX`, title), written by `bun run rename` | the repository | yes |
 | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | GitHub repository secrets; `.env.local` for deploys by hand | no: per repository, per machine |
 | `PREVIEW_ALLOWED_EMAILS`, `PUBLIC_CONVEX_URL` | GitHub repository variables; `.env.local` for deploys by hand | no: per repository, per machine |
-| `PREVIEW_PASSWORD` (optional) | a Cloudflare secret on the Worker, set with wrangler | no |
+| `PREVIEW_PASSWORD` (optional fallback) | a GitHub repository secret; `.env.local` for deploys by hand. A deploy stores it with the Worker | no: per repository, per machine |
 | Sign-in by emailed code | the Zero Trust account, once | no |
 | `CONVEX_DEPLOYMENT`, `CONVEX_URL` | `.env.local`, written by `bun run backend` | no: per developer |
 | Convex and wrangler logins | your machine | no |
@@ -370,28 +386,60 @@ going. Optionally clear the test data, below.
 
 None of this is needed for the real game to work; it only tidies up.
 
-**Cloudflare** (everything is named after the test `"name"`):
+**Cloudflare** (everything is named after the test `"name"`). One command removes all of
+it, and an agent can run it for you:
 
-- *Previews:* closing a pull request deletes its preview. For one made by hand:
-  `bunx wrangler preview delete --name <preview-name>`.
-- *Worker:* with the test name still in `wrangler.jsonc`, `bunx wrangler delete`; or in
-  the dashboard, *Workers & Pages*, the Worker, *Settings*, *Delete*.
-- *R2 bucket* `<name>-assets`: dashboard, *R2 Object Storage*, the bucket; delete its
-  objects, then the bucket under *Settings*. If you keep the name, emptying it is enough:
-  the next deploy uploads what the build needs.
-- *Access application* `<name> (Synergy preview gate)`: dashboard, *Zero Trust > Access >
-  Applications*, delete. A deploy under the same name would recreate it.
-- *API token:* keep it, or roll it and update the GitHub secret.
+```bash
+bun run cloudflare:teardown
+```
+
+That only lists what exists. Add `--confirm <name>`, with the `"name"` from
+`wrangler.jsonc`, and it deletes, in this order:
+
+1. the Worker, with every preview and version of it;
+2. the Access application `<name> (Synergy preview gate)`;
+3. the R2 bucket `<name>-assets`: every object, then the bucket.
+
+It ends with `CLEAN`, or with `NOT CLEAN` and what was left and which token permission
+was missing; running it again skips what is already gone. It needs the token and account
+id of step 5, so there are two ways to run it:
+
+- *From GitHub, with nothing on your machine:* the **Teardown** workflow (*Actions*,
+  *Teardown*, *Run workflow*). Leave *confirm* empty to list, or type the Worker's name to
+  delete. It uses the repository's secrets, so an agent that can start workflows can do
+  the whole clean-up without a Cloudflare login.
+- *Locally:* the command above, with the two values in `.env.local`.
+
+What it leaves alone, because it belongs to the account and not to this game: the API
+token (keep it, or roll it and update the GitHub secret), sign-in by emailed code, your
+`workers.dev` subdomain, and R2 and Zero Trust being switched on. The next deploy under
+the same name creates the Worker, the application and the bucket again.
+
+By hand instead: `bunx wrangler delete` for the Worker; *R2 Object Storage*, the bucket,
+delete its objects, then the bucket under *Settings*; *Zero Trust > Access > Applications*
+for the application. Delete the Worker first: while it exists without its Access
+application, it serves everyone.
 
 **Convex:**
 
-- *Keep the project, drop the data:* dashboard, *Data*, each table (`rooms`, `commands`),
-  *Clear table*, in both the development and the production deployment. Changing
-  `convex/schema.ts` later needs nothing special while the tables are empty.
-- *Drop the project:* dashboard, *Project settings*, *Delete project*. Then remove the
-  `CONVEX_*` lines from `.env.local` (or delete the file) and run `bun run backend` again.
+- *Keep the project, drop the data* (enough for a test run; changing `convex/schema.ts`
+  later needs nothing special while the tables are empty). Either the dashboard: *Data*,
+  each table (`rooms`, `commands`), *Clear table*, in both the development and the
+  production deployment. Or the same command: `bun run cloudflare:teardown --confirm <name>
+  --convex dev` empties every table of `convex/schema.ts` in your development deployment,
+  `--convex prod` in the production one. In the Teardown workflow, tick *convex*; that
+  needs a repository secret `CONVEX_DEPLOY_KEY`: Convex dashboard, the production
+  deployment, *Settings*, *Deploy keys*, with exactly these four permissions ticked:
+  `deployment:data:view`, `deployment:data:write`, `deployment:backups:view` and
+  `deployment:backups:import` (emptying a table goes through Convex's import, which
+  counts as restoring a backup). A key made only for deploying lacks them, and the run
+  then names the one that is missing.
+- *Drop the project:* only you can, in the dashboard: *Project settings*, *Delete project*.
+  Then remove the `CONVEX_*` lines from `.env.local` (or delete the file) and run
+  `bun run backend` again.
 
-**GitHub:** remove secrets and variables only from a repository you are abandoning.
+**GitHub:** remove secrets and variables only from a repository you are abandoning; that,
+and deleting the repository, is done in its *Settings* by you.
 
 ## What a real run has confirmed
 
@@ -402,18 +450,27 @@ avoid; the last column says what has been run since.
 | Step | Result of that run | Since |
 |------|--------------------|-------|
 | 1, 2 | Worked as written. CI was green on the first push with no settings changed | |
-| 3 | Worked, but changing `"name"` alone failed `bun run check` | `bun run rename` added; not yet used in a run |
+| 3 | Worked, but changing `"name"` alone failed `bun run check` | `bun run rename` added. **Confirmed the same day** on a fresh copy: it changed every file, and `bun run check` passed |
 | 4 | Worked as written, including `bunx convex deploy`. Peer-to-peer hosting needed the VPN off; Convex's agent files failed the format check | both noted above; `.yaml` files are no longer format-checked |
 | Multiplayer, locally | Skirmish peer-to-peer and on Convex (it survived a reload), and Frontier host and join, all connected | |
 | 5A | The token from the template plus *Access: Apps and Policies: Edit* was enough. *Zone Resources* had to be filled in | `bun run cloudflare:check` added. **Confirmed the same day** against the account: it ended with `READY`, and reported an empty `PREVIEW_ALLOWED_EMAILS` as `MISSING` |
-| 5C | The workflow ran on a private repository, created the Worker, the bucket and the Access application, linked `pr-1-<name>.<subdomain>.workers.dev`, and a second push uploaded no assets | |
+| 5C | The workflow ran on a private repository, created the Worker, the bucket and the Access application, linked `pr-1-<name>.<subdomain>.workers.dev`, and a second push uploaded no assets | **Confirmed the same day:** closing or merging a pull request deleted its preview (`pr-1` and `pr-2`) |
 | 5, opening the link | **Failed.** Access offered only "Sign in with Cloudflare"; after signing in, the Worker answered "Preview locked". Cloudflare does not tell a Worker with static assets that Access admitted the visitor | the deploy now tells the Worker (`ACCESS_AUD`). **Confirmed the same day:** a pull-request preview opened after signing in, by emailed code (One-time PIN added by hand) and with "Sign in with Cloudflare". An address that is not on the list received no code |
 | 6 | `bun run deploy` deployed and reported; the address was locked for the same reason | same fix; not run again |
 | 7 | The commit hook refused a failing commit; `bun run desktop:dev` opened the game; `varlock scan` works | |
+| Clearing the test run | Not part of that run | `bun run cloudflare:teardown` and the *Teardown* workflow added. **Confirmed the same day**, started by an agent with no Cloudflare login: the listing run found the Worker, the Access application and the bucket; the run with `confirm` deleted all three (the bucket held 1 object) and ended with `CLEAN`; a third run found nothing. The token of step 5A was enough. A pull request opened afterwards created the bucket, the Worker and the Access application again with nothing done by hand, and a second teardown removed them. With `convex` ticked it emptied `rooms` and `commands` in the production deployment, once the deploy key had the four permissions listed above (with three, Convex answered `You do not have permission to perform this operation (deployment:backups:view)`) |
 
-Not run yet: a deploy switching on emailed codes by itself (the token lacked the optional
-permission), multiplayer on a deployed preview and between two networks, deleting a preview by
-closing its pull request, the `PUBLIC_CONVEX_URL=... bun run deploy` form reaching
-production Convex, and everything under "Clearing what the test run created". When a step
+A deploy also passed a `PREVIEW_PASSWORD` repository secret on to the Worker ("stored with
+the Worker, but not asked for", since Access was in front). That run showed why the
+password must be long: GitHub hides a secret's value wherever it occurs in a log, so a
+short one blanks out parts of ordinary words, which gives it away, and the pull request
+loses its "View deployment" link because the address contains it.
+
+Not run yet: a deploy switching on emailed codes by itself (the test token lacked that
+permission), the password prompt on a deployment without Access, multiplayer on a deployed
+preview and between two networks, the `PUBLIC_CONVEX_URL=... bun run deploy` form reaching
+production Convex, a deploy after a rename or from a new repository, and, of the clean-up:
+emptying a bucket of more than a handful of objects, `--convex dev`, and the by-hand and
+Convex dashboard routes. When a step
 disagrees with this page, the command's last lines say which part failed; please correct
 the page.

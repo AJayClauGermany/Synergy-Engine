@@ -16,15 +16,17 @@
  *   4. Runs wrangler, which uploads the page and its scripts, and tells the Worker that
  *      Access guards it (ACCESS_AUD in cloudflare/worker.ts). The very first deploy runs
  *      wrangler twice: Access needs the Worker to exist, and the Worker stays locked until
- *      Access does.
+ *      Access does. A PREVIEW_PASSWORD, when one is set, travels with the upload as a
+ *      secret of the Worker; the Worker asks for it only where Access is not in front.
  *
  * Steps 2 and 3 call Cloudflare's API and so need CLOUDFLARE_API_TOKEN and
  * CLOUDFLARE_ACCOUNT_ID (CI has them; `wrangler login` alone does not provide them).
  * Without them the deploy still works: the assets travel with the Worker and the password
  * gate applies. docs/deploying.md has the whole picture.
  */
-import { appendFile, readdir, rm } from 'node:fs/promises';
+import { appendFile, mkdtemp, readdir, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 
@@ -107,6 +109,14 @@ export function accessApplication(worker: string, workerId: string, allowed: All
   };
 }
 
+/**
+ * What wrangler's --secrets-file is given so that the Worker has the password. JSON, not
+ * the .env form: there a `$` in the password would be read as a variable.
+ */
+export function passwordSecrets(password: string): string {
+  return JSON.stringify({ PREVIEW_PASSWORD: password });
+}
+
 /** The address of a Preview, read from what `wrangler preview --json` prints. */
 export function deployedUrl(output: string): string | null {
   try {
@@ -139,9 +149,11 @@ export interface Account {
   api: string;
 }
 
-class ApiError extends Error {}
+/** Cloudflare refused a call; the message carries its answer. */
+export class ApiError extends Error {}
 
-async function call(account: Account, method: string, resource: string, body?: BodyInit, type?: string) {
+/** One call to the account's part of the API. Throws an ApiError unless it worked or found nothing (404). */
+export async function call(account: Account, method: string, resource: string, body?: BodyInit, type?: string) {
   const response = await fetch(`${account.api}/accounts/${account.id}${resource}`, {
     method,
     body,
@@ -153,14 +165,23 @@ async function call(account: Account, method: string, resource: string, body?: B
 }
 
 /** A JSON call. Gives null for "no such thing" (404). */
-async function api<Result>(account: Account, method: string, resource: string, body?: object): Promise<Result | null> {
+export async function api<Result>(
+  account: Account,
+  method: string,
+  resource: string,
+  body?: object,
+): Promise<Result | null> {
   const response = await call(account, method, resource, body && JSON.stringify(body), 'application/json');
   if (response.status === 404) return null;
   return ((await response.json()) as { result: Result }).result;
 }
 
 /** Runs `work` over `items`, a few at a time: fast, without opening a connection per file. */
-async function inParallel<Item>(items: Item[], limit: number, work: (item: Item) => Promise<void>): Promise<void> {
+export async function inParallel<Item>(
+  items: Item[],
+  limit: number,
+  work: (item: Item) => Promise<void>,
+): Promise<void> {
   const queue = [...items];
   await Promise.all(
     Array.from({ length: Math.min(limit, queue.length) }, async () => {
@@ -229,7 +250,7 @@ export async function moveAssetsToBucket(account: Account, bucket: string, dist:
 }
 
 /** Whether Cloudflare already has a Worker of this name, and its id if so. */
-async function findWorker(account: Account, name: string): Promise<string | null> {
+export async function findWorker(account: Account, name: string): Promise<string | null> {
   return (await api<{ id: string }>(account, 'GET', `/workers/workers/${name}`))?.id ?? null;
 }
 
@@ -259,6 +280,18 @@ export async function allowEmailCodes(account: Account): Promise<string> {
   }
 }
 
+/** The Access application that guards a Worker, if the account has it. */
+export async function findAccessApplication(account: Account, worker: string): Promise<{ id: string } | null> {
+  const name = accessApplicationName(worker);
+  for (let page = 1; ; page++) {
+    const apps =
+      (await api<{ id: string; name: string }[]>(account, 'GET', `/access/apps?per_page=50&page=${page}`)) ?? [];
+    const found = apps.find((app) => app.name === name);
+    if (found) return found;
+    if (apps.length < 50) return null;
+  }
+}
+
 /**
  * Step 3: Cloudflare Access in front of the Worker, for exactly the people on the list.
  * `aud` is the application's audience tag, which the deploy hands to the Worker.
@@ -272,13 +305,7 @@ export async function protectWithAccess(
   if (!workerId) throw new Error(`Cloudflare has no Worker called "${config.name}", so Access has nothing to protect.`);
 
   const name = accessApplicationName(config.name);
-  let existing: { id: string } | undefined;
-  for (let page = 1; !existing; page++) {
-    const apps =
-      (await api<{ id: string; name: string }[]>(account, 'GET', `/access/apps?per_page=50&page=${page}`)) ?? [];
-    existing = apps.find((app) => app.name === name);
-    if (apps.length < 50) break;
-  }
+  const existing = await findAccessApplication(account, config.name);
 
   const application = accessApplication(config.name, workerId, allowed, config.vars?.PUBLIC_ACCESS === 'true');
   let saved: { id: string; aud?: string } | null;
@@ -370,8 +397,9 @@ export async function checkAccount(account: Account, config: WorkerConfig): Prom
   );
   await look(
     'Sign-in by emailed code',
-    `Optional. Without it, testers need a Cloudflare account to sign in. To switch it on, ${EMAIL_CODE_BY_HAND}; ` +
-      'or give the token "Access: Organizations, Identity Providers, and Groups: Edit" and a deploy does it.',
+    'The token lacks "Access: Organizations, Identity Providers, and Groups: Edit" (docs/setup.md, step 5A), so a ' +
+      'deploy cannot switch this on, and testers without a Cloudflare account could not sign in. Add the ' +
+      `permission to the token, or ${EMAIL_CODE_BY_HAND}.`,
     async () => {
       const methods = (await api<{ type: string }[]>(account, 'GET', '/access/identity_providers')) ?? [];
       return methods.some((method) => method.type === EMAIL_CODE) ? 'on' : 'off; a deploy switches it on';
@@ -439,7 +467,7 @@ async function main(): Promise<number> {
         `${finding.ok ? 'ok     ' : 'MISSING'}  ${finding.what}: ${finding.detail.replaceAll('\n', '\n         ')}`,
       );
     }
-    // Sign-in by emailed code is a convenience: a deploy works without it.
+    // A deploy works without sign-in by emailed code, and a token from an older set-up lacks the permission.
     const blocking = findings.filter((finding) => !finding.ok && finding.what !== 'Sign-in by emailed code');
     console.log(
       blocking.length === 0
@@ -470,10 +498,15 @@ async function main(): Promise<number> {
     }
   }
 
+  // The fallback gate. Optional: with neither it nor Access, the deployment is locked.
+  const password = process.env.PREVIEW_PASSWORD;
+  const secrets = password ? path.join(await mkdtemp(path.join(tmpdir(), 'synergy-deploy-')), 'secrets.json') : null;
+  if (secrets && password) await Bun.write(secrets, passwordSecrets(password));
+
   /** Runs wrangler and gives a Preview's address. `aud` set means Access is in front, and the Worker is told so. */
   const publish = async (aud: string | null): Promise<string | null> => {
     const wrangler = [process.execPath, 'x', 'wrangler'];
-    const vars = aud ? ['--var', `ACCESS_AUD:${aud}`] : [];
+    const vars = [...(aud ? ['--var', `ACCESS_AUD:${aud}`] : []), ...(secrets ? ['--secrets-file', secrets] : [])];
     if (target === 'preview') {
       const name = values.name ? ['--name', values.name] : [];
       const output = await run([...wrangler, 'preview', ...name, ...vars, '--json'], true);
@@ -485,25 +518,41 @@ async function main(): Promise<number> {
     return null;
   };
 
-  let url: string | null;
-  if (hasAllowed && account) {
-    // Access attaches to the Worker, so the Worker has to exist first. A Worker deployed
-    // without ACCESS_AUD answers nobody (it fails closed), so there is no open window.
-    if (!(await findWorker(account, config.name))) {
-      console.log(`First deploy of "${config.name}": creating the Worker, then putting Access in front.`);
-      await publish(null);
+  const deployBehindGate = async (): Promise<string | null> => {
+    if (hasAllowed && account) {
+      // Access attaches to the Worker, so the Worker has to exist first. A Worker deployed
+      // without ACCESS_AUD answers nobody without the password, so there is no open window.
+      if (!(await findWorker(account, config.name))) {
+        console.log(`First deploy of "${config.name}": creating the Worker, then putting Access in front.`);
+        await publish(null);
+      }
+      const access = await protectWithAccess(account, config, allowed);
+      report.push(`Cloudflare Access: ${access.summary}.`);
+      return publish(access.aud);
     }
-    const access = await protectWithAccess(account, config, allowed);
-    url = await publish(access.aud);
-    report.push(`Cloudflare Access: ${access.summary}.`);
-  } else {
-    url = await publish(null);
+    const locked = password
+      ? 'Only the password opens this deployment.'
+      : 'This deployment is locked: it has no password either.';
     report.push(
       hasAllowed
-        ? 'Cloudflare Access: NOT set up, because CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are not set. ' +
-            'This deployment is locked unless it has a PREVIEW_PASSWORD secret.'
+        ? `Cloudflare Access: NOT set up, because CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are not set. ${locked}`
         : 'Cloudflare Access: NOT set up, because PREVIEW_ALLOWED_EMAILS is empty (in CI it is a repository ' +
-            'variable, not a secret). This deployment is locked unless it has a PREVIEW_PASSWORD secret.',
+            `variable, not a secret). ${locked}`,
+    );
+    return publish(null);
+  };
+
+  let url: string | null;
+  try {
+    url = await deployBehindGate();
+  } finally {
+    if (secrets) await rm(path.dirname(secrets), { recursive: true });
+  }
+  if (password) {
+    report.push(
+      hasAllowed && account
+        ? 'Password: stored with the Worker, but not asked for: Cloudflare Access is in front, and it comes first.'
+        : 'Password: set from PREVIEW_PASSWORD.',
     );
   }
 

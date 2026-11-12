@@ -30,6 +30,12 @@ clear what a test run created: `docs/setup.md`. The moving parts:
   which does not pass `ctx.access` on. Access still checks every visitor before the
   Worker; the Worker just cannot see it. Do not "fix" this by trusting a request header.
 - `.github/workflows/preview.yml` → a preview per non-draft pull request, deleted on close.
+- `scripts/teardown.ts` (`bun run cloudflare:teardown`) → the opposite of a deploy: lists
+  the Worker, the Access application and the bucket, and with `--confirm <worker name>`
+  deletes them, Worker first (a Worker without its Access application serves everyone).
+  `.github/workflows/teardown.yml` runs it with the repository's secrets, started by hand
+  or by an agent: you need no Cloudflare login to clean up. It deletes for good, so start
+  it only when the user asked for a clean-up, and list (empty `confirm`) before deleting.
 
 Commands:
 
@@ -52,8 +58,9 @@ bunx wrangler deploy --dry-run
 ```
 
 Secrets are entered by the user, never by you and never in files that get committed
-(GitHub repository secrets for CI, `.env.local` locally, `wrangler secret put` for the
-optional password).
+(GitHub repository secrets for CI, `.env.local` locally). The optional `PREVIEW_PASSWORD`
+lives in the same two places; a deploy hands it to wrangler (`--secrets-file`), and the
+Worker asks for it only where Access is not in front.
 
 Deploying publishes content to the internet and needs the user's Cloudflare credentials.
 Ask before running `preview:deploy` or `deploy` unless they already told you to.
