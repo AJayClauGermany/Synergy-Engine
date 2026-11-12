@@ -184,8 +184,8 @@ a real account, the pull-request workflow built, created the Worker, the bucket 
 Access application, uploaded only changed assets and linked the preview. Opening that
 preview failed at first (the Worker could not see the Access sign-in); with `ACCESS_AUD`
 it opened, for a visitor signed in by emailed code and for one signed in with Cloudflare.
-The deploy switching on emailed codes by itself, and `bun run cloudflare:check`, are
-tested against stand-ins (`scripts/deploy.test.ts`) and not yet against an account. Worker Previews are in open beta in Wrangler; `bunx wrangler preview --help`
+`bun run cloudflare:check` has run against an account too. The deploy switching on
+emailed codes by itself is tested against a stand-in (`scripts/deploy.test.ts`) only. Worker Previews are in open beta in Wrangler; `bunx wrangler preview --help`
 shows the current options.
 
 Wrangler's usage reports to Cloudflare are switched off for this project

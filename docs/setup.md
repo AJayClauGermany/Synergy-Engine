@@ -405,15 +405,14 @@ avoid; the last column says what has been run since.
 | 3 | Worked, but changing `"name"` alone failed `bun run check` | `bun run rename` added; not yet used in a run |
 | 4 | Worked as written, including `bunx convex deploy`. Peer-to-peer hosting needed the VPN off; Convex's agent files failed the format check | both noted above; `.yaml` files are no longer format-checked |
 | Multiplayer, locally | Skirmish peer-to-peer and on Convex (it survived a reload), and Frontier host and join, all connected | |
-| 5A | The token from the template plus *Access: Apps and Policies: Edit* was enough. *Zone Resources* had to be filled in | `bun run cloudflare:check` added; tested against a stand-in only |
+| 5A | The token from the template plus *Access: Apps and Policies: Edit* was enough. *Zone Resources* had to be filled in | `bun run cloudflare:check` added. **Confirmed the same day** against the account: it ended with `READY`, and reported an empty `PREVIEW_ALLOWED_EMAILS` as `MISSING` |
 | 5C | The workflow ran on a private repository, created the Worker, the bucket and the Access application, linked `pr-1-<name>.<subdomain>.workers.dev`, and a second push uploaded no assets | |
-| 5, opening the link | **Failed.** Access offered only "Sign in with Cloudflare"; after signing in, the Worker answered "Preview locked". Cloudflare does not tell a Worker with static assets that Access admitted the visitor | the deploy now tells the Worker (`ACCESS_AUD`). **Confirmed the same day:** a pull-request preview opened after signing in, by emailed code (One-time PIN added by hand) and with "Sign in with Cloudflare" |
+| 5, opening the link | **Failed.** Access offered only "Sign in with Cloudflare"; after signing in, the Worker answered "Preview locked". Cloudflare does not tell a Worker with static assets that Access admitted the visitor | the deploy now tells the Worker (`ACCESS_AUD`). **Confirmed the same day:** a pull-request preview opened after signing in, by emailed code (One-time PIN added by hand) and with "Sign in with Cloudflare". An address that is not on the list received no code |
 | 6 | `bun run deploy` deployed and reported; the address was locked for the same reason | same fix; not run again |
 | 7 | The commit hook refused a failing commit; `bun run desktop:dev` opened the game; `varlock scan` works | |
 
 Not run yet: a deploy switching on emailed codes by itself (the token lacked the optional
-permission), `bun run cloudflare:check` against an account, an address that is not on the
-list being refused, multiplayer on a deployed preview and between two networks, deleting a preview by
+permission), multiplayer on a deployed preview and between two networks, deleting a preview by
 closing its pull request, the `PUBLIC_CONVEX_URL=... bun run deploy` form reaching
 production Convex, and everything under "Clearing what the test run created". When a step
 disagrees with this page, the command's last lines say which part failed; please correct
