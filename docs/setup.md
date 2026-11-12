@@ -596,7 +596,7 @@ Useful when something is missing, and when moving to another repository or machi
 | Value | Lives in | Follows the code? |
 |-------|----------|-------------------|
 | Names (`wrangler.jsonc`, `PEER_PREFIX`, title), written by `bun run rename` | the repository | yes |
-| `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | GitHub repository secrets; `.env.local` for deploys by hand | no: per repository, per machine |
+| `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | GitHub repository secrets; `.env.local` or Bitwarden ([environment.md](environment.md)) for deploys by hand | no: per repository, per machine |
 | `PREVIEW_ALLOWED_EMAILS`, `PUBLIC_CONVEX_URL` | GitHub repository variables; `.env.local` for deploys by hand | no: per repository, per machine |
 | `PREVIEW_PASSWORD` (optional fallback) | a GitHub repository secret; `.env.local` for deploys by hand. A deploy stores it with the Worker | no: per repository, per machine |
 | Sign-in by emailed code | the Zero Trust account, once | no |

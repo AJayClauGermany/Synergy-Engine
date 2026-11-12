@@ -33,7 +33,8 @@ It prints every variable and whether it resolved, with secrets masked.
 
 Later wins:
 
-1. the defaults in `.env.schema`
+1. the defaults in `.env.schema`, including secrets fetched from Bitwarden once that is set
+   up (below)
 2. `.env`, then `.env.local` (git-ignored; this is where `convex dev` and you write values)
 3. the process environment, which is how CI and hosting dashboards set them
 
@@ -43,8 +44,8 @@ deployment without touching any file.
 ## Secrets
 
 `CONVEX_DEPLOY_KEY` and `CLOUDFLARE_API_TOKEN` are marked `@sensitive`: varlock masks them
-in output and logs. Keep them in `.env.local` or your CI's secret store, never in a
-committed file.
+in output and logs. Keep them in Bitwarden (below), `.env.local` or your CI's secret store,
+never in a committed file.
 
 ```bash
 bunx varlock reveal CLOUDFLARE_API_TOKEN     # show one to yourself
@@ -58,8 +59,53 @@ bunx varlock encrypt --file .env.local       # replace plaintext secrets with de
 bunx varlock scan --install-hook             # refuse commits that contain a secret
 ```
 
-For secrets a team shares, varlock has plugins that read from 1Password, Infisical, AWS
-and others; the schema then holds a reference, not a value. See varlock's documentation.
+### Secrets from Bitwarden (optional, your own machine)
+
+A secret in `.env.local` is plain text that any program you run can read, including an
+agent that opens the file by mistake. The schema can fetch the secrets from
+[Bitwarden Secrets Manager](https://bitwarden.com/products/secrets-manager/) instead
+(varlock's [Bitwarden plugin](https://varlock.dev/plugins/bitwarden/)). This is for
+commands on your machine; CI keeps passing its secrets as environment variables.
+
+It covers `CONVEX_DEPLOY_KEY`, `CLOUDFLARE_API_TOKEN` and `PREVIEW_PASSWORD`. Each one
+is fetched only when both `BWS_ACCESS_TOKEN` and its `BWS_ID_...` are set. Otherwise
+nothing changes and the value comes from `.env.local` as before, so a clone without
+Bitwarden works as it always did.
+
+1. In Bitwarden Secrets Manager, put the secrets in a project, and give a machine
+   account *Can read* access to that project. Create an access token for the machine
+   account. An existing machine account works too, if it can read the project.
+2. Write each secret's ID into `.env.schema` (`BWS_ID_CLOUDFLARE_API_TOKEN=<uuid>` and
+   so on) and commit it. IDs are not secret. The web app shows them, and so does
+   `bws secret list <project-id>`. The token already names the organisation, so the
+   schema needs no organisation or project ID.
+3. Give varlock the access token without leaving it in plain text. It unlocks every
+   secret the machine account can read. Either put `BWS_ACCESS_TOKEN=` in `.env.local`
+   and encrypt it to this device:
+
+   ```bash
+   bunx varlock encrypt --file .env.local
+   ```
+
+   On macOS the key stays in the Secure Enclave and each decrypt asks for Touch ID or
+   your password. On Linux, anything running as you can decrypt it, so it guards the
+   file at rest only. Or export `BWS_ACCESS_TOKEN` in your shell, if it is set there
+   already for another tool.
+4. Delete those secrets from `.env.local`. A value in `.env.local` or the environment
+   always wins over Bitwarden.
+5. Run `bun run env`. The three show as resolved (masked), and the token is listed as
+   `internal`: varlock uses it but never passes it to the commands it runs.
+
+With the token and an ID set, a command fails to start if Bitwarden cannot be reached
+(offline, or a revoked token), and the error names the secret. To work offline for a
+while, unset `BWS_ACCESS_TOKEN` and put the values back in `.env.local`.
+
+To add another secret: add a `BWS_ID_<NAME>` line marked `@type=bitwardenSecretId
+@internal`, and set the variable to
+`if(and($BWS_ACCESS_TOKEN, $BWS_ID_<NAME>), bitwarden($BWS_ID_<NAME>))`.
+
+For other secret stores, varlock has plugins for 1Password, Infisical, AWS and others
+that work the same way. See varlock's documentation.
 
 Only variables starting with `PUBLIC_` are built into the web page, and anyone who opens
 the game can read them. Never put a secret in one.
