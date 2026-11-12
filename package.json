@@ -24,11 +24,13 @@
     "format": "bun fmt",
     "format:check": "bun fmt --check",
     "hooks": "git config core.hooksPath .githooks",
+    "rename": "bun scripts/rename.ts",
     "screenshot": "varlock run -- bun run scripts/screenshot.ts",
     "backend": "convex dev",
     "preview:local": "bun run build && varlock run -- wrangler dev",
     "preview:deploy": "varlock run -- bun scripts/deploy.ts preview",
     "deploy": "varlock run -- bun scripts/deploy.ts production",
+    "cloudflare:check": "varlock run -- bun scripts/deploy.ts check",
     "desktop:dev": "varlock run -- bun run scripts/build.ts --outdir desktop/dist && cd desktop && bun ../node_modules/electrobun/bin/electrobun.cjs dev",
     "desktop:build": "varlock run -- bun run scripts/build.ts --outdir desktop/dist && cd desktop && bun ../node_modules/electrobun/bin/electrobun.cjs build --env=stable",
     "env": "varlock load"

@@ -74,9 +74,9 @@ starting on your game, so nothing is left to set up later.
 
 ## Making it yours
 
-1. Rename things ([docs/setup.md](docs/setup.md), step 3): `name` in `wrangler.jsonc`,
-   the app in `desktop/electrobun.config.ts`, `PEER_PREFIX` in `game/src/online.ts`, the
-   `<title>` in `game/index.html`.
+1. Rename things ([docs/setup.md](docs/setup.md), step 3): `bun run rename my-game "My Game"`
+   writes the name into `wrangler.jsonc`, `desktop/electrobun.config.ts`, the
+   `PEER_PREFIX`es and the `<title>` in `game/index.html`.
 2. Replace the sample: `game/src/rules/` (your rules), `game/src/behaviours/` (your
    scripts), `game/src/scenes/` (your scenes), `game/src/ui/` (your HUD).
 3. Keep the shape of the sample you started from. Skirmish: input submits commands,

@@ -6,10 +6,11 @@ disk, so it runs offline; only online multiplayer needs a connection. That inclu
 images, models and sounds: the web deploy keeps those in R2, a desktop build keeps them in
 `views/game/assets/` (see [deploying.md](deploying.md), "Assets").
 
-> **Status:** the configuration follows Electrobun 2.0.6's official templates, but it
-> has not been built yet: in the cloud environment this template was authored in,
-> Electrobun's toolchain downloader could not get through the network proxy. Expect to
-> adjust it on first use, and please update this note once it is confirmed on your machine.
+> **Status:** the configuration follows Electrobun 2.0.6's official templates.
+> `bun run desktop:dev` has been run once, on macOS (12 November 2026): it downloaded the
+> tools and opened the game with no changes. The system asked whether the app may use the
+> network, and the download needed a direct connection (no VPN). `bun run desktop:build`,
+> Windows and Linux have not been run; please update this note when they are.
 
 ## Commands
 

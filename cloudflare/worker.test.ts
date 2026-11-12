@@ -121,6 +121,15 @@ describe('preview gate', () => {
     );
     expect(forged.status).toBe(503);
   });
+
+  test('a deployment that a deploy put behind Access is served: the Worker cannot see the sign-in itself', async () => {
+    // Behind the asset router `context.access` never arrives, so the deploy's word counts.
+    const response = await handleRequest(new Request(`${origin}/`), { ASSETS: assets, ACCESS_AUD: 'aud-tag' }, {});
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Cache-Control')).toContain('private');
+    const unset = await handleRequest(new Request(`${origin}/`), { ASSETS: assets, ACCESS_AUD: '' }, {});
+    expect(unset.status).toBe(503);
+  });
 });
 
 describe('hashed assets', () => {
