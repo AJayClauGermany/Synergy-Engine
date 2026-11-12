@@ -17,6 +17,8 @@ export interface MountedUI {
 }
 
 const STYLE_ID = 'synergy-ui-style';
+/** The overlay on each container, so a second `mountUI` replaces the first instead of stacking on it. */
+const mounted = new WeakMap<HTMLElement, MountedUI>();
 
 // The overlay itself ignores the pointer so the game underneath stays clickable.
 // Controls opt back in; add `data-interactive` to any panel that should block clicks.
@@ -26,7 +28,8 @@ const STYLE = `
 `;
 
 /**
- * Renders a Preact tree on top of the game canvas.
+ * Renders a Preact tree on top of the game canvas. There is one overlay per container:
+ * mounting again replaces what was there.
  *
  *   mountUI(<Hud />, { engine });
  *
@@ -47,17 +50,24 @@ export function mountUI(element: ComponentChildren, options: MountOptions): Moun
     document.head.append(style);
   }
 
+  // A scene that mounts its own HUD is loaded more than once (a restart, a rematch). Without
+  // this each load would add another copy on top of the last, every one of them live.
+  mounted.get(container)?.unmount();
+
   const root = document.createElement('div');
   root.className = 'synergy-ui';
   container.append(root);
 
   render(<EngineContext.Provider value={engine}>{element}</EngineContext.Provider>, root);
 
-  return {
+  const ui: MountedUI = {
     root,
     unmount() {
       render(null, root);
       root.remove();
+      if (mounted.get(container) === ui) mounted.delete(container);
     },
   };
+  mounted.set(container, ui);
+  return ui;
 }

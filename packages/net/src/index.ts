@@ -5,3 +5,4 @@ export { Signal } from './Signal';
 export { type Transport, LoopbackHub, LoopbackTransport } from './Transport';
 export { type Session, type CommandEntry, type HostOptions, CommandSession } from './Session';
 export { startTicker } from './Ticker';
+export { wireProblem, wireCopy } from './wire';

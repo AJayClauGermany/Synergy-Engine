@@ -12,7 +12,7 @@ import {
   Time,
   Vector3,
 } from '@synergy/engine';
-import { Signal, type Transport } from '@synergy/net';
+import { Signal, type Transport, wireCopy, wireProblem } from '@synergy/net';
 import { CustomMessagingManager } from './CustomMessaging';
 import type { NetworkBehaviour } from './NetworkBehaviour';
 import { NetworkObject } from './NetworkObject';
@@ -427,6 +427,13 @@ export class NetworkManager extends MonoBehaviour {
 
   private begin(role: Role, transport: Transport): void {
     if (this.role !== 'none') throw new Error('NetworkManager is already running. Call shutdown() first.');
+    if (this.isDestroyed) {
+      // Unity ticks "Don't Destroy" on its NetworkManager by default; here it is a line of code.
+      throw new Error(
+        'This NetworkManager has been destroyed (the scene it was created in was unloaded), so it cannot start: it would ' +
+          'never read the network. Keep it across scenes: dontDestroyOnLoad(manager.gameObject), right after creating it.',
+      );
+    }
     const playerPrefab = this.networkConfig.playerPrefab;
     if (playerPrefab) this.networkPrefabs.add(playerPrefab);
     this.role = role;
@@ -567,11 +574,32 @@ export class NetworkManager extends MonoBehaviour {
   }
 
   private flushServer(): void {
+    const told = this.sendVariableChanges();
+    // With nothing to say, still tell clients what tick it is now and then.
+    const heartbeat = this.tick - this.lastHeartbeatTick >= this.networkConfig.tickRate;
+    if (!heartbeat) return;
+    this.lastHeartbeatTick = this.tick;
+    for (const id of this.remoteClientIds()) {
+      if (!told.has(id)) this.sendTo(id, { t: 'sync', tick: this.tick, u: [] });
+    }
+  }
+
+  /**
+   * Server: sends every pending variable change now, and returns the clients that were
+   * sent one. This runs once a tick, and also just before anything that is sent at once
+   * (an RPC, a despawn). Otherwise `hp.value -= 4; this.showHitRpc();` would reach
+   * clients as the RPC first and the new value a tick later, and a value written just
+   * before `despawn()` would never reach them at all.
+   */
+  private sendVariableChanges(): Set<number> {
     const perClient = new Map<number, VarUpdate[]>();
     for (const variable of this.dirtyVariables) {
-      if (!variable._dirty) continue;
       const behaviour = variable._behaviour;
       const object = behaviour?._networkObject;
+      // An object still being spawned sends its first values with the spawn itself.
+      if (variable._dirty && object?._spawning) continue;
+      this.dirtyVariables.delete(variable);
+      if (!variable._dirty) continue;
       if (!behaviour || !object?._spawned) {
         variable._resetDirty();
         continue;
@@ -585,15 +613,8 @@ export class NetworkManager extends MonoBehaviour {
       }
       variable._resetDirty();
     }
-    this.dirtyVariables.clear();
-
-    // With nothing to say, still tell clients what tick it is now and then.
-    const heartbeat = this.tick - this.lastHeartbeatTick >= this.networkConfig.tickRate;
-    if (heartbeat) this.lastHeartbeatTick = this.tick;
-    for (const id of this.remoteClientIds()) {
-      const updates = perClient.get(id);
-      if (updates || heartbeat) this.sendTo(id, { t: 'sync', tick: this.tick, u: updates ?? [] });
-    }
+    for (const [id, updates] of perClient) this.sendTo(id, { t: 'sync', tick: this.tick, u: updates });
+    return new Set(perClient.keys());
   }
 
   private flushClient(): void {
@@ -930,6 +951,7 @@ export class NetworkManager extends MonoBehaviour {
     this.scoped(() => {
       this.requireServer('despawn objects');
       if (!object._spawned) throw new Error(`"${object.name}" is not spawned.`);
+      this.sendVariableChanges(); // its last values first: after the despawn nobody is listening
       for (const id of object._visibleTo) this.sendTo(id, { t: 'despawn', o: object._id });
       this.removeObject(object, destroyObject);
     });
@@ -939,6 +961,7 @@ export class NetworkManager extends MonoBehaviour {
   objectDestroyed(object: NetworkObject): void {
     if (this.role === 'none') return;
     if (this.isServer) {
+      this.sendVariableChanges();
       for (const id of object._visibleTo) this.sendTo(id, { t: 'despawn', o: object._id });
     } else if (!this._sceneLoading && !this.engine?.isDisposed) {
       // (During a networked scene load the old scene's objects go with it; the server's
@@ -1259,10 +1282,27 @@ export class NetworkManager extends MonoBehaviour {
       );
     }
 
+    // An optional parameter left out arrives as undefined everywhere; one passed as
+    // undefined would arrive as null on the other machines. Leaving it off is the same call.
+    while (args.length > 0 && args.at(-1) === undefined) args = args.slice(0, -1);
+    // The other machines get the arguments as JSON. What JSON would change is refused
+    // here, on the caller's machine: a Vector3 would work for the host and break a guest.
+    const problem = wireProblem(args, `the arguments of "${name}"`);
+    if (problem) {
+      throw new Error(
+        `Cannot call RPC "${name}": ${problem} RPC arguments are plain data, identical on every machine.`,
+      );
+    }
+    // This machine runs the handler with a copy too, as the others do: what it is given
+    // cannot then be changed by the caller afterwards, or the caller's by the handler.
+    args = wireCopy(args);
+
     const sender = this.clientId;
     const audience: RpcAudience = { sender, owner: object._owner, hostIsClient: this.isHost, targets };
     const index = behaviour._behaviourIndex;
     if (this.isServer) {
+      // Changes made before this call are sent before it, so every machine sees them in that order.
+      this.sendVariableChanges();
       // The server knows everyone, so it decides who hears this and delivers to each.
       for (const id of this.participantIds()) {
         if (!isRecipient(mode, id, audience)) continue;
@@ -1274,6 +1314,7 @@ export class NetworkManager extends MonoBehaviour {
     }
     if (isRecipient(mode, sender, audience)) this.runRpc(object, index, name, args, sender);
     if (mode !== SendTo.Me) {
+      this.flushClient(); // what this client wrote before the call arrives before it
       this.sendToServer({
         t: 'rpc',
         o: object._id,
