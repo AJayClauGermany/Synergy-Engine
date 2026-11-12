@@ -1,5 +1,6 @@
 import { Signal } from './Signal';
 import { LoopbackHub, type Transport } from './Transport';
+import { wireCopy, wireProblem } from './wire';
 
 /** One accepted command, with its position in the shared order. */
 export interface CommandEntry<C> {
@@ -127,8 +128,19 @@ export class CommandSession<C> implements Session<C> {
 
   submit(command: C): void {
     if (this.closed) throw new Error('This session is closed.');
-    if (this.hostId === null) this.accept(this.localId, command);
-    else this.send(this.hostId, { t: 'submit', command });
+    // The other players get the command as JSON. If JSON would change it, they would
+    // apply something else than this machine does, so it is refused here, where it is made.
+    const problem = wireProblem(command, 'the command');
+    if (problem) {
+      throw new Error(
+        `session.submit(): ${problem} A command is plain data: every player must receive exactly what was submitted.`,
+      );
+    }
+    // A copy, so the host applies what the guests receive, and changing the object
+    // afterwards (or submitting it twice) cannot rewrite what is already in the log.
+    const sent = wireCopy(command);
+    if (this.hostId === null) this.accept(this.localId, sent);
+    else this.send(this.hostId, { t: 'submit', command: sent });
   }
 
   close(): void {

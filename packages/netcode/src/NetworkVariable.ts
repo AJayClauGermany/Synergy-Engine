@@ -1,4 +1,5 @@
-import { Signal } from '@synergy/net';
+import type { ReadonlyValue } from '@synergy/engine';
+import { Signal, wireProblem } from '@synergy/net';
 import type { NetworkBehaviour } from './NetworkBehaviour';
 import { SERVER_CLIENT_ID } from './protocol';
 import { jsonSerializer, type Serializer } from './Serializers';
@@ -167,10 +168,32 @@ export class NetworkVariable<T> extends NetworkVariableBase {
     super(options);
     this.current = initial;
     this.serializer = options.serializer ?? jsonSerializer;
+    this.assertSendable(initial);
   }
 
-  get value(): T {
-    return this.current;
+  /**
+   * Without a serializer the value travels as JSON. A value JSON would change (a Vector3,
+   * a Map, Infinity) stays right on the machine that set it and is wrong everywhere
+   * else, so it is refused on the machine that set it.
+   */
+  private assertSendable(value: T): void {
+    if (this.serializer !== jsonSerializer) return;
+    const problem = wireProblem(value, 'its value');
+    if (!problem) return;
+    const name = this._name ? `NetworkVariable "${this._name}"` : 'A NetworkVariable';
+    throw new Error(
+      `${name}: ${problem} For a Vector3, Vector2, Quaternion or Color pass a serializer: ` +
+        'new NetworkVariable(Vector3.zero, { serializer: Serializers.vector3 }).',
+    );
+  }
+
+  /**
+   * The current value, to read. The type is read-only because a change made in place
+   * (`cell.value.x = 3`, `items.value.push(item)`) is not seen and not sent: this
+   * machine would show it and no other. Assign a new value instead.
+   */
+  get value(): ReadonlyValue<T> {
+    return this.current as ReadonlyValue<T>;
   }
 
   /** For logs and `Debug.hierarchy()`: `NetworkVariable(100)`. */
@@ -178,13 +201,14 @@ export class NetworkVariable<T> extends NetworkVariableBase {
     return `NetworkVariable(${printable(this.current)})`;
   }
 
-  set value(next: T) {
+  set value(next: T | ReadonlyValue<T>) {
     this.assertWritable();
+    this.assertSendable(next as T);
     if (sameValue(this.current, next, this.serializer as Serializer<never>)) return;
     const previous = this.current;
-    this.current = next;
+    this.current = next as T;
     this.markDirty(true, -1);
-    this.onValueChanged.emit(previous, next);
+    this.onValueChanged.emit(previous, next as T);
   }
 
   /** @internal */

@@ -50,34 +50,42 @@ export abstract class MonoBehaviour extends Behaviour {
   _invokes: { method: () => void; coroutine: Coroutine }[] = [];
 
   // ---- Messages (all optional) ------------------------------------------------------
+  // The return types are unions on purpose. A plain `void` accepts a method that returns
+  // anything, so `*update(): IEnumerator` and `async update()` would compile, and the
+  // engine would call them and get a generator or a promise it has no use for. With a
+  // union the compiler checks what is returned: nothing, or (where Unity allows a
+  // coroutine) an IEnumerator.
 
   /** Called once when the object first becomes active, before any `start`. */
-  protected awake?(): void;
+  protected awake?(): void | undefined;
   /** Called each time the behaviour becomes enabled and active. */
-  protected onEnable?(): void;
-  /** Called once, just before the first update. Other objects have finished `awake` by now. */
-  protected start?(): void;
+  protected onEnable?(): void | undefined;
+  /**
+   * Called once, just before the first update. Other objects have finished `awake` by now.
+   * May be a coroutine, as in Unity: `*start(): IEnumerator { yield new WaitForSeconds(1); ... }`.
+   */
+  protected start?(): void | IEnumerator;
   /** Called every frame. Use `Time.deltaTime`. */
-  protected update?(): void;
+  protected update?(): void | undefined;
   /** Called every frame after all `update`s. Good for cameras that follow things. */
-  protected lateUpdate?(): void;
+  protected lateUpdate?(): void | undefined;
   /** Called on a fixed timestep (`Time.fixedDeltaTime`). Good for simulation. */
-  protected fixedUpdate?(): void;
+  protected fixedUpdate?(): void | undefined;
   /** Called each time the behaviour becomes disabled or inactive. */
-  protected onDisable?(): void;
+  protected onDisable?(): void | undefined;
   /** Called once when destroyed (only if `awake` ran). */
-  protected onDestroy?(): void;
+  protected onDestroy?(): void | undefined;
 
-  /** Mouse pressed while over this object's Collider. Needs a `Camera.main`. */
-  protected onMouseDown?(): void;
-  /** Mouse released, sent to the object that received `onMouseDown`. */
-  protected onMouseUp?(): void;
-  /** Mouse moved onto this object's Collider. */
-  protected onMouseEnter?(): void;
+  /** Mouse pressed while over this object's Collider. Needs a `Camera.main`. May be a coroutine. */
+  protected onMouseDown?(): void | IEnumerator;
+  /** Mouse released, sent to the object that received `onMouseDown`. May be a coroutine. */
+  protected onMouseUp?(): void | IEnumerator;
+  /** Mouse moved onto this object's Collider. May be a coroutine. */
+  protected onMouseEnter?(): void | IEnumerator;
   /** Called every frame the mouse is over this object's Collider. */
-  protected onMouseOver?(): void;
-  /** Mouse moved off this object's Collider. */
-  protected onMouseExit?(): void;
+  protected onMouseOver?(): void | undefined;
+  /** Mouse moved off this object's Collider. May be a coroutine. */
+  protected onMouseExit?(): void | IEnumerator;
 
   // ---- Unity's spellings --------------------------------------------------------------
   // A method named `Update` would compile and never be called. These declarations turn
@@ -198,9 +206,26 @@ export abstract class MonoBehaviour extends Behaviour {
     const handler = (this as unknown as Record<MessageName, (() => void) | undefined>)[message];
     if (typeof handler !== 'function') return;
     try {
-      handler.call(this);
+      const result: unknown = (handler as () => unknown).call(this);
+      if (result !== undefined && result !== null) this._returned(message, result);
     } catch (error) {
       currentEngine().reportError(error, `${typeNameOf(this)}.${message} on "${this.name}"`);
+    }
+  }
+
+  /**
+   * A message that returned something. Unity: `IEnumerator Start()` runs as a coroutine,
+   * and so does `*start(): IEnumerator` here. An `async` message returns a promise; if
+   * that fails, the error is reported instead of vanishing.
+   */
+  private _returned(message: MessageName, result: unknown): void {
+    const candidate = result as { next?: unknown; then?: unknown };
+    if (typeof candidate.next === 'function') {
+      currentEngine().coroutines.start(this, result as Iterator<Yieldable, unknown, unknown>);
+    } else if (typeof candidate.then === 'function') {
+      const engine = currentEngine();
+      const context = `${typeNameOf(this)}.${message} on "${this.name}" (after an await)`;
+      (result as PromiseLike<unknown>).then(undefined, (error: unknown) => engine.reportError(error, context));
     }
   }
 

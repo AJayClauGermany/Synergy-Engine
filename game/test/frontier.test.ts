@@ -155,8 +155,10 @@ describe('orders', () => {
       'That unit is not yours to command.',
     );
     // Nonsense from a modified client is dropped without a word.
-    guest.run(() => red.moveRpc(1.5, Number.NaN));
+    guest.run(() => red.moveRpc(1.5, -3));
     net.pump();
+    // What JSON would change (NaN arrives as null) does not leave an honest client at all.
+    expect(() => guest.run(() => red.moveRpc(1, Number.NaN))).toThrow('is NaN, which JSON turns into null');
 
     expect(blue.cell.value).toEqual(before.blue);
     expect(red.cell.value).toEqual(before.red);

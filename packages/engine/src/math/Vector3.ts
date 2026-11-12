@@ -25,15 +25,15 @@ export class Vector3 implements Vector3Like {
     readonly z: number = 0,
   ) {}
 
-  static readonly zero = new Vector3(0, 0, 0);
-  static readonly one = new Vector3(1, 1, 1);
-  static readonly up = new Vector3(0, 1, 0);
-  static readonly down = new Vector3(0, -1, 0);
-  static readonly left = new Vector3(-1, 0, 0);
-  static readonly right = new Vector3(1, 0, 0);
+  static readonly zero = Object.freeze(new Vector3(0, 0, 0));
+  static readonly one = Object.freeze(new Vector3(1, 1, 1));
+  static readonly up = Object.freeze(new Vector3(0, 1, 0));
+  static readonly down = Object.freeze(new Vector3(0, -1, 0));
+  static readonly left = Object.freeze(new Vector3(-1, 0, 0));
+  static readonly right = Object.freeze(new Vector3(1, 0, 0));
   /** The direction an unrotated object (and camera) faces: -Z. */
-  static readonly forward = new Vector3(0, 0, -1);
-  static readonly back = new Vector3(0, 0, 1);
+  static readonly forward = Object.freeze(new Vector3(0, 0, -1));
+  static readonly back = Object.freeze(new Vector3(0, 0, 1));
 
   static from(value: Vector3Like): Vector3 {
     return new Vector3(value.x, value.y, value.z);

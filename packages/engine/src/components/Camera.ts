@@ -24,12 +24,26 @@ export enum CameraClearFlags {
  * Screen points are CSS pixels with the origin at the TOP-left of the game view, the
  * same space as `Input.mousePosition` and the Preact HUD.
  */
+const warnedNoMain = new WeakSet<object>();
+
 export class Camera extends Behaviour {
   static readonly disallowMultiple = true;
 
   /** The first enabled camera tagged "MainCamera", or `null`. */
   static get main(): Camera | null {
-    return currentEngine().cameras.find((camera) => camera.gameObject.tag === 'MainCamera') ?? null;
+    const engine = currentEngine();
+    const main = engine.cameras.find((camera) => camera.gameObject.tag === 'MainCamera') ?? null;
+    if (!main && engine.cameras.length > 0 && !warnedNoMain.has(engine)) {
+      // Picking, the onMouse messages and WorldAnchor all go through Camera.main, and each
+      // quietly does nothing without it. One line here says why.
+      warnedNoMain.add(engine);
+      const tags = engine.cameras.map((camera) => `"${camera.gameObject.tag}"`).join(', ');
+      console.warn(
+        `Camera.main is null: ${engine.cameras.length} camera(s) are enabled, but none has the tag "MainCamera" ` +
+          `(their tags: ${tags}). Mouse picking, onMouseDown() and WorldAnchor need it: camera.gameObject.tag = 'MainCamera'.`,
+      );
+    }
+    return main;
   }
 
   /** Every enabled camera. */

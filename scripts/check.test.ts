@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test';
+import path from 'node:path';
+import cloudflareConfig from '../cloudflare/tsconfig.json';
 import packageJson from '../package.json';
+import rootConfig from '../tsconfig.json';
 import {
   clip,
   parseArgs,
@@ -55,6 +58,10 @@ describe('the steps', () => {
       '404 pass in 26 files',
     );
     expect(detail?.(' 404 pass\n 2 fail\n 1 error\n')).toBe('2 fail, 1 error, 404 pass');
+    // A test that did not run is not a pass, and the line says so.
+    expect(detail?.(' 3 pass\n 2 skip\n 1 todo\n 0 fail\nRan 6 tests across 1 file.')).toBe(
+      '3 pass, 2 skip (NOT RUN), 1 todo (NOT RUN) in 1 file',
+    );
   });
 
   test('the lint and type steps count findings, and say nothing when there are none', () => {
@@ -94,7 +101,33 @@ describe('long output', () => {
   });
 });
 
+describe('what is type-checked', () => {
+  // A file outside every tsconfig's `include` is linted, formatted and run by its tests,
+  // and never type-checked: `bun run check` says PASSED over a type error in it.
+  test('every TypeScript file in the project belongs to a tsconfig', () => {
+    const root = path.resolve(import.meta.dir, '..');
+    const skip = /(^|\/)(node_modules|dist|\.git|\.screenshots|\.claude\/worktrees|convex\/_generated|desktop)(\/|$)/;
+    const files = [...new Bun.Glob('**/*.{ts,tsx}').scanSync({ cwd: root, dot: true })].filter(
+      (file) => !skip.test(file),
+    );
+    const covered = [
+      ...rootConfig.include.map((entry) => new Bun.Glob(entry.includes('*') ? entry : `${entry}/**`)),
+      new Bun.Glob('convex/**'), // convex/tsconfig.json
+      ...cloudflareConfig.include.map((entry) => new Bun.Glob(`cloudflare/${entry}`)),
+    ];
+    const unchecked = files.filter((file) => !covered.some((glob) => glob.match(file)));
+    expect(files.length).toBeGreaterThan(100);
+    expect(unchecked, 'add the folder to "include" in tsconfig.json').toEqual([]);
+  });
+});
+
 describe('the report', () => {
+  test('a run of some checks does not say PASSED, and names what it left out', () => {
+    const report = renderReport([result('lint', 'passed'), result('types', 'passed')], 1.1, ['install', 'test']);
+    expect(report).not.toContain('PASSED');
+    expect(report).toContain('OK so far: lint, types in 1.1s. Not run: install, test. This is not the full check');
+  });
+
   test('a clean run is one line per check and a verdict', () => {
     const report = renderReport([result('format', 'passed'), result('test', 'passed', ' 12 pass\n 0 fail')], 2.5);
     expect(report).toBe(

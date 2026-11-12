@@ -17,14 +17,16 @@ export class Vector3Int implements CellLike {
     readonly x: number = 0,
     readonly y: number = 0,
     readonly z: number = 0,
-  ) {}
+  ) {
+    if (!Number.isInteger(x) || !Number.isInteger(y) || !Number.isInteger(z)) throw notWhole('Vector3Int', [x, y, z]);
+  }
 
-  static readonly zero = new Vector3Int(0, 0, 0);
-  static readonly one = new Vector3Int(1, 1, 1);
-  static readonly up = new Vector3Int(0, 1, 0);
-  static readonly down = new Vector3Int(0, -1, 0);
-  static readonly left = new Vector3Int(-1, 0, 0);
-  static readonly right = new Vector3Int(1, 0, 0);
+  static readonly zero = Object.freeze(new Vector3Int(0, 0, 0));
+  static readonly one = Object.freeze(new Vector3Int(1, 1, 1));
+  static readonly up = Object.freeze(new Vector3Int(0, 1, 0));
+  static readonly down = Object.freeze(new Vector3Int(0, -1, 0));
+  static readonly left = Object.freeze(new Vector3Int(-1, 0, 0));
+  static readonly right = Object.freeze(new Vector3Int(1, 0, 0));
 
   /** Accepts a `Vector3Int`, `Vector2Int` or a plain `{ x, y, z? }`. */
   static from(cell: CellLike): Vector3Int {
@@ -86,9 +88,35 @@ export class Vector3Int implements CellLike {
   }
 }
 
-/** The `Map`/`Set` key for any cell-like value. Equal cells give equal keys. */
+/**
+ * In C# these hold `int`s, and `new Vector3Int(7 / 2, 0, 0)` is (3, 0, 0) because the
+ * division already dropped the half. Here `7 / 2` is 3.5, and a vector that kept it would
+ * be a cell that equals no cell.
+ */
+function notWhole(type: string, parts: readonly number[]): RangeError {
+  return new RangeError(
+    `new ${type}(${parts.join(', ')}): an integer vector holds whole numbers. ` +
+      'For a division write Math.trunc(a / b) (C# does that for ints); for a world position use grid.worldToCell(position).',
+  );
+}
+
+/**
+ * The `Map`/`Set` key for any cell-like value. Equal cells give equal keys.
+ *
+ * A cell is made of whole numbers. A world position has `x` and `y` too, so
+ * `tilemap.getTile(unit.transform.position)` type-checks; it would read a cell at
+ * (2.5, 0, -3.5) that nothing else can reach. That is refused here, where every lookup
+ * by cell passes.
+ */
 export function cellKey(cell: CellLike): string {
-  return `${cell.x},${cell.y},${cell.z ?? 0}`;
+  const z = cell.z ?? 0;
+  if (!Number.isInteger(cell.x) || !Number.isInteger(cell.y) || !Number.isInteger(z)) {
+    throw new RangeError(
+      `(${cell.x}, ${cell.y}, ${z}) is not a cell: a cell's coordinates are whole numbers. ` +
+        'For a world position use grid.worldToCell(position); for a division, Math.trunc(a / b).',
+    );
+  }
+  return `${cell.x},${cell.y},${z}`;
 }
 
 /** Immutable 2D integer vector. */
@@ -96,14 +124,16 @@ export class Vector2Int implements CellLike {
   constructor(
     readonly x: number = 0,
     readonly y: number = 0,
-  ) {}
+  ) {
+    if (!Number.isInteger(x) || !Number.isInteger(y)) throw notWhole('Vector2Int', [x, y]);
+  }
 
-  static readonly zero = new Vector2Int(0, 0);
-  static readonly one = new Vector2Int(1, 1);
-  static readonly up = new Vector2Int(0, 1);
-  static readonly down = new Vector2Int(0, -1);
-  static readonly left = new Vector2Int(-1, 0);
-  static readonly right = new Vector2Int(1, 0);
+  static readonly zero = Object.freeze(new Vector2Int(0, 0));
+  static readonly one = Object.freeze(new Vector2Int(1, 1));
+  static readonly up = Object.freeze(new Vector2Int(0, 1));
+  static readonly down = Object.freeze(new Vector2Int(0, -1));
+  static readonly left = Object.freeze(new Vector2Int(-1, 0));
+  static readonly right = Object.freeze(new Vector2Int(1, 0));
 
   static from(cell: CellLike): Vector2Int {
     return cell instanceof Vector2Int ? cell : new Vector2Int(cell.x, cell.y);
@@ -148,7 +178,9 @@ export class BoundsInt {
   /** Builds bounds from an inclusive minimum and an exclusive maximum. */
   static fromMinMax(min: CellLike, max: CellLike): BoundsInt {
     const lo = Vector3Int.from(min);
-    return new BoundsInt(lo, Vector3Int.from(max).sub(lo));
+    // A 2D maximum ({ x, y }) means one layer of cells, not none: z is exclusive.
+    const hi = new Vector3Int(max.x, max.y, max.z ?? lo.z + 1);
+    return new BoundsInt(lo, hi.sub(lo));
   }
 
   get min(): Vector3Int {

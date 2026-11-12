@@ -1,9 +1,18 @@
 ---
 name: netcode
-description: Use when making things multiplayer the Netcode-for-GameObjects way - NetworkManager, NetworkPrefab, NetworkBehaviour, NetworkVariable, RPCs, ownership, hosting and joining, the Convex lobby, or porting Unity NGO code - in packages/netcode or game code that uses @synergy/netcode.
+description: >
+  Builds real-time multiplayer the Netcode-for-GameObjects way on this engine:
+  NetworkManager, NetworkPrefab, NetworkBehaviour, NetworkVariable, RPCs, ownership,
+  hidden information, networked scene loads, hosting and joining. Use when something must
+  exist on every player's machine and move or change in real time, when porting Unity NGO
+  code, or when a value, an RPC or an object reaches the host and not the clients. Not
+  for turn-based games every machine can replay from commands (use `multiplayer`), or for
+  deploying a build (use `ship-it`).
 ---
 
 # Netcode (Netcode for GameObjects)
+
+<!-- check: manager: NetworkManager -->
 
 Read `docs/netcode.md` first; it has the Unity-to-Synergy map. One player hosts and is
 the server and a client at once; clients connect only to the host. Convex is the lobby;
@@ -31,7 +40,7 @@ and replace its contents.
    readonly squad = new NetworkList<number>();
    readonly attackRpc = this.serverRpc((targetId: number) => { /* host: validate, then act */ });
    readonly flashRpc = this.clientRpc((text: string) => this.flash(text));
-   readonly pingRpc = this.rpc(SendTo.Everyone, (text: string) => ...);
+   readonly pingRpc = this.rpc(SendTo.Everyone, (text: string) => this.flash(text));
    ```
 4. On the host: `instantiate(Prefab, position).getComponent(NetworkObject)?.spawn()`
    (or `spawnWithOwnership(clientId)`). Clients receive a copy automatically.
@@ -47,10 +56,14 @@ and replace its contents.
 - A `serverRpc` handler **must validate its arguments**: ownership is checked for you,
   values are not. `this.rpcSenderClientId` says who asked.
 - A variable is written by the server unless `write: NetworkVariableWritePermission.Owner`;
-  writing without permission throws. Replace objects and arrays instead of mutating them,
-  or call `setDirty()`.
+  writing without permission throws. Replace objects and arrays instead of mutating them
+  (`value` is read-only, so `cell.value.x = 3` and `items.value.push(x)` do not compile).
 - Everything on the wire is JSON. RPC arguments are plain data; use `Serializers.vector3`
-  (etc.) for `Vector3`, `Quaternion`, `Vector2`, `Color` variables.
+  (etc.) for `Vector3`, `Quaternion`, `Vector2`, `Color` variables. A value JSON would
+  change (a class instance, a `Map`, `Infinity`, `NaN`) is refused on the machine that
+  sends it, with a message naming it.
+- Keep the manager across scenes: `dontDestroyOnLoad(manager.gameObject)` right after
+  creating it. One that was destroyed with its scene refuses to start.
 - `onValueChanged` does not fire for a late joiner's initial values; read `.value` in
   `onNetworkSpawn`.
 - Create the `NetworkManager` before scripts that use it (its `update` reads the network).
@@ -101,7 +114,53 @@ Three things the sample gets right that are easy to get wrong:
 - **Listeners you add for one start.** Remove them when that start ends, including when
   it ends early (the network was shut down mid-load), or the next start runs them too.
 
-## Testing
+## Known limits (say so, do not paper over them)
+
+The host is trusted and there is no authentication. No scene-placed network objects or
+additive networked scenes, no reparenting, no prediction or reconciliation, no host
+migration or reconnect. The network clock pauses through a stall instead of catching up. The PeerJS and Convex helpers are untested against live services.
+
+## Gotchas
+
+- **An RPC that only runs where it is called.** `fireServerRpc() { ... }` written as a
+  method (NGO's attribute style) is an ordinary method. An RPC is a field:
+  `readonly fireRpc = this.serverRpc(...)`. Lint reports the method.
+- **A variable that never leaves the machine.** Declared as a `#private` field, inside
+  an array or object (`readonly resources = [new NetworkVariable(0), ...]`), in
+  `onNetworkSpawn`, or on a class that extends `MonoBehaviour`. Only direct fields of a
+  `NetworkBehaviour`, created with the object, are bound. Lint reports the first three
+  shapes; hold a collection in one `NetworkVariable` or a `NetworkList`.
+- **`instantiate(prefab).getComponent(NetworkObject)?.spawn()` does nothing.** The
+  prefab was made with `new Prefab`, not `new NetworkPrefab`, so there is no
+  NetworkObject and `?.` hides it. The object exists on the host only.
+- **Instantiated and never spawned.** `isServer` and `isOwner` are false, variables are
+  freely writable, and no other machine has the object. Spawning is always explicit, also
+  for objects a scene builder creates.
+- **It moves for its owner and nobody else.** `NetworkTransform` is server-authoritative
+  by default and does not snap back, so the owner sees nothing wrong. Set
+  `authority = 'owner'` **in the prefab** (not on the host's instance), or move it on
+  the host.
+- **Objects spawned right after `loadScene` are gone.** From inside a frame the load has
+  not happened yet. Spawn in `sceneManager.onLoadComplete` for client 0.
+- **The host changed scene and the clients did not.** `SceneManager.loadScene` is this
+  machine only; use `manager.sceneManager.loadScene`.
+- **`this.rpcSenderClientId` is -1.** It is valid while the handler runs, not after a
+  `yield` or an `await` inside it. Read it into a `const` first.
+- **`isServer` is false in `awake`.** Roles and variable values are valid from
+  `onNetworkSpawn`.
+- **A listener per respawn.** `manager.onTick.add(...)` in `onNetworkSpawn`, never
+  removed, runs once more for each time the object was spawned. Keep what `add` returned
+  and call it in `onNetworkDespawn`.
+- **A module-level `Map` or `static instance`** is one object for every simulated
+  machine in a test, so a client-side read passes there and is empty on a real client.
+  Key shared lookups by the manager (`Match.of(manager)` in the sample).
+- **NGO's other callbacks** (`onOwnershipChanged`, `onNetworkPostSpawn`) are never
+  called: `onGainedOwnership` / `onLostOwnership` and `onNetworkSpawn`. Lint reports them.
+- **Order on the wire.** A value written and an RPC called in the same frame arrive in
+  that order, and the last value written before `despawn()` arrives before the despawn.
+  Do not add delays to "let the variable sync first".
+
+## Verify
 
 Always test with simulated machines; the real transports need live services. Use
 `TestNetwork` from `@synergy/netcode/testing` (`host()`, `client(id)`, `pump()`,
@@ -109,13 +168,12 @@ Always test with simulated machines; the real transports need live services. Use
 that registers your prefabs on every machine. Create objects inside `machine.run(...)`
 or `machine.make(prefab)`, because each engine must be current while you use it.
 `game/test/frontier.test.ts` is the pattern for a game; `packages/netcode/test` for the
-package itself. Write
-the test for: the value or call reaching the right machines, the wrong machine being
-refused, and a late joiner seeing the current state. The loopback round-trips JSON, so
-non-serialisable values fail in tests.
+package itself.
 
-## Known limits (say so, do not paper over them)
+Write the test for: the value or call reaching the right machines, the wrong machine
+being refused, and a late joiner seeing the current state. **Assert on a client's copy,
+not the host's**: the host holds the originals, so a test that only looks there passes
+with values that never arrived.
 
-The host is trusted and there is no authentication. No scene-placed network objects or
-additive networked scenes, no reparenting, no prediction or reconciliation, no host
-migration or reconnect. The network clock pauses through a stall instead of catching up. The PeerJS and Convex helpers are untested against live services.
+A pass is `bun run check` ending in `PASSED`. PeerJS, Convex and the lobby helpers have
+no automated tests: say so, and ask the user to host in one browser and join from another.

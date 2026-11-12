@@ -25,7 +25,7 @@ type MethodNode = NodeOf<'MethodDefinition'>;
 /** Engine types that are structs in Unity and immutable objects here. */
 const VALUE_TYPES = new Set(['Vector2', 'Vector3', 'Vector2Int', 'Vector3Int', 'Quaternion', 'Color']);
 /** The same, plus the shapes the engine accepts in their place. */
-const VALUE_KEY_TYPES = new Set([...VALUE_TYPES, 'CellLike', 'Vector3Like', 'QuaternionLike', 'ColorLike']);
+const VALUE_KEY_TYPES = new Set([...VALUE_TYPES, 'CellLike', 'Cell', 'Vector3Like', 'QuaternionLike', 'ColorLike']);
 /** Base classes of scripts: the classes the engine sends messages to. */
 const BEHAVIOUR_BASES = new Set(['MonoBehaviour', 'NetworkBehaviour']);
 
@@ -68,6 +68,25 @@ export const NOT_SENT: Readonly<Record<string, string>> = {
   oncollisionenter2d: 'there is no 2D physics; test for contact with Physics.overlapSphere or a raycast',
   ontriggerenter2d: 'there is no 2D physics; test for overlap with Physics.overlapSphere in update()',
   ontriggerexit2d: 'there is no 2D physics; test for overlap with Physics.overlapSphere in update()',
+  oncollisionstay2d: 'there is no 2D physics; test for contact with Physics.overlapSphere or a raycast',
+  oncollisionexit2d: 'there is no 2D physics; test for contact with Physics.overlapSphere or a raycast',
+  ontriggerstay2d: 'there is no 2D physics; test for overlap with Physics.overlapSphere in update()',
+  oncontrollercolliderhit: 'there is no CharacterController; move the transform and test ahead with Physics.raycast',
+  onparticlecollision: 'there are no particle systems yet',
+  onpointerclick: 'uGUI pointer events are not sent; use onMouseDown() with a Collider, or a button in the Preact HUD',
+  onpointerdown: 'uGUI pointer events are not sent; use onMouseDown() with a Collider, or a button in the Preact HUD',
+  onpointerup: 'uGUI pointer events are not sent; use onMouseUp() with a Collider, or a button in the Preact HUD',
+  onpointerenter:
+    'uGUI pointer events are not sent; use onMouseEnter() with a Collider, or CSS :hover in the Preact HUD',
+  onpointerexit: 'uGUI pointer events are not sent; use onMouseExit() with a Collider, or CSS :hover in the Preact HUD',
+  onvalidate: 'there is no editor, so editor messages are never sent; check the values in awake()',
+  ondrawgizmos: 'there is no editor, so editor messages are never sent; draw with Debug.drawLine() in update()',
+  ondrawgizmosselected: 'there is no editor, so editor messages are never sent; draw with Debug.drawLine() in update()',
+  onownershipchanged: 'use onGainedOwnership() and onLostOwnership(), or networkObject.onOwnershipChanged',
+  onnetworkprespawn: 'use onNetworkSpawn()',
+  onnetworkpostspawn: 'use onNetworkSpawn()',
+  onnetworkpredespawn: 'use onNetworkDespawn()',
+  onnetworksessionsynchronized: 'use onNetworkSpawn(); for "everyone has loaded", sceneManager.onLoadEventCompleted',
   onmousedrag: 'track the drag yourself between onMouseDown() and onMouseUp() with Input.mousePosition',
   onmouseupasbutton: 'use onMouseUp()',
   ongui: 'draw UI with a Canvas and Image, or with the Preact HUD',
@@ -177,6 +196,17 @@ function isNode(value: unknown): value is Node {
 function isBehaviour(owner: ClassNode, scriptsInFile: ReadonlySet<string>): boolean {
   const base = identifierName(owner.superClass);
   return base !== null && (BEHAVIOUR_BASES.has(base) || scriptsInFile.has(base));
+}
+
+/**
+ * Whether `owner` is a script as far as this file shows: it is one by `isBehaviour`, or it
+ * extends some class and declares a message the engine sends. That second case is a
+ * script whose base is imported (`class Archer extends UnitView`).
+ */
+function looksLikeScript(owner: ClassNode, scriptsInFile: ReadonlySet<string>): boolean {
+  if (isBehaviour(owner, scriptsInFile)) return true;
+  if (!owner.superClass) return false;
+  return (MESSAGES as readonly string[]).some((message) => findMethod(owner, message) !== null);
 }
 
 /** A file name without its folders and extension: `game/src/Unit.test.ts` gives `Unit.test`. */
@@ -377,7 +407,8 @@ const noUnsentMessage: Rule = {
     messages: {
       extraOn:
         '{{owner}}.{{name}}() looks like a Unity message, but the engine never calls it. ' +
-        'The message is {{intended}}(): rename the method.',
+        'The message is {{intended}}(): rename the method. (If your own code calls it, give it a name that ' +
+        'is not a message with "on" in front, such as tick().)',
       notSent: '{{owner}}.{{name}}() is a Unity message this engine does not send, so it is never called: {{reason}}.',
     },
   },
@@ -385,12 +416,16 @@ const noUnsentMessage: Rule = {
     const scriptsInFile = new Set<string>();
 
     function check(owner: ClassNode): void {
-      if (!isBehaviour(owner, scriptsInFile)) return;
+      if (!looksLikeScript(owner, scriptsInFile)) return;
       const ownerName = identifierName(owner.id) ?? 'This class';
       if (owner.id) scriptsInFile.add(owner.id.name);
       for (const member of owner.body.body) {
-        if (member.type !== 'MethodDefinition' || member.kind !== 'method' || member.static || member.computed)
-          continue;
+        // A method, or a field holding a function (`onStart = () => { ... }`).
+        const isMethod = member.type === 'MethodDefinition' && member.kind === 'method';
+        const isFunctionField =
+          member.type === 'PropertyDefinition' &&
+          (member.value?.type === 'ArrowFunctionExpression' || member.value?.type === 'FunctionExpression');
+        if ((!isMethod && !isFunctionField) || member.static || member.computed) continue;
         const name = identifierName(member.key);
         if (!name) continue;
         const lower = name.toLowerCase();
@@ -422,12 +457,27 @@ const noZAxisLiteral: Rule = {
       axis:
         'new Vector3(0, 0, {{z}}) is Vector3.{{name}} here: the world is right-handed and forward is -Z ' +
         "(in Unity forward is +Z). Write the direction by name, Vector3.forward or Vector3.back, so it cannot be Unity's by accident.",
+      vertical:
+        "The 'Vertical' axis is +1 for W and the up arrow, and forward is -Z here, so as the z of a Vector3 it moves backward " +
+        "(in Unity forward is +Z). Write Vector3.right.mul(horizontal).add(Vector3.forward.mul(vertical)), or negate it: -Input.getAxis('Vertical').",
     },
   },
   create(context) {
     return {
       NewExpression(node) {
         if (identifierName(node.callee) !== 'Vector3' || node.arguments.length !== 3) return;
+        const third = unwrap(node.arguments[2] as Node);
+        const axisCall = third.type === 'CallExpression' ? unwrap(third.callee) : null;
+        if (
+          third.type === 'CallExpression' &&
+          axisCall?.type === 'MemberExpression' &&
+          ['getAxis', 'getAxisRaw'].includes(identifierName(axisCall.property) ?? '') &&
+          third.arguments[0]?.type === 'Literal' &&
+          third.arguments[0].value === 'Vertical'
+        ) {
+          context.report({ node: third, messageId: 'vertical' });
+          return;
+        }
         const [x, y, z] = node.arguments.map((argument) => numericLiteral(argument));
         if (x !== 0 || y !== 0 || (z !== 1 && z !== -1)) return;
         context.report({ node, messageId: 'axis', data: { z, name: z === -1 ? 'forward' : 'back' } });
@@ -505,10 +555,20 @@ function testCall(callee: Node): { base: string; modifiers: string[] } | null {
 
 const TEST_FUNCTIONS = new Set(['test', 'it', 'describe']);
 
+/** `test.skipIf(true)(...)`, `test.if(false)(...)`: whether the condition is written as a constant. */
+function constantCondition(callee: Node): boolean {
+  const inner = unwrap(callee);
+  if (inner.type !== 'CallExpression') return false;
+  const condition = inner.arguments[0];
+  return condition?.type === 'Literal' && typeof condition.value === 'boolean';
+}
+
 /**
- * `test.skip` and `test.only`. Both turn a failing suite green without fixing anything:
- * a skipped test does not run, and `.only` stops every other test in its file.
- * `test.todo` (a test still to be written) and `test.skipIf(condition)` are left alone.
+ * `test.skip`, `test.only` and their relatives. Each turns a failing suite green without
+ * fixing anything: a skipped test does not run, `.only` stops every other test in its
+ * file, `.failing` passes because the test fails, and `.todo` with a body is a skip under
+ * another name. `test.todo('name')`, with no body, is a test still to be written, and
+ * `test.skipIf(condition)` with a real condition (no browser here) is left alone.
  */
 const noSkippedTest: Rule = {
   meta: {
@@ -520,6 +580,13 @@ const noSkippedTest: Rule = {
       only:
         '{{call}} stops every other test in this file from running, so they pass without being run. ' +
         "Remove .only. To run one test while working, use: bun test -t 'part of its name'.",
+      conditional:
+        '{{call}} with a fixed condition switches this test off for good, and a test that does not run checks nothing ' +
+        'while the suite still passes. Remove the condition and fix what makes the test fail.',
+      failing: '{{call}} passes while the test fails, so the bug it shows is recorded as fine. Fix what makes it fail.',
+      todoBody:
+        '{{call}} with a body is a skipped test: the body never runs. Remove .todo and make it pass, ' +
+        "or keep only the name, {{call}}('...'), for a test still to be written.",
     },
   },
   create(context) {
@@ -529,10 +596,18 @@ const noSkippedTest: Rule = {
         if (!call) return;
         // Report the outer call only: in test.skip.each(rows)(name, fn) the inner one is rows.
         if (node.parent?.type === 'CallExpression' && node.parent.callee === node) return;
-        const modifier = call.modifiers.find((name) => name === 'skip' || name === 'only');
-        if (!modifier) return;
         const data = { call: `${call.base}.${call.modifiers.join('.')}` };
-        context.report({ node: node.callee, messageId: modifier === 'skip' ? 'skip' : 'only', data });
+        const has = (...names: string[]) => call.modifiers.some((name) => names.includes(name));
+        const hasBody = node.arguments.some(
+          (argument) => argument.type === 'ArrowFunctionExpression' || argument.type === 'FunctionExpression',
+        );
+        let messageId: 'skip' | 'only' | 'conditional' | 'failing' | 'todoBody' | null = null;
+        if (has('skip')) messageId = 'skip';
+        else if (has('only')) messageId = 'only';
+        else if (has('skipIf', 'if', 'todoIf') && constantCondition(node.callee)) messageId = 'conditional';
+        else if (has('failing')) messageId = 'failing';
+        else if (has('todo') && hasBody) messageId = 'todoBody';
+        if (messageId) context.report({ node: node.callee, messageId, data });
       },
     };
   },
@@ -552,13 +627,23 @@ const testNeedsExpect: Rule = {
     },
   },
   create(context) {
-    /** Whether anything inside `node` calls expect(...), or a helper named like an assertion. */
+    /**
+     * Whether anything inside `node` asserts: `expect(x).toBe(y)`, or a helper named like
+     * an assertion. `expect(x);` alone does not: with no matcher after it nothing is
+     * compared (it is what NUnit's `Assert.IsTrue(x)` turns into when ported word for word).
+     */
     function asserts(node: Node): boolean {
       if (node.type === 'CallExpression') {
         let callee = unwrap(node.callee);
+        const chained = callee.type === 'MemberExpression';
         while (callee.type === 'MemberExpression') callee = unwrap(callee.object);
+        // expect(x).toBe(y): the outer call's callee chain ends in the call expect(x).
+        const inner = callee.type === 'CallExpression' ? identifierName(unwrap(callee.callee)) : null;
+        if (chained && inner && /^expect/i.test(inner)) return true;
         const name = identifierName(callee);
-        if (name && /^(expect|assert)/i.test(name)) return true;
+        if (name && /^assert/i.test(name)) return true;
+        if (name && /^expect./i.test(name)) return true; // a helper: expectSameState(a, b)
+        if (name === 'expect' && chained) return true; // expect.assertions(n), expect.hasAssertions()
       }
       for (const [key, value] of Object.entries(node)) {
         if (key === 'parent') continue;
@@ -583,8 +668,302 @@ const testNeedsExpect: Rule = {
   },
 };
 
+/**
+ * `event.removeListener(() => this.onAlarm())`. A function written at the call is a new
+ * function, never the one that was added, so nothing is removed and the listener stays
+ * for the life of the event. C# compares delegates by what they call; JavaScript compares
+ * functions by identity.
+ */
+const noInlineRemove: Rule = {
+  meta: {
+    type: 'problem',
+    messages: {
+      inline:
+        '{{method}}() is given a function written right here. It is a new function, not the one that was added, ' +
+        'so nothing is removed. Keep what adding returned and call that (`this.stop = event.addListener(...)`, later `this.stop()`), ' +
+        'or make the handler a field (`onAlarm = () => { ... }`) and pass `this.onAlarm` to both.',
+    },
+  },
+  create(context) {
+    const REMOVERS = new Set(['removeListener', 'removeEventListener', 'cancelInvoke', 'isInvoking', 'off']);
+    return {
+      CallExpression(node) {
+        const callee = unwrap(node.callee);
+        if (callee.type !== 'MemberExpression' || callee.computed) return;
+        const method = identifierName(callee.property);
+        if (!method || !REMOVERS.has(method)) return;
+        const written = node.arguments.find(
+          (argument) => argument.type === 'ArrowFunctionExpression' || argument.type === 'FunctionExpression',
+        );
+        if (written) context.report({ node: written, messageId: 'inline', data: { method } });
+      },
+    };
+  },
+};
+
+/** Methods of the value types that return a new value and change nothing. */
+const PURE_METHODS = new Set([
+  'sub',
+  'mul',
+  'div',
+  'neg',
+  'cross',
+  'withX',
+  'withY',
+  'withZ',
+  'withAlpha',
+  'encapsulate',
+]);
+/** Properties that hold a value type. `x.position.add(v)` cannot be a Set's or a list's `add`. */
+const VALUE_PROPERTIES = new Set([
+  'position',
+  'localPosition',
+  'localScale',
+  'eulerAngles',
+  'localEulerAngles',
+  'forward',
+  'right',
+  'up',
+  'velocity',
+  'direction',
+  'normalized',
+]);
+
+/**
+ * `this.transform.position.add(step);` as a statement. Vectors are immutable: `add`
+ * returns the sum and leaves the position where it was, so the line does nothing. In
+ * Unity `position += step` moved the object, and in PlayCanvas or three.js `add` changes
+ * the vector in place; here the result has to be assigned.
+ */
+const noDiscardedResult: Rule = {
+  meta: {
+    type: 'problem',
+    messages: {
+      discarded:
+        '.{{method}}() returns a new value and changes nothing, and this line throws the result away, so it does nothing. ' +
+        'Vectors, colours and bounds are immutable here: assign the result, as in ' +
+        '`transform.position = transform.position.add(step)` or `bounds = bounds.encapsulate(point)`.',
+    },
+  },
+  create(context) {
+    return {
+      ExpressionStatement(node) {
+        const call = unwrap(node.expression);
+        if (call.type !== 'CallExpression') return;
+        const callee = unwrap(call.callee);
+        if (callee.type !== 'MemberExpression' || callee.computed) return;
+        const method = identifierName(callee.property);
+        if (!method) return;
+        const receiver = unwrap(callee.object);
+        const onValue =
+          (receiver.type === 'MemberExpression' && VALUE_PROPERTIES.has(identifierName(receiver.property) ?? '')) ||
+          (receiver.type === 'NewExpression' && VALUE_TYPES.has(identifierName(receiver.callee) ?? '')) ||
+          VALUE_TYPES.has(staticMember(receiver)?.[0] ?? '');
+        // `set.add(x)` and `context.scale(2, 2)` are real changes: those names count only on a value.
+        if (PURE_METHODS.has(method) || (onValue && ['add', 'scale', 'rotate', 'lerp'].includes(method))) {
+          context.report({ node: call, messageId: 'discarded', data: { method } });
+        }
+      },
+    };
+  },
+};
+
+/**
+ * Members the engine keeps on every script for its own bookkeeping. `synergy.test.ts`
+ * fails if this list and the engine's differ.
+ */
+export const ENGINE_MEMBERS = [
+  '_attach',
+  '_awake',
+  '_awoken',
+  '_copyFrom',
+  '_deferred',
+  '_destroy',
+  '_destroyed',
+  '_disable',
+  '_enable',
+  '_enabled',
+  '_enabledChanged',
+  '_gameObjectDeactivated',
+  '_has',
+  '_instanceId',
+  '_invokes',
+  '_live',
+  '_lookup',
+  '_returned',
+  '_send',
+  '_startQueued',
+  '_started',
+  '_wantsLive',
+] as const;
+
+/**
+ * `_started = false` or `_destroy() { ... }` in a script. The engine has members of those
+ * names on every script, and a script that declares its own replaces them: `update` stops
+ * being called, or `onDestroy` never runs, with no error. (`private _started` is a type
+ * error already; without `private` it compiles.)
+ */
+const noEngineMember: Rule = {
+  meta: {
+    type: 'problem',
+    messages: {
+      taken:
+        '{{owner}}.{{name}} has the name of a member the engine keeps on every script for its own use, and replaces it: ' +
+        'messages can stop arriving with no error. Choose another name ({{suggestion}}).',
+    },
+  },
+  create(context) {
+    const scriptsInFile = new Set<string>();
+    const taken = new Set<string>(ENGINE_MEMBERS);
+
+    function check(owner: ClassNode): void {
+      if (!looksLikeScript(owner, scriptsInFile)) return;
+      if (owner.id) scriptsInFile.add(owner.id.name);
+      for (const member of owner.body.body) {
+        if (member.type !== 'MethodDefinition' && member.type !== 'PropertyDefinition') continue;
+        if (member.static || member.computed || member.override) continue;
+        const name = identifierName(member.key);
+        if (!name || !taken.has(name)) continue;
+        const data = {
+          owner: identifierName(owner.id) ?? 'This class',
+          name,
+          suggestion: `_${name.slice(1)}Now, _my${name[1]?.toUpperCase() ?? ''}${name.slice(2)}`,
+        };
+        context.report({ node: member.key, messageId: 'taken', data });
+      }
+    }
+
+    return { ClassDeclaration: check, ClassExpression: check };
+  },
+};
+
+const NETWORK_FACTORIES = new Set(['serverRpc', 'clientRpc', 'rpc']);
+const NETWORK_TYPES = new Set(['NetworkVariable', 'NetworkList']);
+
+/** Whether `value` is `new NetworkVariable(...)`, `new NetworkList(...)` or `this.serverRpc(...)` and the like. */
+function networkMemberKind(value: Node | null | undefined): 'variable' | 'rpc' | null {
+  if (!value) return null;
+  const node = unwrap(value);
+  if (node.type === 'NewExpression' && NETWORK_TYPES.has(identifierName(node.callee) ?? '')) return 'variable';
+  if (node.type === 'CallExpression') {
+    const callee = unwrap(node.callee);
+    if (
+      callee.type === 'MemberExpression' &&
+      unwrap(callee.object).type === 'ThisExpression' &&
+      NETWORK_FACTORIES.has(identifierName(callee.property) ?? '')
+    ) {
+      return 'rpc';
+    }
+  }
+  return null;
+}
+
+/**
+ * Netcode members written the way that compiles and does not replicate:
+ *
+ * - `healServerRpc() { ... }`: NGO's `[ServerRpc] void HealServerRpc()` as a method. It is
+ *   an ordinary method and runs only on the machine that calls it.
+ * - `#hp = new NetworkVariable(10)`: a `#private` field cannot be seen by the code that
+ *   binds variables to the object, so it never leaves the machine.
+ * - `new NetworkVariable(...)` on a class that extends `MonoBehaviour`: nothing binds it.
+ * - a variable or RPC tucked into an array or object field: the field name is its
+ *   identity on the wire, and it has none.
+ */
+const networkMembers: Rule = {
+  meta: {
+    type: 'problem',
+    messages: {
+      rpcMethod:
+        '{{name}}() is a method, so it runs only on the machine that calls it: nothing is sent. An RPC is a field: ' +
+        '`readonly {{name}} = this.serverRpc((...) => { ... })` (or this.clientRpc, or this.rpc(SendTo.Everyone, ...)).',
+      privateField:
+        '#{{name}} is a #private field, which the netcode cannot see: it is never bound to the object, so it is not ' +
+        'replicated and anyone may write it. Declare it `readonly {{name}} = ...` (TypeScript `private readonly` is fine).',
+      wrongBase:
+        '{{name}} is a network member on a class that does not extend NetworkBehaviour, so nothing replicates it. ' +
+        'Extend NetworkBehaviour (and put the object under a NetworkObject, as NetworkPrefab does).',
+      nested:
+        'A NetworkVariable or RPC inside an array or object is not replicated: its field name is its identity on the wire. ' +
+        'Declare each as its own field (`readonly wood = new NetworkVariable(0)`), or hold the whole collection in one NetworkVariable or NetworkList.',
+    },
+  },
+  create(context) {
+    const networkedInFile = new Set<string>();
+
+    function check(owner: ClassNode): void {
+      const base = identifierName(owner.superClass);
+      const networked = base === 'NetworkBehaviour' || (base !== null && networkedInFile.has(base));
+      if (networked && owner.id) networkedInFile.add(owner.id.name);
+      for (const member of owner.body.body) {
+        if (member.type === 'StaticBlock' || member.static) continue;
+        if (networked && member.type === 'MethodDefinition' && member.kind === 'method' && !member.computed) {
+          const name = identifierName(member.key);
+          if (name?.endsWith('Rpc')) context.report({ node: member.key, messageId: 'rpcMethod', data: { name } });
+        }
+        if (member.type !== 'PropertyDefinition') continue;
+        const kind = networkMemberKind(member.value);
+        if (kind && member.key.type === 'PrivateIdentifier') {
+          context.report({ node: member.key, messageId: 'privateField', data: { name: member.key.name } });
+        } else if (kind === 'variable' && base === 'MonoBehaviour') {
+          context.report({
+            node: member.key,
+            messageId: 'wrongBase',
+            data: { name: identifierName(member.key) ?? 'This' },
+          });
+        } else if (!kind && networked && member.value) {
+          const value = unwrap(member.value);
+          const parts =
+            value.type === 'ArrayExpression'
+              ? value.elements
+              : value.type === 'ObjectExpression'
+                ? value.properties.map((property: Node) => (property.type === 'Property' ? property.value : null))
+                : [];
+          const inside = parts.find((part: Node | null) => networkMemberKind(part) !== null);
+          if (inside) context.report({ node: inside, messageId: 'nested' });
+        }
+      }
+    }
+
+    return { ClassDeclaration: check, ClassExpression: check };
+  },
+};
+
+/**
+ * `let nextId = 0;` at the top of a rules file. Rules are run by every machine, and a
+ * machine that joins late, reloads, or played another game first has a different value in
+ * that variable: the same commands then give different states. Whatever the rules need to
+ * remember is part of the state they are given.
+ */
+const noModuleState: Rule = {
+  meta: {
+    type: 'problem',
+    messages: {
+      state:
+        '`{{kind}} {{name}}` at the top of a rules file is state the rules keep outside the game state. Every machine has its own copy, ' +
+        'and one that joined late or played before has a different value, so the same commands give different results. ' +
+        'Put it in the state (`{ ...state, {{name}}: ... }`), or make it a `const` if it never changes.',
+    },
+  },
+  create(context) {
+    return {
+      VariableDeclaration(node) {
+        if (node.kind === 'const' || node.parent?.type !== 'Program') return;
+        for (const declaration of node.declarations) {
+          const name = identifierName(declaration.id) ?? 'value';
+          context.report({ node: declaration, messageId: 'state', data: { kind: node.kind, name } });
+        }
+      },
+    };
+  },
+};
+
 export const rules = {
   'behaviour-file-name': behaviourFileName,
+  'network-members': networkMembers,
+  'no-discarded-result': noDiscardedResult,
+  'no-engine-member': noEngineMember,
+  'no-inline-remove': noInlineRemove,
+  'no-module-state': noModuleState,
   'no-detached-method': noDetachedMethod,
   'no-identity-compare': noIdentityCompare,
   'no-skipped-test': noSkippedTest,

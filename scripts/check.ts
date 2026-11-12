@@ -114,9 +114,25 @@ export const STEPS: readonly Step[] = [
       const errors = Number(output.match(/^\s*(\d+) errors?$/m)?.[1] ?? 0);
       const failed = [fail > 0 ? `${fail} fail` : '', errors > 0 ? plural(errors, 'error') : ''].filter(Boolean);
       const files = output.match(/across (\d+) files?/)?.[1];
-      return [...failed, `${pass} pass`].join(', ') + (files ? ` in ${plural(Number(files), 'file')}` : '');
+      // A test that did not run checked nothing. Say so on the line people read.
+      const idle = ['skip', 'todo'].flatMap((word) => {
+        const count = Number(output.match(new RegExp(`^\\s*(\\d+) ${word}$`, 'm'))?.[1] ?? 0);
+        return count > 0 ? [`${count} ${word} (NOT RUN)`] : [];
+      });
+      return [...failed, `${pass} pass`, ...idle].join(', ') + (files ? ` in ${plural(Number(files), 'file')}` : '');
     },
     lines: 100,
+  },
+  {
+    name: 'docs',
+    checks: 'the guides against the code (scripts/docs.ts)',
+    command: ['bun', 'run', '--silent', 'docs:check'],
+    hint:
+      'A guide and the code disagree, and people and agents copy the guide. Each line is file:line in a Markdown file.\n' +
+      'If the code is right, correct the guide; if the guide says what the code should do, change the code.\n' +
+      'A code block is compiled against the real packages. One that only shows a shape opens with ```ts sketch.\n' +
+      'docs/checks.md ("Documentation") explains how blocks, paths and skills are checked.',
+    detail: (output) => output.match(/\d+ problems? in the documentation|\d+ code blocks compiled/)?.[0] ?? '',
   },
   {
     name: 'project',
@@ -198,8 +214,13 @@ function indent(text: string): string {
     .join('\n');
 }
 
-/** The report: each failure with its output and what to do, then one line per step, then the verdict. */
-export function renderReport(results: readonly StepResult[], seconds: number): string {
+/**
+ * The report: each failure with its output and what to do, then one line per step, then
+ * the verdict. `left` names the checks that were not asked for: a run of some checks can
+ * say they are fine, but only a run of all of them says `PASSED`, the word a change is
+ * done by.
+ */
+export function renderReport(results: readonly StepResult[], seconds: number, left: readonly string[] = []): string {
   const parts: string[] = [];
   const failures = results.filter((result) => result.status === 'failed' || result.status === 'timed out');
 
@@ -235,7 +256,12 @@ export function renderReport(results: readonly StepResult[], seconds: number): s
   }
 
   const skipped = results.filter((result) => result.status === 'not run');
-  if (failures.length === 0 && skipped.length === 0) {
+  if (failures.length === 0 && skipped.length === 0 && left.length > 0) {
+    parts.push(
+      `\nOK so far: ${results.map((result) => result.step.name).join(', ')} in ${seconds.toFixed(1)}s. ` +
+        `Not run: ${left.join(', ')}. This is not the full check: \`bun run check\` runs them all.`,
+    );
+  } else if (failures.length === 0 && skipped.length === 0) {
     parts.push(`\nPASSED: ${plural(results.length, 'check')} in ${seconds.toFixed(1)}s.`);
   } else {
     const names = failures.map((result) => result.step.name).join(', ');
@@ -295,7 +321,7 @@ async function runStep(step: Step, cwd: string): Promise<StepResult> {
 const HELP = `Usage: bun run check [--fix] [${STEPS.map((step) => step.name).join('] [')}]
 
 Runs every automatic check and ends with PASSED or FAILED (exit code 0 or 1).
-Name one or more checks to run only those. --fix (or \`bun run fix\`) first applies
+Name one or more checks to run only those; that run ends with "OK so far", not PASSED. --fix (or \`bun run fix\`) first applies
 what can be fixed automatically: lint fixes, then formatting.
 
 ${STEPS.map((step) => `  ${step.name.padEnd(8)} ${step.checks}`).join('\n')}
@@ -339,7 +365,8 @@ async function main(): Promise<number> {
     results.push(...(await Promise.all(rest.map((step) => runStep(step, cwd)))));
   }
 
-  console.log(renderReport(results, (performance.now() - started) / 1000));
+  const left = STEPS.filter((step) => !steps.includes(step)).map((step) => step.name);
+  console.log(renderReport(results, (performance.now() - started) / 1000, left));
   return results.every((result) => result.status === 'passed') ? 0 : 1;
 }
 

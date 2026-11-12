@@ -10,12 +10,12 @@ export class Vector2 {
     readonly y: number = 0,
   ) {}
 
-  static readonly zero = new Vector2(0, 0);
-  static readonly one = new Vector2(1, 1);
-  static readonly up = new Vector2(0, 1);
-  static readonly down = new Vector2(0, -1);
-  static readonly left = new Vector2(-1, 0);
-  static readonly right = new Vector2(1, 0);
+  static readonly zero = Object.freeze(new Vector2(0, 0));
+  static readonly one = Object.freeze(new Vector2(1, 1));
+  static readonly up = Object.freeze(new Vector2(0, 1));
+  static readonly down = Object.freeze(new Vector2(0, -1));
+  static readonly left = Object.freeze(new Vector2(-1, 0));
+  static readonly right = Object.freeze(new Vector2(1, 0));
 
   get sqrMagnitude(): number {
     return this.x * this.x + this.y * this.y;

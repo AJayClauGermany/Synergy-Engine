@@ -17,18 +17,18 @@ export class Color implements ColorLike {
     readonly a: number = 1,
   ) {}
 
-  static readonly white = new Color(1, 1, 1, 1);
-  static readonly black = new Color(0, 0, 0, 1);
-  static readonly red = new Color(1, 0, 0, 1);
-  static readonly green = new Color(0, 1, 0, 1);
-  static readonly blue = new Color(0, 0, 1, 1);
-  static readonly yellow = new Color(1, 0.92, 0.016, 1);
-  static readonly cyan = new Color(0, 1, 1, 1);
-  static readonly magenta = new Color(1, 0, 1, 1);
-  static readonly gray = new Color(0.5, 0.5, 0.5, 1);
+  static readonly white = Object.freeze(new Color(1, 1, 1, 1));
+  static readonly black = Object.freeze(new Color(0, 0, 0, 1));
+  static readonly red = Object.freeze(new Color(1, 0, 0, 1));
+  static readonly green = Object.freeze(new Color(0, 1, 0, 1));
+  static readonly blue = Object.freeze(new Color(0, 0, 1, 1));
+  static readonly yellow = Object.freeze(new Color(1, 0.92, 0.016, 1));
+  static readonly cyan = Object.freeze(new Color(0, 1, 1, 1));
+  static readonly magenta = Object.freeze(new Color(1, 0, 1, 1));
+  static readonly gray = Object.freeze(new Color(0.5, 0.5, 0.5, 1));
   static readonly grey = Color.gray;
   /** Fully transparent black. */
-  static readonly clear = new Color(0, 0, 0, 0);
+  static readonly clear = Object.freeze(new Color(0, 0, 0, 0));
 
   static from(value: ColorLike): Color {
     return new Color(value.r, value.g, value.b, value.a ?? 1);

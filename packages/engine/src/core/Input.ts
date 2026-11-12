@@ -88,13 +88,14 @@ export class InputState {
 
   // ---- Feeding input (DOM listeners, tests, replays) ---------------------------------
 
-  pressKey(code: string): void {
+  /** Holds a key down, as the keyboard would: `engine.input.pressKey(KeyCode.Space)`. */
+  pressKey(code: KeyCode): void {
     if (this.held.has(code)) return; // key repeat
     this.held.add(code);
     this.pressed.add(code);
   }
 
-  releaseKey(code: string): void {
+  releaseKey(code: KeyCode): void {
     if (!this.held.delete(code)) return;
     this.released.add(code);
   }
@@ -126,7 +127,7 @@ export class InputState {
   }
 
   releaseAll(): void {
-    for (const code of [...this.held]) this.releaseKey(code);
+    for (const code of [...this.held]) this.releaseKey(code as KeyCode);
     for (const button of [...this.mouseHeld]) this.releaseMouseButton(button);
   }
 
@@ -264,11 +265,11 @@ export class InputState {
     target.addEventListener(
       'keydown',
       (event) => {
-        if (!isTyping(event)) this.pressKey(event.code);
+        if (!isTyping(event)) this.pressKey(event.code as KeyCode);
       },
       options,
     );
-    target.addEventListener('keyup', (event) => this.releaseKey(event.code), options);
+    target.addEventListener('keyup', (event) => this.releaseKey(event.code as KeyCode), options);
     target.addEventListener('blur', () => this.releaseAll(), options);
 
     canvas.addEventListener(
@@ -365,6 +366,14 @@ export class Input {
   }
 
   /** Pointer position on the canvas in CSS pixels, origin top-left. `z` is always 0. */
+  /**
+   * True once the pointer has been over the game. Until then `mousePosition` is (0, 0),
+   * the top-left corner: check this before treating the position as "at the edge".
+   */
+  static get mousePresent(): boolean {
+    return currentEngine().input.mousePresent;
+  }
+
   static get mousePosition(): Vector3 {
     return currentEngine().input.mousePosition;
   }

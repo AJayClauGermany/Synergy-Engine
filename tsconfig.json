@@ -16,6 +16,6 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["packages", "game", "scripts", "tools/lint", "cloudflare/worker.test.ts"],
+  "include": ["packages", "game", "scripts", "tools", "cloudflare/*.test.ts"],
   "exclude": ["node_modules", "dist", "desktop", "**/dist"]
 }

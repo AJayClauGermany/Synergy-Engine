@@ -14,10 +14,10 @@ Cloudflare Workers (preview deploys) · Electrobun (desktop).
 |---------|--------------|
 | `bun install` | Install dependencies |
 | `bun run dev` | Dev server with hot reload at http://localhost:3000 |
-| `bun run check` | **Every automatic check: lockfile, format, lint, types, tests, project graph. Ends with `PASSED` or `FAILED`. Run it before you call a change done.** |
+| `bun run check` | **Every automatic check: lockfile, format, lint, types, tests, the guides against the code, project graph. Ends with `PASSED` or `FAILED`. Run it before you call a change done.** |
 | `bun run fix` | Apply what a tool can fix by itself (lint fixes, formatting), then run the same checks |
 | `bun test` | Tests only (headless, about two seconds). `bun test game` runs one folder, `-t "name"` one test |
-| `bun run lint` / `typecheck` / `lint:project` / `format` | One check by itself. `bun run lint path/to/File.ts` lints one file |
+| `bun run lint` / `typecheck` / `docs:check` / `lint:project` / `format` | One check by itself. `bun run lint path/to/File.ts` lints one file. `bun run check lint types` runs the ones named and ends with `OK so far`, not `PASSED` |
 | `bun run coverage` | Tests with coverage: per file, the lines no test reached |
 | `bun run build` | Production build into `dist/` |
 | `bun run screenshot` | Build, open in headless Chromium, save `.screenshots/game.png`; fails on page errors. `--hierarchy` prints the scene as text; `--renderer webgl2` forces WebGL2 (the game prefers WebGPU) |
@@ -58,7 +58,8 @@ packages/netcode/        Netcode for GameObjects on those transports  (@synergy/
 convex/                  backend functions; _generated/ is generated, never edit it
 cloudflare/worker.ts     gate in front of the static build (Cloudflare Access or a password); serves assets from R2
 desktop/                 Electrobun shell
-scripts/                 dev server, build, deploy, rename, screenshot tool, the check runner
+scripts/                 dev server, build, deploy, rename, screenshot tool, the check runner,
+                         the check that holds the guides to the code (docs.ts)
 tools/unity/             editor script that exports Unity tiles, tilemaps and ScriptableObjects
 tools/lint/              lint rules for the mistakes a Unity port makes (loaded by oxlint)
 .env.schema              every environment variable: type, comment, secret or not (varlock)
@@ -78,21 +79,30 @@ but not all: it cannot know which way you meant a vector to point.
    Unity's spelling (`Update()`, `OnEnable()`) is a type error and an error when the script
    is added. A near miss such as `onStart()` only logs a warning, so read the output.
 2. **Vectors are immutable and have no operators**: `a.add(b)`, `v.mul(2)`, `q.rotate(v)`.
-   `transform.position = transform.position.add(delta)`.
+   `transform.position = transform.position.add(delta)`. A result that is not assigned is
+   lost: `transform.position.add(delta);` on its own line does nothing.
 3. **Right-handed world, forward is -Z.** Always write `Vector3.forward` / `transform.forward`,
-   never `new Vector3(0, 0, 1)`.
+   never `new Vector3(0, 0, 1)`; `new Vector3(h, 0, v)` from the input axes walks backward.
+   **Angles turn the other way about X and Y**: `Quaternion.euler(45, 0, 0)` tilts up, and
+   `rotate(Vector3.up, 90)` turns left. Negate a ported pitch and yaw, or aim with `lookAt`
+   / `Quaternion.lookRotation`, which need no angles.
 4. **Screen space is top-left origin, Y down, CSS pixels** (`Input.mousePosition`,
    `camera.worldToScreenPoint`). A larger `y` is lower on screen.
 5. **No `out` params, no `== null` for destroyed objects**: `const hit = Physics.raycast(ray); if (hit) ...`
    and `if (isAlive(target))`.
-6. **Never `new` a component.** `gameObject.addComponent(Type)`. Set up in `awake`/`start`, not a constructor.
+6. **Never `new` a component.** `gameObject.addComponent(Type)`. Set up in `awake`/`start`, not a
+   constructor, and not in a field: `private body = this.getComponent(MeshRenderer)` throws,
+   because the other components may not exist yet.
 7. **Coroutines are generators**: `*run(): IEnumerator { yield new WaitForSeconds(1); }`, started
-   with `this.startCoroutine(this.run())` (call it).
+   with `this.startCoroutine(this.run())` (call it). `*start()` runs as a coroutine, as in
+   Unity; `*update()` and `async update()` are type errors.
 8. **Lights aim along -Y.** Use `light.direction = ...`.
 9. **C# habits that change meaning.** `a / b` never truncates (`Math.trunc(a / b)` for
-   integer division); objects used as `Map`/`Set` keys match by identity, not value
-   (`cellKey(cell)` for cells); `array.sort()` sorts in place and as text unless given a
-   comparer. The table is in `docs/unity-to-synergy.md`, "C# to TypeScript".
+   integer division; a `Vector3Int` or a cell refuses a fraction); objects used as
+   `Map`/`Set` keys match by identity, not value (`cellKey(cell)` for cells); `array.sort()`
+   sorts in place and as text unless given a comparer; `removeListener` needs the very
+   function that was added, not a new arrow. The table is in `docs/unity-to-synergy.md`,
+   "C# to TypeScript".
 10. **No rigidbody physics, animation, audio or particles yet.** Colliders are for
    raycasts only. Reach PlayCanvas directly via `gameObject.entity` / `engine.app` when needed.
    "Not implemented yet" in `docs/unity-to-synergy.md` lists what is missing.
@@ -147,7 +157,8 @@ Load images with `Assets.loadSprite(url)` (they load as sRGB colour textures).
 
 **Show something in the HUD.** Add an `Observable` to `game/src/hud.ts`, set `.value` from
 game code, read it in a component with `useObservable`. Replace objects/arrays rather than
-mutating them. Elements that should block clicks to the game need `data-interactive`
+mutating them (`hud.update((s) => ({ ...s, gold }))`): the value is read-only, so a change
+in place does not compile. Elements that should block clicks to the game need `data-interactive`
 (buttons, inputs and links already do).
 
 **The HUD is Preact, not React.** It is small (about 8 kB gzipped against React's 66 kB)
@@ -177,19 +188,26 @@ game uses and stay with it (`docs/multiplayer.md` compares them):
 **Add a player action (commands).** Add a variant to `Command` in `game/src/rules/`, handle
 it in `check()` and `apply()`, add a rule test, then submit it from input or HUD code with
 `controller.submit(...)`. Never change game state outside `apply()`; that is what keeps
-this kind of multiplayer in sync.
+this kind of multiplayer in sync. Commands and state are plain data (numbers, strings,
+arrays, plain objects): `session.submit` refuses anything JSON would change.
 
 **Add a player action or networked object (netcode).** For real-time play, use
 `@synergy/netcode` (`docs/netcode.md`) instead of commands. One player hosts and is
 the server and a client at once. A `NetworkPrefab` holds `NetworkBehaviour`s whose
-`NetworkVariable` and RPC fields are declared as class fields; the host calls
-`networkObject.spawn()`, and clients change things only by calling a `serverRpc`, whose
-handler validates its arguments:
+`NetworkVariable` and RPC fields are declared as class fields (a method named `moveRpc()`
+is just a method); the host calls `networkObject.spawn()`, and clients change things only
+by calling a `serverRpc`, whose handler validates its arguments. What is sent is plain
+data: a `Vector3` or `Infinity` in an RPC argument or a variable is refused where it is
+sent (`Serializers.vector3` for a vector in a variable):
 
 ```ts
 export class Soldier extends NetworkBehaviour {
   readonly health = new NetworkVariable(100);
-  readonly moveRpc = this.serverRpc((x: number, y: number) => { /* check, then change state */ });
+  readonly cell = new NetworkVariable({ x: 0, y: 0 });
+  readonly moveRpc = this.serverRpc((x: number, y: number) => {
+    if (Math.abs(x - this.cell.value.x) + Math.abs(y - this.cell.value.y) > 2) return;   // check
+    this.cell.value = { x, y };                                                          // then change state
+  });
   onNetworkSpawn() { this.health.onValueChanged.add((_before, now) => showHealth(now)); }
 }
 export const SoldierPrefab = new NetworkPrefab('Soldier', (go) => { go.addComponent(Soldier); });
@@ -209,7 +227,9 @@ explains each check and every message of the project's own lint rules.
 
 1. `bun run check` must end with `PASSED`. Fix the code, not the check: no skipped
    tests, no rule switched off, no disable comment without a reason that would convince
-   a reviewer.
+   a reviewer (`// oxlint-disable-next-line rule -- reason`, `// @ts-expect-error reason`;
+   one without a reason fails the check). When a guard in the engine throws, its message
+   says what to write instead: read it before working around it.
 2. Gameplay logic: add or extend a test. Pure rules go in `game/test/*.test.ts`;
    behaviours can be tested in a real scene with `Engine.createHeadless()`, `engine.step()`
    and `engine.input.pressKey(...)` / `moveMouse(...)` / `pressMouseButton(...)`
@@ -240,6 +260,10 @@ warning or nothing at all. Test or screenshot behaviour changes.
 - One exported behaviour per file, named like the class.
 - No file or export that nothing uses. A test counts as a use.
 - Comments explain why, or map a concept to Unity. Public engine APIs get a doc comment.
+- Guides are held to the code: every ` ```ts ` block in a Markdown file is compiled against
+  the real packages, and a member, script or file path named in one must exist
+  (`docs/checks.md`, "Documentation"). When you change an API, the check names the guides
+  that still show the old one.
 - Game rules are pure and deterministic: no `Math.random()`, `Date.now()` or scene access
   inside `apply()`. Use `new Random(state.seed)` for randomness and
   `@synergy/engine/grid` for grid maths.
@@ -266,7 +290,25 @@ warning or nothing at all. Test or screenshot behaviour changes.
 
 ## Skills
 
-Task playbooks live in `.claude/skills/<name>/SKILL.md`: `gameplay-scripting`,
-`tile-maps`, `port-from-unity`, `verify-changes`, `multiplayer`, `netcode`, `ship-it`,
-`extend-engine`.
-See `docs/agent-skills.md` for these and for the vendors' optional skills.
+Task playbooks live in `.claude/skills/<name>/SKILL.md`. Load the one that matches the
+task before starting it; each ends with how to check the work.
+
+| Task | Skill |
+|------|-------|
+| Scripts, scenes, prefabs, input, coroutines, picking | `gameplay-scripting` |
+| Maps, grids, hex or square tiles, ranges, pathfinding | `tile-maps` |
+| A computer opponent, an enemy turn, unit behaviour | `game-ai` |
+| The camera: pan, zoom, edge scroll, focus, limits | `camera-controls` |
+| HUD and menus (Preact), health bars, panels | `hud-ui` |
+| Pops, shakes, hit-stop, eased motion | `game-feel` |
+| Save and load, autosave, old saves after an update | `save-load` |
+| Commands and rules that stay in sync; PeerJS, Convex | `multiplayer` |
+| Networked objects, `NetworkVariable`s, RPCs | `netcode` |
+| Unity C# or a Unity tutorial into this engine | `port-from-unity` |
+| Something is broken and you do not know why | `debug-a-problem` |
+| Checking a change before calling it done | `verify-changes` |
+| An API or component in `packages/engine` | `extend-engine` |
+| Preview deploys, the desktop app | `ship-it` |
+
+`docs/agent-skills.md` says how the skills are written and checked, and lists optional
+skills from the makers of the tools and from the wider game-development catalogue.

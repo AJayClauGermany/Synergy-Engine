@@ -33,7 +33,9 @@ async function main() {
     mountUI(<FrontierHud manager={manager} />, { engine });
     await playOffline(manager);
   } else {
-    const scene = requested && SceneManager.isRegistered(requested) ? requested : 'Skirmish';
+    // A name nobody registered fails here, with the list of names that exist. Opening the
+    // default instead would show a working game and hide the typo.
+    const scene = requested ?? 'Skirmish';
     // The Preact HUD belongs to the Skirmish game; other scenes bring their own UI.
     if (scene === 'Skirmish') mountUI(<Hud />, { engine });
     await SceneManager.loadScene(scene);

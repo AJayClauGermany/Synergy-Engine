@@ -98,6 +98,20 @@ export interface LayerCell {
   tile: string;
 }
 
+/**
+ * The layer of a map called `name`. Throws, naming the layers the map has, when there is
+ * none: a layer renamed in the map file should fail where it is looked up, not later as
+ * "cannot read properties of undefined".
+ */
+export function layerNamed(map: TilemapData, name: string): TilemapLayerData {
+  const layer = map.layers.find((candidate) => candidate.name === name);
+  if (!layer) {
+    const names = map.layers.map((candidate) => `"${candidate.name}"`).join(', ');
+    throw new Error(`The map has no layer named "${name}". Its layers: ${names || 'none'}.`);
+  }
+  return layer;
+}
+
 /** The tile id in a cell of a layer, or `null` when the cell is empty or outside the layer. */
 export function layerTileAt(layer: TilemapLayerData, cell: CellLike): string | null {
   if ((cell.z ?? 0) !== (layer.z ?? 0)) return null;
@@ -177,9 +191,12 @@ const isNumbers = (value: unknown, length: number): boolean =>
  * when it is sound). Pass the palette's tile ids to also catch tiles the map uses but
  * the palette does not define. Run it in a test over every map file you ship.
  */
-export function checkTilemapData(data: TilemapData, knownTiles?: Iterable<string>): string[] {
+export function checkTilemapData(file: unknown, knownTiles?: Iterable<string>): string[] {
+  // A checker is given data nobody has vouched for yet: a JSON import, a hand-edited file.
+  if (typeof file !== 'object' || file === null) return ['The map is not an object.'];
+  const data = file as TilemapData;
   const problems: string[] = [];
-  const grid = data?.grid;
+  const grid = data.grid;
   if (!grid || typeof grid !== 'object') return ['The map has no "grid".'];
   if (grid.cellLayout !== 'rectangle' && grid.cellLayout !== 'hexagon') {
     problems.push(
@@ -241,9 +258,12 @@ export function checkTilemapData(data: TilemapData, knownTiles?: Iterable<string
  * things that otherwise show up as a blank or wrong tile: duplicate ids, a tile whose
  * sprite or sheet does not exist.
  */
-export function checkTilePaletteData(data: TilePaletteData<unknown>): string[] {
+export function checkTilePaletteData(file: unknown): string[] {
   const problems: string[] = [];
-  if (!data || !Array.isArray(data.tiles)) return ['The palette has no "tiles" list.'];
+  const data = file as TilePaletteData<unknown> | null;
+  if (typeof data !== 'object' || data === null || !Array.isArray(data.tiles)) {
+    return ['The palette has no "tiles" list.'];
+  }
   const sheets = data.sheets ?? {};
   for (const [name, sheet] of Object.entries(sheets)) {
     if (typeof sheet.image !== 'string' || sheet.image === '') problems.push(`Sheet "${name}" has no "image".`);

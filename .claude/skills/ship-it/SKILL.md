@@ -1,6 +1,13 @@
 ---
 name: ship-it
-description: Use when deploying a password-protected preview or the main build to Cloudflare Workers, changing the preview gate, configuring CI previews, or packaging the desktop app with Electrobun.
+description: >
+  Ships builds of the game: a gated preview or the main deployment on Cloudflare Workers
+  (Access or a password, assets on R2), preview deploys from CI, and the desktop app with
+  Electrobun; also build-time environment variables. Use when asked to deploy, publish,
+  share a preview link, set up or tear down the Cloudflare side, package for desktop, or
+  when a deployed build shows a blank page or missing assets. Not for checking that a
+  change works before it ships (use `verify-changes`), or for the multiplayer backend's
+  functions (use `multiplayer`).
 ---
 
 # Shipping builds
@@ -111,3 +118,35 @@ Add new ones to the schema, mark secrets `@sensitive`, and never read or edit `.
 `process.env.PUBLIC_*` is inlined into the browser bundle at build time (and by the dev
 server). Read such variables through a guarded helper like `game/src/env.ts`, because an
 unset variable is left as a bare `process.env` reference that would throw in a browser.
+
+## Gotchas
+
+- **A blank page after deploying, fine locally.** An asset was referenced by an absolute
+  URL (`/images/x.png`) or a `PUBLIC_` variable was unset at build time, leaving a bare
+  `process.env` in the bundle. Asset URLs stay relative; read variables through
+  `game/src/env.ts`.
+- **A secret in the browser.** Every `PUBLIC_*` variable is inlined into the bundle
+  anyone can download. Secrets have no `PUBLIC_` prefix and are marked `@sensitive` in
+  `.env.schema`.
+- **The preview asks for a password nobody set, or lets everyone in.** The gate is
+  decided at deploy time from the environment: `bun run cloudflare:check` says what the
+  account has switched on, without changing anything.
+- **Guessing `wrangler` flags.** `wrangler preview` is in open beta and changes; read
+  `bunx wrangler preview --help`.
+- **Deploying from a branch with failing checks.** A deploy does not run `bun run check`
+  for you. Run it first.
+- **Reporting a desktop build as working.** `desktop:dev` has run on macOS only;
+  `desktop:build` is unverified. Say which you ran and where.
+- **Tearing down the wrong thing.** `bun run cloudflare:teardown` lists first and deletes
+  only with `--confirm <name>`. Read the list; ask the user before confirming.
+
+## Verify
+
+Before a deploy: `bun run check` ends in `PASSED`, and `bun run build` succeeds.
+
+After it: open the URL the deploy printed and look, or
+`bun run screenshot --url <preview url> --out .screenshots/preview.png` and read the
+image; the run fails if the page logged an error. For a gated preview the screenshot is of
+the gate, which is itself the check that the gate is on. Then say exactly what ran
+against a real account and what did not: `docs/deploying.md` keeps that line for the
+project, and a change that crosses it should update it.
