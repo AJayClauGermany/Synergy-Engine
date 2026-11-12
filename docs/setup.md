@@ -454,9 +454,13 @@ avoid; the last column says what has been run since.
 | 5, opening the link | **Failed.** Access offered only "Sign in with Cloudflare"; after signing in, the Worker answered "Preview locked". Cloudflare does not tell a Worker with static assets that Access admitted the visitor | the deploy now tells the Worker (`ACCESS_AUD`). **Confirmed the same day:** a pull-request preview opened after signing in, by emailed code (One-time PIN added by hand) and with "Sign in with Cloudflare". An address that is not on the list received no code |
 | 6 | `bun run deploy` deployed and reported; the address was locked for the same reason | same fix; not run again |
 | 7 | The commit hook refused a failing commit; `bun run desktop:dev` opened the game; `varlock scan` works | |
+| Clearing the test run | Not part of that run | `bun run cloudflare:teardown` and the *Teardown* workflow added. **Confirmed the same day**, started by an agent with no Cloudflare login: the listing run found the Worker, the Access application and the bucket; the run with `confirm` deleted all three (the bucket held 1 object) and ended with `CLEAN`; a third run found nothing. The token of step 5A was enough |
 
-Not run yet: a deploy switching on emailed codes by itself (the token lacked that
-permission), multiplayer on a deployed preview and between two networks, the `PUBLIC_CONVEX_URL=... bun run deploy` form reaching
-production Convex, and everything under "Clearing what the test run created". When a step
+Not run yet: a deploy switching on emailed codes by itself (the test token lacked that
+permission), a deploy passing `PREVIEW_PASSWORD` on, multiplayer on a deployed preview and
+between two networks, the `PUBLIC_CONVEX_URL=... bun run deploy` form reaching production
+Convex, a deploy after a teardown creating everything again, and, of the clean-up:
+emptying a bucket of more than a handful of objects, emptying the Convex tables
+(`--convex`; it needs a `CONVEX_DEPLOY_KEY`), and the by-hand and Convex dashboard routes. When a step
 disagrees with this page, the command's last lines say which part failed; please correct
 the page.

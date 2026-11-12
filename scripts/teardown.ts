@@ -208,11 +208,13 @@ async function main(): Promise<number> {
     (step) => `${step.outcome.padEnd(7)}  ${step.what}: ${step.detail.replaceAll('\n', '\n         ')}`,
   );
   const failed = steps.filter((step) => step.outcome === 'failed' || step.outcome === 'kept').length;
-  const verdict = !remove
-    ? `NOTHING CHANGED. To delete what was found: bun run cloudflare:teardown --confirm ${config.name}`
-    : failed === 0
-      ? 'CLEAN. The next deploy would create all of it again.'
-      : `NOT CLEAN: ${failed} left. Fix what failed, then run this again; what is already gone is skipped.`;
+  const verdict = steps.every((step) => step.outcome === 'absent')
+    ? 'NOTHING TO DELETE. Cloudflare holds nothing under this name.'
+    : !remove
+      ? `NOTHING CHANGED. To delete what was found: bun run cloudflare:teardown --confirm ${config.name}`
+      : failed === 0
+        ? 'CLEAN. The next deploy would create all of it again.'
+        : `NOT CLEAN: ${failed} left. Fix what failed, then run this again; what is already gone is skipped.`;
   console.log(`${lines.join('\n')}\n\n${verdict}`);
   if (process.env.GITHUB_STEP_SUMMARY) {
     await appendFile(

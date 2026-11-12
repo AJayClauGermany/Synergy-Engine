@@ -180,7 +180,8 @@ a real account, the pull-request workflow built, created the Worker, the bucket 
 Access application, uploaded only changed assets and linked the preview. Opening that
 preview failed at first (the Worker could not see the Access sign-in); with `ACCESS_AUD`
 it opened, for a visitor signed in by emailed code and for one signed in with Cloudflare.
-`bun run cloudflare:check` has run against an account too. The deploy switching on
+`bun run cloudflare:check` has run against an account too. So has `bun run cloudflare:teardown`,
+through the Teardown workflow: it deleted the Worker, the Access application and the bucket. The deploy switching on
 emailed codes by itself is tested against a stand-in (`scripts/deploy.test.ts`) only. Worker Previews are in open beta in Wrangler; `bunx wrangler preview --help`
 shows the current options.
 
