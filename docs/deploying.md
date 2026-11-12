@@ -182,10 +182,10 @@ Access, and the assets are read from `dist/assets/`.
 [setup.md](setup.md), "What a real run has confirmed", has the record. In short: against
 a real account, the pull-request workflow built, created the Worker, the bucket and the
 Access application, uploaded only changed assets and linked the preview. Opening that
-preview failed (the Worker could not see the Access sign-in), which is what `ACCESS_AUD`
-and the emailed-code step fix; those, and `bun run cloudflare:check`, are tested against
-stand-ins (`cloudflare/worker.test.ts`, `scripts/deploy.test.ts`) and not yet against an
-account. Worker Previews are in open beta in Wrangler; `bunx wrangler preview --help`
+preview failed at first (the Worker could not see the Access sign-in); with `ACCESS_AUD`
+it opened, for a visitor signed in by emailed code and for one signed in with Cloudflare.
+The deploy switching on emailed codes by itself, and `bun run cloudflare:check`, are
+tested against stand-ins (`scripts/deploy.test.ts`) and not yet against an account. Worker Previews are in open beta in Wrangler; `bunx wrangler preview --help`
 shows the current options.
 
 Wrangler's usage reports to Cloudflare are switched off for this project

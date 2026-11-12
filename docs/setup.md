@@ -153,7 +153,7 @@ can open. This step has three parts, done in this order so that each is proven b
 next one starts: **A** prepares Cloudflare, **B** deploys a preview from your machine
 (GitHub is not involved yet), **C** hands the same three values to GitHub.
 
-### 5A. Cloudflare: two switches and a token
+### 5A. Cloudflare: three switches and a token
 
 All of it is in the [Cloudflare dashboard](https://dash.cloudflare.com).
 
@@ -163,14 +163,19 @@ All of it is in the [Cloudflare dashboard](https://dash.cloudflare.com).
 2. **R2.** Open *R2 Object Storage* and enable it. It asks for a payment method; the free
    allowance is 10 GB.
 3. **Zero Trust.** Open *Zero Trust*, pick a team name and the free plan (50 people).
-4. **API token.** *My Profile > API Tokens > Create Token*, then *Use template* next to
+4. **Sign-in by emailed code.** In *Zero Trust > Integrations > Identity providers*, choose
+   *Add new identity provider*, then **One-time PIN**. A new Zero Trust account offers
+   only "Sign in with Cloudflare", which works for you but not for a tester without a
+   Cloudflare login. (Skip this if you give the token the optional permission below: the
+   first deploy then does it.)
+5. **API token.** *My Profile > API Tokens > Create Token*, then *Use template* next to
    **Edit Cloudflare Workers**. On the form:
 
    | Field | What to choose |
    |-------|----------------|
    | Permissions, already listed | leave them. *Workers R2 Storage: Edit* is among them; *Edit* includes reading, so *Read* stays unticked |
    | Permissions, *Add more* | *Account* / **Access: Apps and Policies** / *Edit* |
-   | Permissions, *Add more* (optional) | *Account* / **Access: Organizations, Identity Providers, and Groups** / *Edit*. Lets a deploy switch on sign-in by emailed code; without it you do that by hand, below |
+   | Permissions, *Add more* (optional) | *Account* / **Access: Organizations, Identity Providers, and Groups** / *Edit*. Lets a deploy do item 4 for you, and lets `bun run cloudflare:check` see whether it is done |
    | Account Resources | *Include* / your account |
    | Zone Resources | *Include* / *All zones*. The form will not continue without a choice; the game uses no zone |
 
@@ -214,15 +219,14 @@ attached to a Worker that exists.
 - The output ends with a `Deployed https://setup-test-<name>.<subdomain>.workers.dev`
   line, an `Assets:` line and a `Cloudflare Access: created, admitting ...` line.
 - The address shows Cloudflare's sign-in page. Enter your email, receive a code, and the
-  game opens.
+  game opens. "Sign in with Cloudflare" works as well, for an address on the list. Once
+  signed in you are not asked again for 7 days, on any preview; use a private window to
+  see the sign-in page again.
 - In a private window, an address that is not on the list gets no further than the
   sign-in page (it is told a code was sent; none is).
 
 If the sign-in page offers only **Sign in with Cloudflare**, sign-in by emailed code is
-off: new Zero Trust accounts start that way, and only people with a Cloudflare login
-could get in. Switch it on under *Zero Trust > Integrations > Identity providers > Add new
-identity provider > One-time PIN*, then reload the page. The `Cloudflare Access:` line of
-the deploy says whether this is needed.
+off: do item 4 of 5A, then reload the page. Nothing needs deploying again.
 
 If after signing in the page says **Preview locked**, the deployment was made without
 Access: the `Cloudflare Access:` line of that deploy says why (usually an empty
@@ -403,12 +407,13 @@ avoid; the last column says what has been run since.
 | Multiplayer, locally | Skirmish peer-to-peer and on Convex (it survived a reload), and Frontier host and join, all connected | |
 | 5A | The token from the template plus *Access: Apps and Policies: Edit* was enough. *Zone Resources* had to be filled in | `bun run cloudflare:check` added; tested against a stand-in only |
 | 5C | The workflow ran on a private repository, created the Worker, the bucket and the Access application, linked `pr-1-<name>.<subdomain>.workers.dev`, and a second push uploaded no assets | |
-| 5, opening the link | **Failed.** Access offered only "Sign in with Cloudflare"; after signing in, the Worker answered "Preview locked". Cloudflare does not tell a Worker with static assets that Access admitted the visitor | the deploy now tells the Worker (`ACCESS_AUD`) and switches on emailed codes; tested against stand-ins, **not yet against the account** |
-| 6 | `bun run deploy` deployed and reported; the address was locked for the same reason | same fix |
+| 5, opening the link | **Failed.** Access offered only "Sign in with Cloudflare"; after signing in, the Worker answered "Preview locked". Cloudflare does not tell a Worker with static assets that Access admitted the visitor | the deploy now tells the Worker (`ACCESS_AUD`). **Confirmed the same day:** a pull-request preview opened after signing in, by emailed code (One-time PIN added by hand) and with "Sign in with Cloudflare" |
+| 6 | `bun run deploy` deployed and reported; the address was locked for the same reason | same fix; not run again |
 | 7 | The commit hook refused a failing commit; `bun run desktop:dev` opened the game; `varlock scan` works | |
 
-Not run yet: a deployed preview opened by a person on the list and refused to one who is
-not, multiplayer on a deployed preview and between two networks, deleting a preview by
+Not run yet: a deploy switching on emailed codes by itself (the token lacked the optional
+permission), `bun run cloudflare:check` against an account, an address that is not on the
+list being refused, multiplayer on a deployed preview and between two networks, deleting a preview by
 closing its pull request, the `PUBLIC_CONVEX_URL=... bun run deploy` form reaching
 production Convex, and everything under "Clearing what the test run created". When a step
 disagrees with this page, the command's last lines say which part failed; please correct
