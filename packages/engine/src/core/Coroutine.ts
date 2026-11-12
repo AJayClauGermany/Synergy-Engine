@@ -2,7 +2,14 @@ import type { MonoBehaviour } from './MonoBehaviour';
 import type { TimeState } from './Time';
 
 /** Base class for the things a coroutine can `yield` to wait on. */
-export abstract class YieldInstruction {}
+export abstract class YieldInstruction {
+  /**
+   * Makes the type its own: without a member, anything at all would count as a
+   * YieldInstruction, and `yield 2` or `yield WaitForSeconds` (the class, without `new`)
+   * would compile. It exists only for the type checker.
+   */
+  declare protected readonly _yieldInstruction: true;
+}
 
 /** Waits for scaled game time. `yield new WaitForSeconds(1.5)`. */
 export class WaitForSeconds extends YieldInstruction {
@@ -80,6 +87,8 @@ export class Coroutine {
   _done = false;
   /** @internal True while this coroutine's generator is executing. */
   _running = false;
+  /** @internal What the last wait produced (a promise's value); handed to the generator when it resumes. */
+  _resumeWith: unknown = undefined;
 
   /** @internal */
   constructor(
@@ -187,8 +196,11 @@ export class CoroutineScheduler {
       }
       let result: IteratorResult<Yieldable, unknown>;
       coroutine._running = true;
+      // What the coroutine waited on hands back a value: `const data = yield fetch(url)`.
+      const resumeWith = coroutine._resumeWith;
+      coroutine._resumeWith = undefined;
       try {
-        result = iterator.next();
+        result = iterator.next(resumeWith);
       } catch (error) {
         coroutine._running = false;
         coroutine._done = true;
@@ -212,7 +224,13 @@ export class CoroutineScheduler {
         coroutine._stack.push(value);
         continue;
       }
-      coroutine._ready = this.waitFor(coroutine, value);
+      try {
+        coroutine._ready = this.waitFor(coroutine, value);
+      } catch (error) {
+        // It yielded something that cannot be waited on: end this coroutine, not the frame.
+        this.stop(coroutine);
+        this.reportError(error, `a coroutine on ${coroutine._owner}`);
+      }
       return;
     }
   }
@@ -241,8 +259,9 @@ export class CoroutineScheduler {
     if (isThenable(value)) {
       let settled = false;
       value.then(
-        () => {
+        (result: unknown) => {
           settled = true;
+          coroutine._resumeWith = result;
         },
         (error: unknown) => {
           settled = true;
@@ -252,7 +271,11 @@ export class CoroutineScheduler {
       );
       return (phase) => phase === 'update' && settled;
     }
-    // oxlint-disable-next-line typescript/no-base-to-string -- whatever the script yielded; its own text is all there is
-    throw new TypeError(`A coroutine yielded something it cannot wait on: ${String(value)}`);
+    const shown =
+      typeof value === 'function' ? `the function ${(value as { name: string }).name}` : JSON.stringify(value);
+    throw new TypeError(
+      `A coroutine yielded ${shown}, which is not something to wait on. Yield null (one frame), ` +
+        'a wait such as new WaitForSeconds(1) (with `new`), a Tween, a Coroutine, a promise, or another generator.',
+    );
   }
 }

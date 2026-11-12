@@ -59,14 +59,57 @@ function buildPrimitive(device: pc.GraphicsDevice, type: PrimitiveType): pc.Mesh
  */
 export class Mesh {
   name = 'Mesh';
-  /** Corner positions. Reassign the array (and call `markDirty`) after changing it. */
-  vertices: Vector3[] = [];
+
+  private vertexList: Vector3[] = [];
+  private triangleList: number[] = [];
+  private normalList: Vector3[] = [];
+  private uvList: Vector2[] = [];
+  /** @internal The MeshFilters drawing this mesh. They are redrawn when it changes. */
+  readonly _users = new Set<MeshFilter>();
+
+  /**
+   * Corner positions. Assigning the array updates every MeshFilter that shows this mesh,
+   * as in Unity; after changing an array in place, call `markDirty()`.
+   */
+  get vertices(): Vector3[] {
+    return this.vertexList;
+  }
+
+  set vertices(value: Vector3[]) {
+    this.vertexList = value;
+    this.markDirty();
+  }
+
   /** Indices into `vertices`, three per triangle. */
-  triangles: number[] = [];
+  get triangles(): number[] {
+    return this.triangleList;
+  }
+
+  set triangles(value: number[]) {
+    this.triangleList = value;
+    this.markDirty();
+  }
+
   /** One normal per vertex. Leave empty and call `recalculateNormals()` to generate them. */
-  normals: Vector3[] = [];
+  get normals(): Vector3[] {
+    return this.normalList;
+  }
+
+  set normals(value: Vector3[]) {
+    this.normalList = value;
+    this.autoNormals = false;
+    this.markDirty();
+  }
+
   /** One texture coordinate per vertex. Optional. */
-  uv: Vector2[] = [];
+  get uv(): Vector2[] {
+    return this.uvList;
+  }
+
+  set uv(value: Vector2[]) {
+    this.uvList = value;
+    this.markDirty();
+  }
 
   private primitiveType: PrimitiveType | null = null;
   private wrapped: pc.Mesh[] | null = null;
@@ -101,9 +144,22 @@ export class Mesh {
     this.markDirty();
   }
 
-  /** Call after editing `vertices`/`triangles`/`normals`/`uv` in place, then reassign the mesh to its MeshFilter. */
+  /**
+   * Call after editing `vertices`/`triangles`/`normals`/`uv` in place (`mesh.vertices[0] = ...`).
+   * Assigning a whole array does it for you. Every MeshFilter showing this mesh is redrawn.
+   */
   markDirty(): void {
+    const superseded = this.built;
     this.built = null;
+    for (const filter of [...this._users]) {
+      if (filter.isDestroyed) this._users.delete(filter);
+      else filter._refresh();
+    }
+    // Nothing draws the old geometry any more: give its buffers back.
+    if (superseded) {
+      superseded.decRefCount();
+      if (superseded.refCount < 1) superseded.destroy();
+    }
   }
 
   /** Axis-aligned bounds in the mesh's own space. */
@@ -134,7 +190,8 @@ export class Mesh {
       return [mesh];
     }
     if (!this.built || this.built.device !== device) {
-      if (this.vertices.length === 0) return [];
+      // Not a drawable mesh yet (vertices assigned, triangles still to come): draw nothing.
+      if (this.vertices.length === 0 || this.triangles.length < 3) return [];
       const geometry = new pc.Geometry();
       geometry.positions = this.vertices.flatMap((v) => [v.x, v.y, v.z]);
       geometry.indices = [...this.triangles];
@@ -322,7 +379,14 @@ export class MeshFilter extends Component {
   }
 
   set mesh(value: Mesh | null) {
+    this._mesh?._users.delete(this);
     this._mesh = value;
+    value?._users.add(this);
+    syncRender(this.gameObject, true);
+  }
+
+  /** @internal The mesh's geometry changed: draw the new one. */
+  _refresh(): void {
     syncRender(this.gameObject, true);
   }
 
@@ -336,6 +400,7 @@ export class MeshFilter extends Component {
   }
 
   override _destroy(): void {
+    this._mesh?._users.delete(this);
     this._mesh = null;
     if (!this.gameObject.isDestroyed) syncRender(this.gameObject, true);
   }
@@ -343,6 +408,7 @@ export class MeshFilter extends Component {
   override _copyFrom(source: this): void {
     // PlayCanvas already cloned the mesh instances; just share the same Mesh object.
     this._mesh = source._mesh;
+    this._mesh?._users.add(this);
   }
 }
 

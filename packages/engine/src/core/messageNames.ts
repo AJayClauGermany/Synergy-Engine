@@ -23,6 +23,25 @@ export const NOT_SENT: Readonly<Record<string, string>> = {
   oncollisionenter2d: 'there is no 2D physics; test for contact with Physics.overlapSphere or a raycast',
   ontriggerenter2d: 'there is no 2D physics; test for overlap with Physics.overlapSphere in update()',
   ontriggerexit2d: 'there is no 2D physics; test for overlap with Physics.overlapSphere in update()',
+  oncollisionstay2d: 'there is no 2D physics; test for contact with Physics.overlapSphere or a raycast',
+  oncollisionexit2d: 'there is no 2D physics; test for contact with Physics.overlapSphere or a raycast',
+  ontriggerstay2d: 'there is no 2D physics; test for overlap with Physics.overlapSphere in update()',
+  oncontrollercolliderhit: 'there is no CharacterController; move the transform and test ahead with Physics.raycast',
+  onparticlecollision: 'there are no particle systems yet',
+  onpointerclick: 'uGUI pointer events are not sent; use onMouseDown() with a Collider, or a button in the Preact HUD',
+  onpointerdown: 'uGUI pointer events are not sent; use onMouseDown() with a Collider, or a button in the Preact HUD',
+  onpointerup: 'uGUI pointer events are not sent; use onMouseUp() with a Collider, or a button in the Preact HUD',
+  onpointerenter:
+    'uGUI pointer events are not sent; use onMouseEnter() with a Collider, or CSS :hover in the Preact HUD',
+  onpointerexit: 'uGUI pointer events are not sent; use onMouseExit() with a Collider, or CSS :hover in the Preact HUD',
+  onvalidate: 'there is no editor, so editor messages are never sent; check the values in awake()',
+  ondrawgizmos: 'there is no editor, so editor messages are never sent; draw with Debug.drawLine() in update()',
+  ondrawgizmosselected: 'there is no editor, so editor messages are never sent; draw with Debug.drawLine() in update()',
+  onownershipchanged: 'use onGainedOwnership() and onLostOwnership(), or networkObject.onOwnershipChanged',
+  onnetworkprespawn: 'use onNetworkSpawn()',
+  onnetworkpostspawn: 'use onNetworkSpawn()',
+  onnetworkpredespawn: 'use onNetworkDespawn()',
+  onnetworksessionsynchronized: 'use onNetworkSpawn(); for "everyone has loaded", sceneManager.onLoadEventCompleted',
   onmousedrag: 'track the drag yourself between onMouseDown() and onMouseUp() with Input.mousePosition',
   onmouseupasbutton: 'use onMouseUp()',
   ongui: 'draw UI with a Canvas and Image, or with the Preact HUD',
@@ -32,6 +51,24 @@ export const NOT_SENT: Readonly<Record<string, string>> = {
   onapplicationpause: 'listen for the page being hidden instead (the "visibilitychange" event)',
   onapplicationfocus: 'listen for the window\'s "focus" and "blur" events instead',
 };
+
+/**
+ * Messages that must be plain methods. Unity runs `Start` and the mouse messages as
+ * coroutines when they are written as one, and so does this engine; these it cannot.
+ */
+const NEVER_COROUTINES = new Set([
+  'awake',
+  'onEnable',
+  'onDisable',
+  'onDestroy',
+  'update',
+  'lateUpdate',
+  'fixedUpdate',
+  'onMouseOver',
+]);
+
+const GENERATOR = Object.getPrototypeOf(function* () {}) as object;
+const ASYNC_GENERATOR = Object.getPrototypeOf(async function* () {}) as object;
 
 interface Verdict {
   /** A method that can only be a mistake: a message in the wrong letter case. */
@@ -55,8 +92,20 @@ function inspect(type: MessageHost): Verdict {
     const owner = (proto as { constructor?: MessageHost }).constructor;
     if (!owner || Object.hasOwn(owner, '_messageNames')) break;
     for (const name of Object.getOwnPropertyNames(proto)) {
-      if (name === 'constructor' || typeof Object.getOwnPropertyDescriptor(proto, name)?.value !== 'function') continue;
-      if (valid.includes(name)) continue;
+      const method: unknown = Object.getOwnPropertyDescriptor(proto, name)?.value;
+      if (name === 'constructor' || typeof method !== 'function') continue;
+      if (valid.includes(name)) {
+        // `*update()` type-checks (any return value fits `void`), and calling it only makes a
+        // generator object: not one line of it would run.
+        const kind = Object.getPrototypeOf(method) as object;
+        if (kind === ASYNC_GENERATOR || (kind === GENERATOR && NEVER_COROUTINES.has(name))) {
+          verdict.error ??=
+            `${type.name}.${name}() is a generator (it is written with a *), so when the engine calls it none of its code runs. ` +
+            `Make ${name}() a plain method and start the routine from it: this.startCoroutine(this.routine()). ` +
+            'Only start() and the onMouse messages may themselves be coroutines.';
+        }
+        continue;
+      }
       const lower = name.toLowerCase();
       const intended = byLowerCase.get(lower);
       if (intended) {

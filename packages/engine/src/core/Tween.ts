@@ -2,6 +2,7 @@ import { Color } from '../math/Color';
 import { Quaternion } from '../math/Quaternion';
 import { Vector2 } from '../math/Vector2';
 import { Vector3 } from '../math/Vector3';
+import { Component } from './Component';
 import { CustomYieldInstruction } from './Coroutine';
 import { type EngineObject, isAlive } from './EngineObject';
 import { currentEngine } from './runtime';
@@ -130,9 +131,13 @@ export class Tween extends CustomYieldInstruction {
       .onComplete(callback);
   }
 
-  /** Cancels every running tween whose target is `target`. Returns how many were cancelled. */
+  /**
+   * Cancels every running tween whose target is `target`. Returns how many were cancelled.
+   * A component stands for its GameObject, so `Tween.kill(this.transform)` and
+   * `Tween.kill(this.gameObject)` are the same (DOTween: `transform.DOKill()`).
+   */
   static kill(target: EngineObject): number {
-    return currentEngine().tweens.killTarget(target);
+    return currentEngine().tweens.killTarget(ownerOf(target));
   }
 
   // ---- Options (chainable) ------------------------------------------------------------
@@ -164,7 +169,7 @@ export class Tween extends CustomYieldInstruction {
 
   /** Ties the tween to an object: it is cancelled when that object is destroyed. */
   setTarget(target: EngineObject): this {
-    this._target = target;
+    this._target = ownerOf(target);
     return this;
   }
 
@@ -226,6 +231,11 @@ export class Tween extends CustomYieldInstruction {
     this.completed = true;
     for (const handler of this.completeHandlers) handler();
   }
+}
+
+/** A tween on a component belongs to its GameObject: destroying or killing either ends it. */
+function ownerOf(target: EngineObject): EngineObject {
+  return target instanceof Component ? target.gameObject : target;
 }
 
 /** @internal Runs every tween of one engine. */

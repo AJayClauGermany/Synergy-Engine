@@ -46,7 +46,7 @@ function clickCell(x: number, y: number) {
   engine.step();
 }
 
-function pressKey(key: string) {
+function pressKey(key: KeyCode) {
   engine.input.pressKey(key);
   engine.step();
   engine.input.releaseKey(key);

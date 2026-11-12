@@ -1,4 +1,4 @@
-import type { Engine, Observable, UnityEvent } from '@synergy/engine';
+import type { Engine, Observable, ReadonlyValue, UnityEvent } from '@synergy/engine';
 import { useContext, useEffect, useLayoutEffect, useReducer, useRef } from 'preact/hooks';
 import { EngineContext } from './mount';
 
@@ -15,7 +15,7 @@ export function useEngine(): Engine {
  *
  *   const gold = useObservable(economy.gold);
  */
-export function useObservable<T>(observable: Observable<T>): T {
+export function useObservable<T>(observable: Observable<T>): ReadonlyValue<T> {
   // Preact's core hooks have no `useSyncExternalStore` (only `preact/compat` does), so
   // this is the same contract written out: read the current value while rendering, and
   // re-render whenever it changes.

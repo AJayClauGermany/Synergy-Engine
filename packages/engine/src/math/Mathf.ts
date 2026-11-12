@@ -110,14 +110,16 @@ export const Mathf = {
   /**
    * Critically damped spring toward `target`. C# returns the value and writes velocity through `ref`;
    * here both come back as a tuple: `[value, velocity] = Mathf.smoothDamp(...)`.
+   * The parameters are in Unity's order, and the last two are required (C# defaults them
+   * to no limit and `Time.deltaTime`): pass `Infinity` and `Time.deltaTime`.
    */
   smoothDamp(
     current: number,
     target: number,
     currentVelocity: number,
     smoothTime: number,
+    maxSpeed: number,
     deltaTime: number,
-    maxSpeed = Number.POSITIVE_INFINITY,
   ): [value: number, velocity: number] {
     const time = Math.max(0.0001, smoothTime);
     const omega = 2 / time;

@@ -94,7 +94,8 @@ export function instantiate(
       root = new GameObject(original.name);
       if (parent) root.transform.setParent(parent, false);
       place(root, position, rotation);
-      original.build(root);
+      const made: unknown = original.build(root);
+      checkPrefabBuild(original, root, made);
       result = root;
     } else {
       const source = original instanceof GameObject ? original : original.gameObject;
@@ -107,6 +108,34 @@ export function instantiate(
     }
     return result;
   });
+}
+
+const emptyPrefabs = new WeakSet<Prefab>();
+
+/** Exactly as `new GameObject(name)` left it: no component, no child, no tag, no layer. */
+function isUntouched(root: GameObject): boolean {
+  return root._components.length <= 1 && root.transform.childCount === 0 && root.tag === 'Untagged' && root.layer === 0;
+}
+
+/**
+ * A prefab's build function is handed the instance and adds to it. Written as a factory
+ * (`() => { const enemy = new GameObject(); ...; return enemy; }`) it compiles, and every
+ * instance comes out empty while a stray object sits in the scene.
+ */
+function checkPrefabBuild(prefab: Prefab, root: GameObject, made: unknown): void {
+  const fix = `Add to the GameObject build() is given: new Prefab('${prefab.name}', (go) => { go.addComponent(...); }).`;
+  if (made instanceof GameObject && made !== root) {
+    currentEngine().reportError(
+      new Error(
+        `Prefab "${prefab.name}": build() made and returned a GameObject of its own ("${made.name}"). ` +
+          `That is not the instance, so the instance has none of it. ${fix}`,
+      ),
+      `instantiating the prefab "${prefab.name}"`,
+    );
+  } else if (isUntouched(root) && !emptyPrefabs.has(prefab)) {
+    emptyPrefabs.add(prefab);
+    console.warn(`Prefab "${prefab.name}": build() added nothing to the GameObject it was given. ${fix}`);
+  }
 }
 
 function place(root: GameObject, position: Vector3 | null, rotation: Quaternion | undefined): void {

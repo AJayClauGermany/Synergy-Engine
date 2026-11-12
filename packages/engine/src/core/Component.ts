@@ -9,12 +9,16 @@ export type ComponentClass<T extends Component = Component> = abstract new () =>
 export type ConcreteComponentClass<T extends Component = Component> = new () => T;
 
 let pendingOwner: GameObject | null = null;
+/** Components whose constructor (and so their field initialisers) has not returned yet. */
+const unfinished = new WeakSet<Component>();
 
 /** @internal Constructs a component bound to `owner`. Only `GameObject.addComponent` calls this. */
 export function constructComponent<T extends Component>(type: ConcreteComponentClass<T>, owner: GameObject): T {
   pendingOwner = owner;
   try {
-    return new type();
+    const component = new type();
+    unfinished.delete(component);
+    return component;
   } finally {
     pendingOwner = null;
   }
@@ -24,7 +28,8 @@ export function constructComponent<T extends Component>(type: ConcreteComponentC
  * Base class for everything attached to a GameObject.
  *
  * Components are never constructed with `new`. Use `gameObject.addComponent(Type)`,
- * exactly as in Unity. Field initialisers may use `this.gameObject` and `this.transform`.
+ * exactly as in Unity. Field initialisers may use `this.gameObject` and `this.transform`,
+ * but not look up other components: those may not have been added yet. Do that in `awake`.
  */
 export abstract class Component extends EngineObject {
   readonly gameObject: GameObject;
@@ -45,6 +50,21 @@ export abstract class Component extends EngineObject {
     }
     this.gameObject = pendingOwner;
     pendingOwner = null;
+    unfinished.add(this);
+  }
+
+  /**
+   * `private body = this.getComponent(MeshRenderer)` as a field runs inside `addComponent`,
+   * before the scene or prefab has added the rest: the answer depends on the order the
+   * components happen to be added in. C# does not allow it; here it has to be said.
+   */
+  private _lookup(method: string, type: { readonly name: string }): void {
+    if (!unfinished.has(this)) return;
+    const self = this.constructor.name;
+    throw new Error(
+      `${self}: ${method}(${type.name}) was called in a field initialiser or constructor, while ${self} is still being created. ` +
+        `Whether a ${type.name} is there yet depends on the order components are added in. Look it up in awake().`,
+    );
   }
 
   get transform(): Transform {
@@ -73,22 +93,27 @@ export abstract class Component extends EngineObject {
   }
 
   getComponent<T extends Component>(type: ComponentClass<T>): T | null {
+    this._lookup('getComponent', type);
     return this.gameObject.getComponent(type);
   }
 
   getComponents<T extends Component>(type: ComponentClass<T>): T[] {
+    this._lookup('getComponents', type);
     return this.gameObject.getComponents(type);
   }
 
   getComponentInChildren<T extends Component>(type: ComponentClass<T>, includeInactive = false): T | null {
+    this._lookup('getComponentInChildren', type);
     return this.gameObject.getComponentInChildren(type, includeInactive);
   }
 
   getComponentsInChildren<T extends Component>(type: ComponentClass<T>, includeInactive = false): T[] {
+    this._lookup('getComponentsInChildren', type);
     return this.gameObject.getComponentsInChildren(type, includeInactive);
   }
 
   getComponentInParent<T extends Component>(type: ComponentClass<T>): T | null {
+    this._lookup('getComponentInParent', type);
     return this.gameObject.getComponentInParent(type);
   }
 

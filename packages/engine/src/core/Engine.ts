@@ -81,6 +81,14 @@ export class Engine {
 
   /** Creates an engine. Resolves once the graphics device is ready. */
   static async create(options: EngineOptions = {}): Promise<Engine> {
+    // `document.getElementById('game') as HTMLCanvasElement` is `null` when the id is wrong.
+    // Taking that as "no canvas, so headless" would give a blank page and no error.
+    if ((options.canvas as unknown) === null && !options.headless) {
+      throw new Error(
+        'Engine.create() was given `canvas: null`: the canvas element was not found. Check its id in index.html, ' +
+          'and that this script runs after the element exists. For an engine without graphics, call Engine.createHeadless().',
+      );
+    }
     const headless = options.headless ?? !options.canvas;
     if (headless) return new Engine(options, null);
     const canvas = options.canvas as HTMLCanvasElement;
@@ -264,6 +272,12 @@ export class Engine {
 
   /** Steps frames until `seconds` of game time have passed. */
   stepSeconds(seconds: number, deltaTime = 1 / 60): void {
+    if (seconds > 0 && !(this.time.timeScale > 0 && deltaTime > 0)) {
+      throw new Error(
+        'engine.stepSeconds() counts game time, which does not pass while Time.timeScale is 0 (or with a step of 0). ' +
+          'To run frames while the game is paused, use engine.stepFrames(n).',
+      );
+    }
     const end = this.time.time + seconds;
     // Guard against a zero time scale, which would never reach `end`.
     for (let i = 0; this.time.time < end - 1e-9 && i < 1_000_000; i++) this.step(deltaTime);

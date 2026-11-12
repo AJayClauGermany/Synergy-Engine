@@ -74,8 +74,24 @@ export class GameObject extends EngineObject {
   readonly entity: pc.Entity;
   readonly transform: Transform;
   tag = 'Untagged';
+  private layerIndex = 0;
+
   /** Layer index 0-31, used by `Physics` layer masks. See `LayerMask`. */
-  layer = 0;
+  get layer(): number {
+    return this.layerIndex;
+  }
+
+  set layer(value: number) {
+    // `LayerMask.nameToLayer('Units')` is -1 for a name nobody defined. Stored as it is, the
+    // object would silently match no mask at all.
+    if (!Number.isInteger(value) || value < 0 || value > 31) {
+      throw new RangeError(
+        `"${this.name}".layer must be a whole number from 0 to 31, not ${value}. ` +
+          "LayerMask.nameToLayer() gives -1 for a layer that was never defined: call LayerMask.define(8, 'Units') first.",
+      );
+    }
+    this.layerIndex = value;
+  }
 
   /** @internal */
   readonly _components: Component[] = [];

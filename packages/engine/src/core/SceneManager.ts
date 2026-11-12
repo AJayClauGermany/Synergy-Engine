@@ -304,7 +304,11 @@ export class SceneManager {
   static unloadScene(scene: Scene | string): void {
     const scenes = currentEngine().scenes;
     const target = typeof scene === 'string' ? scenes.loaded.find((s) => s.name === scene) : scene;
-    if (target) scenes.unload(target);
+    if (!target) {
+      const loaded = scenes.loaded.map((s) => `"${s.name}"`).join(', ');
+      throw new Error(`unloadScene: no scene named "${String(scene)}" is loaded. Loaded: ${loaded || 'none'}.`);
+    }
+    scenes.unload(target);
     scenes.pump();
   }
 

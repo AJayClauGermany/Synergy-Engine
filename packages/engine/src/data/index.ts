@@ -11,6 +11,7 @@ export {
   type TilemapLayerData,
   type TilemapData,
   type LayerCell,
+  layerNamed,
   layerTileAt,
   layerCells,
   encodeLayer,

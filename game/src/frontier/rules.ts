@@ -9,13 +9,7 @@
  * State (where each unit is, whose turn, who is winning) does NOT live here. In the
  * netcode model it lives in NetworkVariables, on Match and Soldier.
  */
-import {
-  Catalog,
-  layerTileAt,
-  type TilemapData,
-  type TilemapLayerData,
-  type TilePaletteData,
-} from '@synergy/engine/data';
+import { Catalog, layerNamed, layerTileAt, type TilemapData, type TilePaletteData } from '@synergy/engine/data';
 import { cellKey, findReachable, Hex, type Reachable } from '@synergy/engine/grid';
 import mapJson from './data/map.json';
 import tilesJson from './data/tiles.json';
@@ -61,7 +55,7 @@ export const unitTypes = new Catalog<UnitType>('unit type', [
 ]);
 
 const tileTypes = new Catalog('tile', tiles.tiles);
-const ground = map.layers.find((layer) => layer.name === 'Terrain') as TilemapLayerData;
+const ground = layerNamed(map, 'Terrain');
 
 export const TEAM_NAMES = ['Blue', 'Red'] as const;
 /** Each team's units and where they start. Red's cells mirror Blue's across the map. */

@@ -27,7 +27,7 @@ export class Quaternion implements QuaternionLike {
     readonly w: number = 1,
   ) {}
 
-  static readonly identity = new Quaternion(0, 0, 0, 1);
+  static readonly identity = Object.freeze(new Quaternion(0, 0, 0, 1));
 
   static from(value: QuaternionLike): Quaternion {
     return new Quaternion(value.x, value.y, value.z, value.w);

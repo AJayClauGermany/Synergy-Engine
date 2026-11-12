@@ -136,7 +136,7 @@ describe('Mathf', () => {
     let value = 0;
     let velocity = 0;
     for (let i = 0; i < 300; i++) {
-      [value, velocity] = Mathf.smoothDamp(value, 10, velocity, 0.3, 1 / 60);
+      [value, velocity] = Mathf.smoothDamp(value, 10, velocity, 0.3, Infinity, 1 / 60);
       expect(value).toBeLessThanOrEqual(10);
     }
     close(value, 10, 1e-2);

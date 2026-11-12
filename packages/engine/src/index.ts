@@ -30,7 +30,7 @@ export { Input, KeyCode, Screen } from './core/Input';
 export { Debug } from './core/Debug';
 export type { HierarchyOptions } from './core/hierarchy';
 export { RenderSettings } from './core/RenderSettings';
-export { UnityEvent, Observable } from './core/events';
+export { UnityEvent, Observable, type ReadonlyValue } from './core/events';
 export { Tween, Ease, LoopType, type EaseFunction } from './core/Tween';
 export { Scene, SceneManager, LoadSceneMode, type SceneBuilder, type SceneDefinition } from './core/SceneManager';
 export {
@@ -92,6 +92,7 @@ export {
   type TilemapLayerData,
   type TilemapData,
   type LayerCell,
+  layerNamed,
   layerTileAt,
   layerCells,
   encodeLayer,
