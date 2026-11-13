@@ -11,6 +11,14 @@ function roundHalfToEven(value: number): number {
 }
 
 /**
+ * @internal The engine's own tolerance for "too small to divide by" (normalising a
+ * near-zero vector, a ray parallel to a plane). It used to be `Mathf.epsilon`, which is
+ * now Unity's value. Not part of the public API; game code picks a tolerance that fits
+ * its data, as Unity's docs advise.
+ */
+export const ENGINE_EPSILON = 1e-6;
+
+/**
  * Unity's `Mathf`, with camelCase members. Angles are in degrees unless a name says otherwise.
  */
 export const Mathf = {
@@ -19,7 +27,12 @@ export const Mathf = {
   deg2Rad: Math.PI / 180,
   /** Multiply radians by this to get degrees. Unity: `Mathf.Rad2Deg`. */
   rad2Deg: 180 / Math.PI,
-  epsilon: 1e-6,
+  /**
+   * Same as Unity: the smallest positive float, 1.401298e-45 (Unity's value where
+   * flush-to-zero is off). Comparing against it is the same as comparing exactly; for
+   * "close enough" use `Mathf.approximately` or a tolerance that fits your data.
+   */
+  epsilon: 1.401298e-45,
   infinity: Number.POSITIVE_INFINITY,
   negativeInfinity: Number.NEGATIVE_INFINITY,
 
@@ -36,6 +49,7 @@ export const Mathf = {
   cos: Math.cos,
   tan: Math.tan,
   atan2: Math.atan2,
+  /** Same as Unity: 1 for zero and positive values, -1 for negative. `Math.sign(0)` is 0 instead. */
   sign: (value: number): number => (value >= 0 ? 1 : -1),
 
   floorToInt: (value: number): number => Math.floor(value),
@@ -51,7 +65,7 @@ export const Mathf = {
     return value < 0 ? 0 : value > 1 ? 1 : value;
   },
 
-  /** Linear interpolation with `t` clamped to [0, 1]. */
+  /** Linear interpolation with `t` clamped to [0, 1], as in Unity. `lerpUnclamped` does not clamp. */
   lerp(a: number, b: number, t: number): number {
     return a + (b - a) * Mathf.clamp01(t);
   },
@@ -76,11 +90,17 @@ export const Mathf = {
     return Mathf.lerpUnclamped(from, to, k * k * (3 - 2 * k));
   },
 
-  approximately(a: number, b: number, tolerance = 1e-5): boolean {
-    return Math.abs(a - b) <= tolerance * Math.max(1, Math.abs(a), Math.abs(b));
+  /**
+   * Same as Unity, with Unity's formula: true when `|b - a| < max(1e-6 * max(|a|, |b|), epsilon * 8)`,
+   * a difference of about one part in a million. Near zero that is almost exact equality:
+   * `approximately(0, 1e-9)` is false. For values that should be near zero, compare
+   * against a tolerance of your own: `Math.abs(x) < 1e-4`.
+   */
+  approximately(a: number, b: number): boolean {
+    return Math.abs(b - a) < Math.max(1e-6 * Math.max(Math.abs(a), Math.abs(b)), Mathf.epsilon * 8);
   },
 
-  /** Wraps `t` into [0, length). Like modulo, but never negative. */
+  /** Wraps `t` into [0, length). Like `%`, but never negative (`%` keeps the sign, as C#'s does). Same as Unity. */
   repeat(t: number, length: number): number {
     return Mathf.clamp(t - Math.floor(t / length) * length, 0, length);
   },

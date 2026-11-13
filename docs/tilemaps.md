@@ -110,7 +110,20 @@ engine (on a server, in fast tests): the sample keeps the map layout in
 
 **Per-cell looks.** Override `getTileData(cell, tilemap)` to vary a tile by position or by
 its neighbours (Unity's rule tiles); call `tilemap.refreshTile(cell)` when the answer
-changes. `tilemap.setColor(cell, color)` tints one cell without a new tile.
+changes. `tilemap.setColor(cell, color)` gives one cell its own colour without a new tile:
+it replaces the tile's colour (it is not multiplied with it), as in Unity, and painting the
+cell again brings the tile's colour back. Also as in Unity, a `Tile` has
+`TileFlags.LockColor` by default, which makes `setColor` do nothing (here with a warning).
+Unlock the cell first, or make the tile without the lock:
+
+```ts
+const highlight = new Tile({ name: 'highlight', color: Color.white, flags: TileFlags.None });
+terrain.removeTileFlags(cell, TileFlags.LockColor);   // or: unlock one cell of a locked tile
+terrain.setColor(cell, Color.red);
+```
+
+`getTile(cell, DoorTile)` returns the tile only if it is a `DoorTile` (C#'s `GetTile<T>`);
+`getTile<DoorTile>(cell)` alone is an unchecked cast.
 
 **Artwork.**
 

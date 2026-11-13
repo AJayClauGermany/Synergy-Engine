@@ -334,8 +334,8 @@ another machine's engine may be the current one (wrap what follows in `machine.r
 
 ```ts
 manager.customMessagingManager.registerNamedMessageHandler('chat', (sender, text) => show(sender, text));
-manager.customMessagingManager.sendNamedMessage('chat', 'hello');           // client to host
-manager.customMessagingManager.sendNamedMessageToAll('chat', 'welcome');   // host to everyone
+manager.customMessagingManager.sendNamedMessage('chat', NetworkManager.serverClientId, 'hello'); // client to host: (name, clientId, data), NGO's order
+manager.customMessagingManager.sendNamedMessageToAll('chat', 'welcome');                         // host to everyone
 ```
 
 ## The lobby with Convex

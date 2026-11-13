@@ -41,7 +41,7 @@ export class Random {
     this.current = value >>> 0;
   }
 
-  /** The next number in [0, 1). */
+  /** The next number in [0, 1): 1 itself never comes. Unity has no `next`; see `value`. */
   next(): number {
     // mulberry32: small, fast and well distributed for gameplay purposes.
     this.current = (this.current + 0x6d2b79f5) >>> 0;
@@ -51,17 +51,29 @@ export class Random {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   }
 
-  /** Unity: `Random.value`. Each read advances the sequence. */
+  /**
+   * A number in [0, 1). Unity: `Random.value` is in [0, 1] with BOTH ends included; here
+   * 1 never comes. Each read advances the sequence (Unity's does too).
+   */
   get value(): number {
     return this.next();
   }
 
-  /** A float in [min, max). Unity: `Random.Range(float, float)`. */
+  /**
+   * A float in [min, max). Unity: `Random.Range(float, float)` includes `max`; here `max`
+   * never comes (the difference only shows when you test for `=== max`). Unity also swaps
+   * the bounds when `min > max`; here the result is simply in (max, min].
+   */
   range(min: number, max: number): number {
     return min + (max - min) * this.next();
   }
 
-  /** An integer in [min, max), i.e. `max` is exclusive. Unity: `Random.Range(int, int)`. */
+  /**
+   * A whole number in [min, max): `max` is excluded, the same as Unity's
+   * `Random.Range(int, int)`. So `rangeInt(1, 7)` is a six-sided die. Unity picks the int
+   * or float overload from the argument types; here they are two methods, and `range(1, 7)`
+   * gives fractions.
+   */
   rangeInt(min: number, maxExclusive: number): number {
     return min + Math.floor((maxExclusive - min) * this.next());
   }

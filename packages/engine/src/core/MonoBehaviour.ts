@@ -1,5 +1,5 @@
 import { Behaviour } from './Component';
-import { type Coroutine, type IEnumerator, WaitForSeconds, type Yieldable } from './Coroutine';
+import { Coroutine, type IEnumerator, WaitForSeconds, type Yieldable } from './Coroutine';
 import { Observable, UnityEvent } from './events';
 import { checkMessageNames, type UseCamelCase } from './messageNames';
 import { currentEngine } from './runtime';
@@ -153,7 +153,10 @@ export abstract class MonoBehaviour extends Behaviour {
    *     }
    *   }
    *
-   * It stops by itself when this GameObject is deactivated or destroyed.
+   * Same as Unity: it runs up to its first `yield` straight away, keeps running while
+   * this behaviour is disabled (`enabled = false`), and stops when this GameObject is
+   * deactivated or destroyed. Starting one on an inactive GameObject throws, as Unity
+   * refuses it with an error. Unity's `StartCoroutine("Name")` by name is not supported.
    */
   startCoroutine(routine: Iterator<Yieldable, unknown, unknown>): Coroutine {
     if (this._destroyed) {
@@ -165,29 +168,76 @@ export abstract class MonoBehaviour extends Behaviour {
     return currentEngine().coroutines.start(this, routine);
   }
 
-  stopCoroutine(coroutine: Coroutine): void {
-    currentEngine().coroutines.stop(coroutine);
+  /**
+   * Stops a coroutine this behaviour started. Pass the `Coroutine` handle `startCoroutine`
+   * returned, or the very generator object you passed to it (Unity's
+   * `StopCoroutine(IEnumerator)`: keep it in a field, since calling `this.routine()` again
+   * makes a new one). Unity's `StopCoroutine("Name")` by name is not supported.
+   *
+   * Unity ignores a handle started on another behaviour; here it is stopped, with a
+   * warning, because the same code would do nothing in Unity: call `stopCoroutine` on the
+   * behaviour that started it.
+   */
+  stopCoroutine(routine: Coroutine | Iterator<Yieldable, unknown, unknown>): void {
+    const coroutines = currentEngine().coroutines;
+    if (routine instanceof Coroutine) {
+      if (routine._owner !== this && !routine._done) {
+        console.warn(
+          `stopCoroutine on "${this.name}" (${typeNameOf(this)}) was given a coroutine that ${typeNameOf(routine._owner)} on ` +
+            `"${routine._owner.name}" started. Unity would leave it running; it was stopped here. ` +
+            'Call stopCoroutine on the behaviour that started it.',
+        );
+      }
+      coroutines.stop(routine);
+      return;
+    }
+    if (routine === null || typeof routine !== 'object') {
+      const byName = typeof routine === 'string' ? ` Stopping by name ("${routine}") is not supported.` : '';
+      throw new TypeError(
+        `stopCoroutine was given ${String(routine)}.${byName} Pass the Coroutine that startCoroutine returned, ` +
+          'or the generator object you passed to it.',
+      );
+    }
+    const running = coroutines.find(this, routine);
+    if (running) coroutines.stop(running);
   }
 
+  /**
+   * Stops every coroutine this behaviour started. Same as Unity: pending `invoke` and
+   * `invokeRepeating` calls are NOT cancelled (use `cancelInvoke` for those), and
+   * coroutines started by other behaviours on the same GameObject keep running.
+   */
   stopAllCoroutines(): void {
     currentEngine().coroutines.stopAll(this);
-    this._invokes = [];
   }
 
-  /** Calls `method` (bound to this behaviour) after `time` seconds. Pass the method itself, not its name. */
+  /**
+   * Calls `method` on this behaviour after `time` seconds of scaled game time (`Time.timeScale`
+   * applies; 0 or less means the next frame). Unity takes the method's name as a string;
+   * pass the method itself: `this.invoke(this.launch, 2)`. It is called with `this` bound,
+   * so it needs no `.bind`.
+   *
+   * Same as Unity: an invoke is not a coroutine. It keeps going when this behaviour is
+   * disabled or its GameObject deactivated, it may be scheduled while the GameObject is
+   * inactive, and `stopAllCoroutines` leaves it alone. `cancelInvoke` and destroying the
+   * behaviour cancel it.
+   */
   invoke(method: () => void, time: number): void {
-    const bound = method;
     const self = this;
     function* run(): IEnumerator {
       yield new WaitForSeconds(time);
       self._invokes = self._invokes.filter((entry) => entry.coroutine !== coroutine);
-      bound.call(self);
+      method.call(self);
     }
-    const coroutine: Coroutine = this.startCoroutine(run());
+    const coroutine = this._startInvoke('invoke', method, run());
     if (!coroutine.isDone) this._invokes.push({ method, coroutine });
   }
 
-  /** Calls `method` after `time` seconds, then every `repeatRate` seconds. */
+  /**
+   * Calls `method` after `time` seconds, then every `repeatRate` seconds, until
+   * `cancelInvoke` or destruction. Like `invoke`, it ignores `enabled`, deactivation and
+   * `stopAllCoroutines`, as in Unity. Pass the method itself, not its name.
+   */
   invokeRepeating(method: () => void, time: number, repeatRate: number): void {
     const self = this;
     function* run(): IEnumerator {
@@ -197,10 +247,27 @@ export abstract class MonoBehaviour extends Behaviour {
         yield new WaitForSeconds(repeatRate);
       }
     }
-    this._invokes.push({ method, coroutine: this.startCoroutine(run()) });
+    this._invokes.push({ method, coroutine: this._startInvoke('invokeRepeating', method, run()) });
   }
 
-  /** Cancels pending `invoke`/`invokeRepeating` calls, for one method or for all. */
+  private _startInvoke(caller: string, method: () => void, run: IEnumerator): Coroutine {
+    if (typeof method !== 'function') {
+      throw new TypeError(
+        `${caller} was given ${typeof method === 'string' ? `the name "${method}"` : String(method)}. ` +
+          `Pass the method itself, not its name: this.${caller}(this.launch, 2).`,
+      );
+    }
+    if (this._destroyed) {
+      throw new Error(`${caller} could not be scheduled because "${this.name}" has been destroyed.`);
+    }
+    return currentEngine().coroutines.start(this, run, true);
+  }
+
+  /**
+   * Cancels pending `invoke`/`invokeRepeating` calls: all of them, or those of one method.
+   * Unity names the method with a string; pass the method itself (`this.cancelInvoke(this.launch)`).
+   * It must be the same function that was scheduled: an arrow made on the spot matches nothing.
+   */
   cancelInvoke(method?: () => void): void {
     const coroutines = currentEngine().coroutines;
     this._invokes = this._invokes.filter((entry) => {
@@ -210,6 +277,10 @@ export abstract class MonoBehaviour extends Behaviour {
     });
   }
 
+  /**
+   * Whether an `invoke`/`invokeRepeating` is pending: any, or one of `method`. Same as
+   * Unity's `IsInvoking`, with the method itself in place of its name.
+   */
   isInvoking(method?: () => void): boolean {
     return this._invokes.some((entry) => !entry.coroutine.isDone && (!method || entry.method === method));
   }
@@ -271,6 +342,7 @@ export abstract class MonoBehaviour extends Behaviour {
 
   override _destroy(): void {
     this.stopAllCoroutines();
+    this.cancelInvoke();
     if (this._awoken) this._send('onDestroy');
   }
 

@@ -66,6 +66,7 @@ export class Spinner extends MonoBehaviour {
 | `a == b` (approximate) | `a.equals(b)` |
 | `q1 * q2` | `q1.mul(q2)` |
 | `q * v` | `q.rotate(v)` |
+| `color * 0.5f` / `colorA * colorB` | `color.mul(0.5)` / `colorA.mul(colorB)`: alpha is scaled too, as in Unity (`color.mul(0.5).withAlpha(color.a)` keeps it) |
 | `transform.position += Vector3.up` | `transform.position = transform.position.add(Vector3.up)` |
 | `new Vector3(p.x, 0, p.z)` | `p.withY(0)` |
 
@@ -110,11 +111,11 @@ structs, only a test can show.
 | `new GameObject("Name")` | `new GameObject('Name')` |
 | `new GameObject("Name", typeof(A), typeof(B))` | `new GameObject('Name', A, B)` |
 | `go.AddComponent<T>()` | `go.addComponent(T)` |
-| `GetComponent<T>()`, `GetComponents`, `GetComponentInChildren`, `GetComponentInParent` | same names in camelCase, class as argument |
+| `GetComponent<T>()`, `GetComponents`, `GetComponentInChildren`, `GetComponentInParent`, `GetComponentsInParent` | same names in camelCase, class as argument, and `includeInactive` where Unity has it. As in Unity, the `...InParent` ones skip inactive parents unless `includeInactive` is true, and always search the object itself |
 | `go.SetActive(false)`, `activeSelf`, `activeInHierarchy` | `go.setActive(false)`, same properties |
 | `go.tag`, `CompareTag`, `go.layer` | same |
 | `GameObject.Find`, `FindWithTag`, `FindGameObjectsWithTag` | `GameObject.find`, `findWithTag`, `findGameObjectsWithTag` |
-| `FindFirstObjectByType<T>()`, `FindObjectsByType<T>()` | `findObjectOfType(T)`, `findObjectsOfType(T)` |
+| `FindAnyObjectByType<T>()`, `FindFirstObjectByType<T>()`, `FindObjectsByType<T>(FindObjectsInactive.Include)` | `findAnyObjectByType(T)`, `findFirstObjectByType(T)`, `findObjectsByType(T, FindObjectsInactive.Include)`. Results come in scene order; a `FindObjectsSortMode` is accepted and ignored (Unity 6 deprecates it). The old `findObjectOfType` / `findObjectsOfType` still work and are marked deprecated, as in Unity 6 |
 | `GameObject.CreatePrimitive(PrimitiveType.Cube)` | `GameObject.createPrimitive(PrimitiveType.Cube)` (Unity's sizes) |
 | `Instantiate(obj, pos, rot, parent)` | `instantiate(obj, pos, rot, parent)` |
 | `Destroy(obj, delay)`, `DestroyImmediate` | `destroy(obj, delay)`, `destroyImmediate` |
@@ -153,7 +154,12 @@ start() {
 
 `yield return x` becomes `yield x`. Also available: `WaitForSecondsRealtime`,
 `WaitForEndOfFrame`, `WaitForFixedUpdate`, `WaitWhile`, `CustomYieldInstruction`,
-`stopCoroutine`, `stopAllCoroutines`, `invoke`, `invokeRepeating`, `cancelInvoke`.
+`stopCoroutine` (the `Coroutine`, or the generator you started), `stopAllCoroutines`,
+`invoke`, `invokeRepeating`, `cancelInvoke`, `isInvoking`.
+
+As in Unity, an `invoke` is not a coroutine: `stopAllCoroutines` does not cancel it
+(`cancelInvoke` does), and it keeps going while the behaviour is disabled or its
+GameObject inactive. Coroutines end when the GameObject is deactivated.
 
 A coroutine may stop itself (deactivate or destroy its own object, call
 `stopAllCoroutines`); it ends at its next `yield`, and its `finally` blocks run.
@@ -186,13 +192,13 @@ Iterate children with `for (const child of transform)`.
 | `ScreenCapture.CaptureScreenshot("a.png")` | `await ScreenCapture.captureScreenshot('a.png')` |
 | The Hierarchy, Inspector and Console windows | The editor in a development build: press <kbd>`</kbd> ([devtools.md](devtools.md)). As text: `Debug.hierarchy()`, `bun run logs` |
 | `EditorApplication.isPaused`, `Selection.activeGameObject`, `EditorPrefs` | the same names in `@synergy/devtools`, development builds only |
-| `Mathf.*` | `Mathf.*` in camelCase, for what Unity adds to the language: `clamp`, `clamp01`, `lerp`, `inverseLerp`, `moveTowards`, `smoothStep`, `repeat`, `pingPong`, `deltaAngle`, `lerpAngle`, `approximately`, `floorToInt`, `roundToInt` and the like. `Mathf.smoothDamp(current, target, velocity, smoothTime, maxSpeed, deltaTime)` returns `[value, velocity]` in place of `ref`, and needs its last two arguments (`Infinity`, `Time.deltaTime`). `round` and `roundToInt` send halfway values to the even number, as Unity does. Not there: `acos`, `asin`, `atan`, `exp`, `log`, `log10` (use `Math.acos` and so on, in radians) and `perlinNoise` |
+| `Mathf.*` | `Mathf.*` in camelCase, for what Unity adds to the language: `clamp`, `clamp01`, `lerp`, `inverseLerp`, `moveTowards`, `smoothStep`, `repeat`, `pingPong`, `deltaAngle`, `lerpAngle`, `approximately`, `floorToInt`, `roundToInt` and the like. `Mathf.smoothDamp(current, target, velocity, smoothTime, maxSpeed, deltaTime)` returns `[value, velocity]` in place of `ref`, and needs its last two arguments (`Infinity`, `Time.deltaTime`). `round` and `roundToInt` send halfway values to the even number, as Unity does. `Mathf.epsilon` is Unity's 1.401298e-45 and `approximately` is Unity's formula (relative, about one part in a million), so near zero use a tolerance of your own. Not there: `acos`, `asin`, `atan`, `exp`, `log`, `log10` (use `Math.acos` and so on, in radians) and `perlinNoise` |
 | `SceneManager.LoadScene("Main")` | `await SceneManager.loadScene('Main')` after `SceneManager.register('Main', build)`. For scenes that need assets, register `{ preload, build }` |
-| `Random.Range`, `Random.value` | `new Random(seed)` (the seed is required and a whole number): `Random.Range(int, int)` is `rangeInt(min, maxExclusive)`, `Random.Range(float, float)` is `range(min, max)`; also `value`, `pick`, `shuffle`, `state`. `list[random.range(0, list.length)]` is `undefined`: an index needs `rangeInt`, or `random.pick(list)` |
+| `Random.Range`, `Random.value` | `new Random(seed)` (the seed is required and a whole number): `Random.Range(int, int)` is `rangeInt(min, maxExclusive)`, `Random.Range(float, float)` is `range(min, max)` (and `value`), which never returns `max` where Unity's can; also `value`, `pick`, `shuffle`, `state`. `list[random.range(0, list.length)]` is `undefined`: an index needs `rangeInt`, or `random.pick(list)` |
 | `RenderSettings.ambientLight` | same |
 | `Camera.main`, `ScreenPointToRay`, `WorldToScreenPoint`, `ScreenToWorldPoint` | same in camelCase |
 | `LayerMask.GetMask("Units")`, `NameToLayer` | `LayerMask.getMask('Units')`, `nameToLayer`; name layers with `LayerMask.define(8, 'Units')` |
-| `UnityEvent`, `event Action` | `UnityEvent<[args]>` with `addListener`, `invoke` |
+| `UnityEvent`, `event Action` | `UnityEvent<[args]>` with `addListener`, `removeListener` (removes every registration of that function, as in Unity), `invoke` |
 
 ### Rendering
 
@@ -208,8 +214,8 @@ Iterate children with `for (const child of transform)`.
 
 | Unity | Synergy |
 |-------|---------|
-| `Sprite`, `Sprite.Create(texture, rect, pivot, pixelsPerUnit)` | `new Sprite(texture, rect?, { pivot, pixelsPerUnit })`, `Sprite.create(...)`, `Sprite.slice(texture, columns, rows)`. `rect` is measured from the image's **top**-left |
-| `SpriteRenderer` (`sprite`, `color`, `flipX`, `flipY`, `sortingOrder`, `bounds`) | same. Faces +Z (toward an unrotated camera); unlit, alpha-blended, depth-tested against 3D meshes |
+| `Sprite`, `Sprite.Create(texture, rect, pivot, pixelsPerUnit)` | `new Sprite(texture, rect?, { pivot, pixelsPerUnit })`, `Sprite.create(...)`, `Sprite.slice(texture, columns, rows)`. `rect` is measured from the image's **top**-left. As in Unity, the `pivot` you pass is a fraction of the rect, and `sprite.pivot` reads it back in pixels |
+| `SpriteRenderer` (`sprite`, `color`, `flipX`, `flipY`, `sortingOrder`, `bounds`) | same; `flipX`/`flipY` mirror about the pivot, as in Unity. Faces +Z (toward an unrotated camera); unlit, alpha-blended, depth-tested against 3D meshes |
 | Sorting layers | Not available; use `sortingOrder` (higher draws on top, before distance is considered) |
 
 Sprites, meshes and loaded models share one scene and one depth buffer, so a cube in
@@ -222,9 +228,11 @@ with canvas UI.
 |-------|---------|
 | `Grid` (`cellSize`, `cellGap`, `cellLayout`, `cellSwizzle`) | same. Layouts: `Rectangle`, `Hexagon` (Unity's offset coordinates) |
 | `CellToWorld`, `WorldToCell`, `GetCellCenterWorld` | same in camelCase |
-| `Tilemap.SetTile`, `GetTile<T>`, `HasTile`, `SetTiles`, `FloodFill`, `SwapTile`, `ClearAllTiles`, `cellBounds`, `SetColor` | same in camelCase |
+| `Tilemap.SetTile`, `HasTile`, `SetTiles`, `FloodFill`, `SwapTile`, `ClearAllTiles`, `cellBounds` | same in camelCase |
+| `tilemap.GetTile<DoorTile>(cell)` | `tilemap.getTile(cell, DoorTile)`: `null` unless it is one, like Unity. `getTile<DoorTile>(cell)` compiles too, but only casts |
+| `SetColor`, `GetColor`, `SetTileFlags`, `AddTileFlags`, `RemoveTileFlags`, `TileFlags` | same in camelCase, with Unity's rules: `setColor` replaces the tile's colour, `setTile` resets it, and a `Tile` has `TileFlags.LockColor` by default, so `setColor` does nothing (here it warns once) until `removeTileFlags(cell, TileFlags.LockColor)` |
 | `Tilemap.BoxFill(position, tile, startX, startY, endX, endY)` | `tilemap.boxFill(tile, min, max)`: two corner cells, both inclusive |
-| `Tile`, `TileBase.GetTileData`, `Tile.gameObject` | `Tile`, `TileBase.getTileData`, `tile.gameObject` (a `Prefab` or GameObject) |
+| `Tile`, `TileBase.GetTileData`, `Tile.gameObject`, `Tile.flags` | `Tile`, `TileBase.getTileData`, `tile.gameObject` (a `Prefab` or GameObject), `tile.flags` |
 | Fields on a custom `Tile` class (climate, elevation) | `tile.data`, typed: `Tile<Terrain>` |
 | Tile assets and a painted Tilemap, made in the editor | `TilePalette.load(tiles)` and `createTilemaps(map, palette)` from JSON files; `tools/unity` exports them. See [content.md](content.md) |
 | `TilemapRenderer` Chunk mode | always on: one mesh per 16 x 16 block of cells |

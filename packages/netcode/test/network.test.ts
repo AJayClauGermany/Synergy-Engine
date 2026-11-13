@@ -22,8 +22,8 @@ describe('custom messages', () => {
       );
     }
 
-    alice.manager.customMessagingManager.sendNamedMessage('chat', { text: 'hi' });
-    host.manager.customMessagingManager.sendNamedMessage('news', 'just bob', 2);
+    alice.manager.customMessagingManager.sendNamedMessage('chat', 0, { text: 'hi' });
+    host.manager.customMessagingManager.sendNamedMessage('news', 2, 'just bob');
     host.manager.customMessagingManager.sendNamedMessageToAll('news', 'everyone');
     net.pump();
     expect(heard.sort()).toEqual([
@@ -33,10 +33,34 @@ describe('custom messages', () => {
       'host got {"text":"hi"} from 1',
     ]);
 
-    expect(() => alice.manager.customMessagingManager.sendNamedMessage('chat', 1, 2)).toThrow(
+    expect(() => alice.manager.customMessagingManager.sendNamedMessage('chat', 2, 1)).toThrow(
       /only send messages to the server/,
     );
-    expect(() => host.manager.customMessagingManager.sendNamedMessage('news', 1, 9)).toThrow(/not connected/);
+    expect(() => host.manager.customMessagingManager.sendNamedMessage('news', 9, 1)).toThrow(/not connected/);
+  });
+
+  test("the arguments in the old (name, data, clientId) order are refused with NGO's order", () => {
+    net = new TestNetwork();
+    const host = net.host();
+    const alice = net.client('alice');
+    net.pump();
+    const messages = alice.manager.customMessagingManager;
+    const order = /\(name, clientId, data\).*sendNamedMessage\('chat', NetworkManager\.serverClientId, data\)/;
+    // @ts-expect-error the data where the client id goes: the mistake this test is about
+    expect(() => messages.sendNamedMessage('chat', { text: 'hi' })).toThrow(order);
+    // @ts-expect-error the data where the client id goes, and no data: the mistake this test is about
+    expect(() => messages.sendNamedMessage('chat', 'hello')).toThrow(order);
+    // @ts-expect-error no data at all: NGO's writer is required
+    expect(() => messages.sendNamedMessage('chat', 0)).toThrow(/no data/);
+    // A number where the client id goes is a client id; one the client may not send to is refused.
+    expect(() => messages.sendNamedMessage('chat', 1, 5)).toThrow(order);
+    expect(() => host.manager.customMessagingManager.sendNamedMessage('chat', 7, 'hi')).toThrow(order);
+    // A list of client ids, as NGO's IReadOnlyList<ulong> overload takes.
+    const heard: unknown[] = [];
+    messages.registerNamedMessageHandler('news', (_sender, data) => heard.push(data));
+    host.manager.customMessagingManager.sendNamedMessage('news', [1], 'listed');
+    net.pump();
+    expect(heard).toEqual(['listed']);
   });
 
   test('a handler can be removed', () => {
@@ -48,10 +72,10 @@ describe('custom messages', () => {
     const off = host.manager.customMessagingManager.registerNamedMessageHandler('chat', (_sender, data) =>
       heard.push(data),
     );
-    alice.manager.customMessagingManager.sendNamedMessage('chat', 1);
+    alice.manager.customMessagingManager.sendNamedMessage('chat', 0, 1);
     net.pump();
     off();
-    alice.manager.customMessagingManager.sendNamedMessage('chat', 2);
+    alice.manager.customMessagingManager.sendNamedMessage('chat', 0, 2);
     net.pump();
     expect(heard).toEqual([1]);
   });

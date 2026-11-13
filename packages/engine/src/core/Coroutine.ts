@@ -90,14 +90,20 @@ export class Coroutine {
   /** @internal What the last wait produced (a promise's value); handed to the generator when it resumes. */
   _resumeWith: unknown = undefined;
 
-  /** @internal */
+  /**
+   * @internal `_routine` is the generator `startCoroutine` was given, for
+   * `stopCoroutine(routine)`. `_invoke` marks an `invoke`, which deactivation and
+   * `stopAllCoroutines` leave alone, as in Unity.
+   */
   constructor(
     /** @internal */ readonly _owner: MonoBehaviour,
-    routine: Iterator<Yieldable, unknown, unknown>,
+    /** @internal */ readonly _routine: Iterator<Yieldable, unknown, unknown>,
+    /** @internal */ readonly _invoke = false,
   ) {
-    this._stack = [routine];
+    this._stack = [_routine];
   }
 
+  /** True once the coroutine has finished or been stopped. An addition: Unity's `Coroutine` has no such property. */
   get isDone(): boolean {
     return this._done;
   }
@@ -129,14 +135,16 @@ export class CoroutineScheduler {
     private readonly reportError: (error: unknown, context: string) => void,
   ) {}
 
-  start(owner: MonoBehaviour, routine: Iterator<Yieldable, unknown, unknown>): Coroutine {
+  start(owner: MonoBehaviour, routine: Iterator<Yieldable, unknown, unknown>, invoke = false): Coroutine {
     if (!isIterator(routine)) {
+      const named =
+        typeof routine === 'string' ? ` Unity's startCoroutine("${routine}") by name is not supported.` : '';
       throw new TypeError(
-        'startCoroutine expects a generator object. Call the generator function: ' +
+        `startCoroutine expects a generator object.${named} Call the generator function: ` +
           'this.startCoroutine(this.myRoutine()).',
       );
     }
-    const coroutine = new Coroutine(owner, routine);
+    const coroutine = new Coroutine(owner, routine, invoke);
     this.active.push(coroutine);
     // Like Unity, run up to the first `yield` straight away.
     this.step(coroutine);
@@ -164,10 +172,18 @@ export class CoroutineScheduler {
     }
   }
 
+  /** Stops the owner's coroutines, not its invokes (Unity's `StopAllCoroutines` leaves those running). */
   stopAll(owner: MonoBehaviour): void {
     for (const coroutine of this.active) {
-      if (coroutine._owner === owner) this.stop(coroutine);
+      if (coroutine._owner === owner && !coroutine._invoke) this.stop(coroutine);
     }
+  }
+
+  /** The running coroutine `owner` started with this very generator, if any. */
+  find(owner: MonoBehaviour, routine: Iterator<Yieldable, unknown, unknown>): Coroutine | undefined {
+    return this.active.find(
+      (coroutine) => coroutine._owner === owner && coroutine._routine === routine && !coroutine._done,
+    );
   }
 
   tick(phase: Phase): void {

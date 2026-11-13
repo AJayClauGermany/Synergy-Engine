@@ -241,11 +241,12 @@ export class TilemapRenderer extends MonoBehaviour {
         batches.set(texture, batch);
       }
 
-      const cell = entry.color;
-      const r = Math.round(data.color.r * tint.r * (cell?.r ?? 1) * 255);
-      const g = Math.round(data.color.g * tint.g * (cell?.g ?? 1) * 255);
-      const b = Math.round(data.color.b * tint.b * (cell?.b ?? 1) * 255);
-      const alpha = data.color.a * tint.a * (cell?.a ?? 1);
+      // As in Unity: the cell's colour (setColor's, or the tile's) times the layer's.
+      const cell = tilemap._cellColor(entry, data);
+      const r = Math.round(cell.r * tint.r * 255);
+      const g = Math.round(cell.g * tint.g * 255);
+      const b = Math.round(cell.b * tint.b * 255);
+      const alpha = cell.a * tint.a;
       const a = Math.round(alpha * 255);
       if (alpha < 0.999) batch.translucent = true;
 

@@ -201,11 +201,20 @@ export class GameObject extends EngineObject {
     return this._components.filter((component): component is T => component instanceof type);
   }
 
-  /** Searches this object, then its descendants (depth first). Skips inactive objects by default. */
+  /**
+   * Searches this object, then its descendants (depth first), and returns the first match.
+   * Same as Unity: inactive children are skipped unless `includeInactive` is true, and this
+   * object itself is always searched, active or not.
+   */
   getComponentInChildren<T extends Component>(type: ComponentClass<T>, includeInactive = false): T | null {
     return this.getComponentsInChildren(type, includeInactive, 1)[0] ?? null;
   }
 
+  /**
+   * Every match on this object and its descendants, depth first. Inactive children are
+   * skipped unless `includeInactive` is true; this object itself is always searched, as in
+   * Unity. `limit` is an addition (Unity has none): stop after that many.
+   */
   getComponentsInChildren<T extends Component>(
     type: ComponentClass<T>,
     includeInactive = false,
@@ -215,7 +224,7 @@ export class GameObject extends EngineObject {
     const visit = (node: pc.GraphNode, active: boolean): void => {
       if (found.length >= limit) return;
       const nodeActive = active && localEnabled(node);
-      if (!nodeActive && !includeInactive) return;
+      if (!nodeActive && !includeInactive && node !== this.entity) return;
       if (node instanceof pc.Entity) {
         for (const component of gameObjectOf(node)._components) {
           if (component instanceof type && found.length < limit) found.push(component);
@@ -227,36 +236,55 @@ export class GameObject extends EngineObject {
     return found;
   }
 
-  /** Searches this object, then its ancestors. */
-  getComponentInParent<T extends Component>(type: ComponentClass<T>): T | null {
-    for (let t: Transform | null = this.transform; t; t = t.parent) {
-      const component = t.gameObject.getComponent(type);
+  /**
+   * Searches this object, then each parent up to the root, and returns the first match.
+   * Same as Unity (2021 and later): parents that are inactive in the hierarchy are skipped
+   * unless `includeInactive` is true, and this object itself is always searched, active
+   * or not. (Unity's Component page says the object itself is skipped when inactive; its
+   * GameObject page, and this engine, say it is always searched.)
+   */
+  getComponentInParent<T extends Component>(type: ComponentClass<T>, includeInactive = false): T | null {
+    for (const gameObject of this.selfAndParents(includeInactive)) {
+      const component = gameObject.getComponent(type);
       if (component) return component;
     }
     return null;
   }
 
-  getComponentsInParent<T extends Component>(type: ComponentClass<T>): T[] {
+  /**
+   * Every match on this object and its parents, nearest first. Inactive parents are
+   * skipped unless `includeInactive` is true; this object itself is always searched, as
+   * in `getComponentInParent`.
+   */
+  getComponentsInParent<T extends Component>(type: ComponentClass<T>, includeInactive = false): T[] {
     const found: T[] = [];
-    for (let t: Transform | null = this.transform; t; t = t.parent) {
-      found.push(...t.gameObject.getComponents(type));
-    }
+    for (const gameObject of this.selfAndParents(includeInactive)) found.push(...gameObject.getComponents(type));
     return found;
+  }
+
+  private *selfAndParents(includeInactive: boolean): Generator<GameObject> {
+    yield this;
+    for (let t = this.transform.parent; t; t = t.parent) {
+      if (includeInactive || t.gameObject.activeInHierarchy) yield t.gameObject;
+    }
   }
 
   // ---- Lookup -----------------------------------------------------------------------
 
   /**
-   * Finds an active GameObject by name in the loaded scenes. A name containing `/` is
-   * treated as a path, e.g. `GameObject.find('Army/Footman')`. This walks the scene, so
-   * cache the result instead of calling it every frame.
+   * Finds an active GameObject by name in the loaded scenes, or `null`. Same as Unity: a
+   * name containing `/` is a path (`'Army/Footman'` is a Footman under an Army anywhere;
+   * `'/Army/Footman'` needs Army at the root), and inactive objects are never found. This
+   * walks the scene, so cache the result instead of calling it every frame.
    */
   static find(name: string): GameObject | null {
+    const fromRoot = name.startsWith('/');
     const [first, ...rest] = name.split('/').filter(Boolean);
     if (!first) return null;
     let result: GameObject | null = null;
     walkScenes((node) => {
       if (node.name !== first || !(node instanceof pc.Entity)) return true;
+      if (fromRoot && !(node.parent && isSceneRoot(node.parent))) return true;
       const candidate = gameObjectOf(node);
       if (!candidate.activeInHierarchy) return true;
       const target = rest.length ? candidate.transform.find(rest.join('/'))?.gameObject : candidate;
@@ -267,7 +295,7 @@ export class GameObject extends EngineObject {
     return result;
   }
 
-  /** The first active GameObject with `tag`, or `null`. */
+  /** The first active GameObject with `tag`, or `null`. Unity's throws for a tag never defined; any tag is accepted here. */
   static findWithTag(tag: string): GameObject | null {
     return GameObject.findGameObjectsWithTag(tag, 1)[0] ?? null;
   }

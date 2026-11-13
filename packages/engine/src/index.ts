@@ -42,6 +42,11 @@ export {
   destroy,
   destroyImmediate,
   dontDestroyOnLoad,
+  findAnyObjectByType,
+  findFirstObjectByType,
+  findObjectsByType,
+  FindObjectsInactive,
+  FindObjectsSortMode,
   findObjectOfType,
   findObjectsOfType,
 } from './core/Object';
@@ -76,7 +81,7 @@ export {
   type PathResult,
 } from './grid';
 export { Grid, type GridHit } from './tilemap/Grid';
-export { Tilemap, TileBase, Tile, type TileData } from './tilemap/Tilemap';
+export { Tilemap, TileBase, Tile, TileFlags, type TileData } from './tilemap/Tilemap';
 export { TilemapRenderer } from './tilemap/TilemapRenderer';
 export {
   TilePalette,

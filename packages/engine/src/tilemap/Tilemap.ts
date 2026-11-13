@@ -13,6 +13,7 @@ import {
   type GridShape,
   localToCell,
 } from '../grid/layout';
+import { Debug } from '../core/Debug';
 import { Color } from '../math/Color';
 import type { Vector3 } from '../math/Vector3';
 import { BoundsInt, type CellLike, cellKey, Vector3Int } from '../math/Vector3Int';
@@ -21,14 +22,46 @@ import { Grid } from './Grid';
 
 const DEFAULT_SHAPE: Readonly<GridShape> = Object.freeze(defaultGridShape());
 
+/**
+ * Unity's `TileFlags`, with Unity's values: what a tile lets the tilemap change about it
+ * cell by cell. Combine with `|`: `TileFlags.LockColor | TileFlags.LockTransform`.
+ */
+export enum TileFlags {
+  None = 0,
+  /**
+   * The cell always shows the tile's own colour: `tilemap.setColor` is ignored (with a
+   * warning here; silently in Unity). `Tile` has this by default, as in Unity. Clear it
+   * per cell with `tilemap.removeTileFlags(cell, TileFlags.LockColor)`, or for every cell of
+   * a kind with `tile.flags = TileFlags.None` before painting it.
+   */
+  LockColor = 1,
+  /** Unity: locks the cell's transform matrix. Accepted for Unity's sake; this engine has no per-cell transform yet. */
+  LockTransform = 2,
+  /** `LockColor | LockTransform`. */
+  LockAll = 3,
+  /** Unity: spawn the tile's GameObject in Play mode only. There is no edit mode here, so it changes nothing. */
+  InstantiateGameObjectRuntimeOnly = 4,
+  /** Unity: keep the spawned GameObject when the tile is replaced or erased. Not implemented: the object is removed. */
+  KeepGameObjectRuntimeOnly = 8,
+}
+
 /** What a tile looks like in one particular cell. Unity: `TileData`. */
 export interface TileData {
   /** Artwork. `null` draws the cell in a flat colour. */
   sprite: Sprite | null;
-  /** Tint, multiplied with the sprite. An alpha below 1 makes the tile see-through. */
+  /**
+   * The cell's colour when the tile is painted, multiplied with the sprite. An alpha
+   * below 1 makes the tile see-through. Same as Unity: `setColor` replaces it for one
+   * cell, unless `flags` has `TileFlags.LockColor`.
+   */
   color: Color;
   /** Something to spawn on the cell (a tree, a building). Removed with the tile. */
   gameObject: Prefab | GameObject | null;
+  /**
+   * What the tilemap may change about this cell. Leaving it out means `TileFlags.None`,
+   * as a fresh Unity `TileData` has; `Tile` fills in its own `flags` (LockColor by default).
+   */
+  flags?: TileFlags;
 }
 
 /**
@@ -58,8 +91,15 @@ export abstract class TileBase {
  */
 export class Tile<Data = unknown> extends TileBase {
   sprite: Sprite | null = null;
+  /** The colour of every cell painted with this tile (Unity: `Tile.color`). */
   color: Color = Color.white;
   gameObject: Prefab | GameObject | null = null;
+  /**
+   * Same as Unity: `TileFlags.LockColor` by default, so `tilemap.setColor` on a cell of
+   * this tile does nothing until the lock is removed. Set `TileFlags.None` here (or pass
+   * `flags` to the constructor) for a tile meant to be tinted cell by cell.
+   */
+  flags: TileFlags = TileFlags.LockColor;
   /** Whatever the game attaches to this kind of tile. */
   data: Data;
 
@@ -69,6 +109,7 @@ export class Tile<Data = unknown> extends TileBase {
       sprite?: Sprite | null;
       color?: Color;
       gameObject?: Prefab | GameObject | null;
+      flags?: TileFlags;
       data?: Data;
     } = {},
   ) {
@@ -77,12 +118,13 @@ export class Tile<Data = unknown> extends TileBase {
     if (init.sprite !== undefined) this.sprite = init.sprite;
     if (init.color !== undefined) this.color = init.color;
     if (init.gameObject !== undefined) this.gameObject = init.gameObject;
+    if (init.flags !== undefined) this.flags = init.flags;
     this.data = init.data as Data;
   }
 
   /** Override to vary the look per cell; call `super.getTileData(cell, tilemap)` for the defaults. */
   getTileData(_cell: Vector3Int, _tilemap: Tilemap): TileData {
-    return { sprite: this.sprite, color: this.color, gameObject: this.gameObject };
+    return { sprite: this.sprite, color: this.color, gameObject: this.gameObject, flags: this.flags };
   }
 }
 
@@ -101,8 +143,10 @@ export function chunkKeyOf(cell: CellLike): string {
 export interface TilemapEntry {
   cell: Vector3Int;
   tile: TileBase;
-  /** Per-cell tint set with `setColor`. */
+  /** The colour `setColor` gave this cell; `null` until then (the tile's own colour shows). */
   color: Color | null;
+  /** The cell's flags: the tile's when painted, then changed with `setTileFlags` and friends. */
+  flags: TileFlags;
   /** The object spawned for this cell, if its tile asked for one. */
   instance: GameObject | null;
 }
@@ -134,6 +178,7 @@ export class Tilemap extends Behaviour {
   /** @internal Blocks changed since a renderer last asked. `null` means all of them. */
   private dirtyChunks: Set<string> | null = null;
   private tint = Color.white;
+  private warnedLockedColor = false;
 
   /**
    * @internal Hands over the blocks that changed since the last call (`null` for all of
@@ -194,7 +239,10 @@ export class Tilemap extends Behaviour {
     return grid ? `${grid.getInstanceId()}.${grid._version}` : 'none';
   }
 
-  /** Tint applied to every tile in this layer. Use the alpha to fade a whole layer. */
+  /**
+   * Tint multiplied into every tile of this layer. Use the alpha to fade a whole layer.
+   * Same as Unity's `Tilemap.color`.
+   */
   get color(): Color {
     return this.tint;
   }
@@ -206,7 +254,11 @@ export class Tilemap extends Behaviour {
 
   // ---- Tiles --------------------------------------------------------------------------
 
-  /** Paints `tile` into a cell, or clears the cell with `null`. */
+  /**
+   * Paints `tile` into a cell, or clears the cell with `null`. Same as Unity: the cell
+   * takes the tile's colour and flags, so a colour set earlier with `setColor` is gone
+   * (painting the same tile again changes nothing, and keeps it).
+   */
   setTile(cell: CellLike, tile: TileBase | null): void {
     const key = cellKey(cell);
     const existing = this._entries.get(key);
@@ -216,7 +268,9 @@ export class Tilemap extends Behaviour {
     if (!tile) {
       this._entries.delete(key);
     } else {
-      const entry: TilemapEntry = { cell: Vector3Int.from(cell), tile, color: existing?.color ?? null, instance: null };
+      const at = Vector3Int.from(cell);
+      const flags = tile.getTileData(at, this).flags ?? TileFlags.None;
+      const entry: TilemapEntry = { cell: at, tile, color: null, flags, instance: null };
       this._entries.set(key, entry);
       this.index(entry);
       this.spawn(entry);
@@ -231,7 +285,11 @@ export class Tilemap extends Behaviour {
     });
   }
 
-  /** Fills the rectangle of cells from `min` to `max`, both inclusive. */
+  /**
+   * Fills the rectangle of cells from `min` to `max`, both inclusive. Unity's
+   * `BoxFill(position, tile, startX, startY, endX, endY)` takes other arguments; this one
+   * is `boxFill(tile, min, max)`.
+   */
   boxFill(tile: TileBase | null, min: CellLike, max: CellLike): void {
     const z = min.z ?? 0;
     for (let y = Math.min(min.y, max.y); y <= Math.max(min.y, max.y); y++) {
@@ -241,7 +299,8 @@ export class Tilemap extends Behaviour {
 
   /**
    * Replaces the connected area of identical tiles containing `cell` with `tile`, like a
-   * paint bucket. It only spreads through cells that already have a tile.
+   * paint bucket. Unity's `FloodFill` also fills an empty area from an empty cell; here it
+   * only spreads through cells that already have a tile, and an empty `cell` does nothing.
    */
   floodFill(cell: CellLike, tile: TileBase | null): void {
     const target = this.getTile(cell);
@@ -256,9 +315,24 @@ export class Tilemap extends Behaviour {
     }
   }
 
-  /** The tile in a cell, or `null`. Pass your tile class to get it typed: `getTile<TerrainTile>(cell)`. */
-  getTile<T extends TileBase = TileBase>(cell: CellLike): T | null {
-    return (this._entries.get(cellKey(cell))?.tile as T | undefined) ?? null;
+  /**
+   * The tile in a cell, or `null`.
+   *
+   * With a class, `getTile(cell, DoorTile)`, it is checked: a tile of another kind gives
+   * `null`, like C#'s `tilemap.GetTile(cell) as DoorTile`.
+   *
+   * The type parameter alone, `getTile<DoorTile>(cell)`, is only a cast for the compiler:
+   * nothing is checked, and a grass tile comes back typed as a DoorTile. Unity's
+   * `GetTile<T>()` does check (it is `as T`), so pass the class whenever the cell might
+   * hold another kind. The type parameter is right for a `Tile<Data>` from a palette,
+   * whose `Data` no class can check.
+   */
+  getTile<T extends TileBase = TileBase>(cell: CellLike): T | null;
+  getTile<T extends TileBase>(cell: CellLike, type: abstract new (...args: never[]) => T): T | null;
+  getTile<T extends TileBase>(cell: CellLike, type?: abstract new (...args: never[]) => T): T | null {
+    const tile = this._entries.get(cellKey(cell))?.tile ?? null;
+    if (type && !(tile instanceof type)) return null;
+    return tile as T | null;
   }
 
   hasTile(cell: CellLike): boolean {
@@ -329,7 +403,7 @@ export class Tilemap extends Behaviour {
     return this._entries.size;
   }
 
-  /** Every painted cell. (Unity: iterate `cellBounds.allPositionsWithin` and test `HasTile`.) */
+  /** Every painted cell. An addition; in Unity you iterate `cellBounds.allPositionsWithin` and test `HasTile`. */
   getUsedCells(): Vector3Int[] {
     return [...this._entries.values()].map((entry) => entry.cell);
   }
@@ -341,7 +415,10 @@ export class Tilemap extends Behaviour {
     return `${count} tiles, cells (${min.x}, ${min.y}) to (${max.x - 1}, ${max.y - 1})`;
   }
 
-  /** The smallest box containing every painted cell. */
+  /**
+   * The smallest box containing every painted cell. Unity's `cellBounds` can stay larger
+   * after tiles are erased, until `CompressBounds()`; here it is always the tight box.
+   */
   get cellBounds(): BoundsInt {
     if (this._entries.size === 0) return new BoundsInt();
     let min: Vector3Int | null = null;
@@ -355,16 +432,69 @@ export class Tilemap extends Behaviour {
 
   // ---- Per-cell colour and objects ----------------------------------------------------
 
-  /** Tints one cell, on top of its tile's colour. Useful for highlights and fog. */
+  /**
+   * Sets one cell's colour, in place of its tile's colour (not multiplied with it), as
+   * Unity does. Useful for highlights and fog. An empty cell is left alone.
+   *
+   * Same as Unity: a cell whose flags include `TileFlags.LockColor` ignores this, and
+   * `Tile` has that flag by default. Call `removeTileFlags(cell, TileFlags.LockColor)`
+   * first, or give the tile `flags: TileFlags.None`. Unity ignores it silently; here the
+   * first ignored call logs a warning. Painting the cell again (`setTile`) resets its colour.
+   */
   setColor(cell: CellLike, color: Color): void {
     const entry = this._entries.get(cellKey(cell));
     if (!entry) return;
+    if (entry.flags & TileFlags.LockColor) {
+      if (!this.warnedLockedColor) {
+        this.warnedLockedColor = true;
+        Debug.logWarning(
+          `Tilemap "${this.name}": setColor(${entry.cell.x}, ${entry.cell.y}) was ignored because the cell's tile has ` +
+            'TileFlags.LockColor (every Tile has it by default; Unity ignores the call too). ' +
+            'Call tilemap.removeTileFlags(cell, TileFlags.LockColor) first, or create the tile with flags: TileFlags.None.',
+        );
+      }
+      return;
+    }
     entry.color = color;
     this.touch(entry.cell);
   }
 
+  /**
+   * The colour a cell is drawn with, before the layer's `color`: what `setColor` gave
+   * it, or else its tile's colour. Same as Unity. An empty cell gives white.
+   */
   getColor(cell: CellLike): Color {
-    return this._entries.get(cellKey(cell))?.color ?? Color.white;
+    const entry = this._entries.get(cellKey(cell));
+    return entry ? this._cellColor(entry) : Color.white;
+  }
+
+  /** @internal The colour a cell shows: its own unless locked, else its tile's. */
+  _cellColor(entry: TilemapEntry, data?: TileData): Color {
+    if (entry.color && !(entry.flags & TileFlags.LockColor)) return entry.color;
+    return (data ?? entry.tile.getTileData(entry.cell, this)).color;
+  }
+
+  /** The cell's `TileFlags` (`None` for an empty cell). Same as Unity's `GetTileFlags`. */
+  getTileFlags(cell: CellLike): TileFlags {
+    return this._entries.get(cellKey(cell))?.flags ?? TileFlags.None;
+  }
+
+  /** Replaces the cell's flags. Same as Unity: lasts until the cell is painted again. An empty cell is left alone. */
+  setTileFlags(cell: CellLike, flags: TileFlags): void {
+    const entry = this._entries.get(cellKey(cell));
+    if (!entry || entry.flags === flags) return;
+    entry.flags = flags;
+    this.touch(entry.cell);
+  }
+
+  /** Adds flags to the cell's (bitwise or). Same as Unity's `AddTileFlags`. */
+  addTileFlags(cell: CellLike, flags: TileFlags): void {
+    this.setTileFlags(cell, this.getTileFlags(cell) | flags);
+  }
+
+  /** Removes flags from the cell's. `removeTileFlags(cell, TileFlags.LockColor)` lets `setColor` work. Same as Unity. */
+  removeTileFlags(cell: CellLike, flags: TileFlags): void {
+    this.setTileFlags(cell, this.getTileFlags(cell) & ~flags);
   }
 
   /** The GameObject a tile spawned on this cell, if any. */
@@ -373,7 +503,10 @@ export class Tilemap extends Behaviour {
     return isAlive(instance) ? instance : null;
   }
 
-  /** Re-reads a tile's data, after something `getTileData` depends on has changed. */
+  /**
+   * Re-reads a tile's data, after something `getTileData` depends on has changed. Same as
+   * Unity's `RefreshTile`. The cell's own colour and flags (set from code) are kept.
+   */
   refreshTile(cell: CellLike): void {
     const entry = this._entries.get(cellKey(cell));
     if (!entry) return;
