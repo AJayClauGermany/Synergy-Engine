@@ -19,7 +19,7 @@ const names: Record<PrimitiveType, string> = {
  */
 factories.createPrimitive = (type: PrimitiveType): GameObject => {
   const gameObject = new GameObject(names[type]);
-  gameObject.addComponent(MeshFilter).mesh = Mesh.primitive(type);
+  gameObject.addComponent(MeshFilter).sharedMesh = Mesh.primitive(type);
   gameObject.addComponent(MeshRenderer);
   switch (type) {
     case PrimitiveType.Sphere:

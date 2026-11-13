@@ -46,11 +46,15 @@ export abstract class Collider extends Behaviour {
   abstract _intersect(origin: Vector3, direction: Vector3): { distance: number; normal: Vector3 } | null;
 
   /**
-   * Casts a ray against just this collider. Unity: `collider.Raycast(ray, out hit, maxDistance)`.
+   * Casts a ray against just this collider: the hit, or `null`. Unity:
+   * `collider.Raycast(ray, out hit, maxDistance)`. As in Unity, a ray that starts inside
+   * the collider does not hit it, so a unit casting from its own position does not
+   * find itself.
    */
   raycast(ray: Ray, maxDistance = Number.POSITIVE_INFINITY): RaycastHit | null {
     const result = this._intersect(ray.origin, ray.direction);
-    if (!result || result.distance > maxDistance) return null;
+    // A distance of 0 means the ray starts inside (see `_intersect`).
+    if (!result || result.distance <= 0 || result.distance > maxDistance) return null;
     return {
       collider: this,
       gameObject: this.gameObject,
@@ -61,7 +65,13 @@ export abstract class Collider extends Behaviour {
     };
   }
 
-  /** The point on (or in) the collider's bounds closest to `position`. */
+  /**
+   * The point on the collider's surface closest to `position`, or `position` itself when
+   * it is inside. Same as Unity's `Collider.ClosestPoint`.
+   */
+  abstract closestPoint(position: Vector3): Vector3;
+
+  /** The point on (or in) the collider's bounding box closest to `position`. Same as Unity. */
   closestPointOnBounds(position: Vector3): Vector3 {
     return this.bounds.closestPoint(position);
   }
@@ -91,6 +101,14 @@ export class BoxCollider extends Collider {
       bounds = bounds ? bounds.encapsulate(corner) : new Bounds(corner, Vector3.zero);
     }
     return bounds as Bounds;
+  }
+
+  closestPoint(position: Vector3): Vector3 {
+    // In local space the box is axis-aligned: clamp there and convert back.
+    const local = this.transform.inverseTransformPoint(position);
+    const half = this.size.mul(0.5);
+    const clamped = Vector3.max(this.center.sub(half), Vector3.min(this.center.add(half), local));
+    return clamped.equals(local) ? position : this.transform.transformPoint(clamped);
   }
 
   override _intersect(origin: Vector3, direction: Vector3) {
@@ -134,6 +152,12 @@ export class SphereCollider extends Collider {
     return new Bounds(center, Vector3.one.mul(radius * 2));
   }
 
+  closestPoint(position: Vector3): Vector3 {
+    const { center, radius } = this.world();
+    const offset = position.sub(center);
+    return offset.sqrMagnitude <= radius * radius ? position : center.add(offset.normalized.mul(radius));
+  }
+
   override _intersect(origin: Vector3, direction: Vector3) {
     const { center, radius } = this.world();
     const distance = intersectRaySphere(origin, direction, center, radius);
@@ -169,6 +193,16 @@ export class CapsuleCollider extends Collider {
     const { a, b, radius } = this.world();
     const pad = Vector3.one.mul(radius);
     return Bounds.fromMinMax(Vector3.min(a, b).sub(pad), Vector3.max(a, b).add(pad));
+  }
+
+  closestPoint(position: Vector3): Vector3 {
+    const { a, b, radius } = this.world();
+    const axis = b.sub(a);
+    const lengthSquared = axis.sqrMagnitude;
+    const t = lengthSquared > 0 ? Math.min(1, Math.max(0, position.sub(a).dot(axis) / lengthSquared)) : 0;
+    const onAxis = a.add(axis.mul(t));
+    const offset = position.sub(onAxis);
+    return offset.sqrMagnitude <= radius * radius ? position : onAxis.add(offset.normalized.mul(radius));
   }
 
   override _intersect(origin: Vector3, direction: Vector3) {

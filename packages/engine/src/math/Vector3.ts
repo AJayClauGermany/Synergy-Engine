@@ -1,4 +1,7 @@
-import { Mathf } from './Mathf';
+import { ENGINE_EPSILON, Mathf } from './Mathf';
+
+/** Unity's `Vector3.kEpsilon`: shorter vectors normalise to zero. */
+const NORMALIZE_EPSILON = 1e-5;
 
 /** Anything with x/y/z, e.g. a PlayCanvas `Vec3`. */
 export interface Vector3Like {
@@ -14,9 +17,10 @@ export interface Vector3Like {
  *   a + b  -> a.add(b)      a * 2 -> a.mul(2)      -a -> a.neg()
  *   a - b  -> a.sub(b)      a / 2 -> a.div(2)
  *
- * The world is right-handed with Y up, like PlayCanvas and glTF. `Vector3.forward` is
- * therefore (0, 0, -1), not Unity's (0, 0, 1). Use the named directions instead of
- * literal axes and code ports across unchanged.
+ * Same axes as Unity: left-handed, Y up, X right, Z forward. `Vector3.forward` is
+ * (0, 0, 1), so positions, directions and angles copied from Unity code or a Unity scene
+ * mean the same thing here. (The renderer underneath, PlayCanvas, is right-handed; the
+ * engine converts at that boundary, so game code never sees its convention.)
  */
 export class Vector3 implements Vector3Like {
   constructor(
@@ -31,9 +35,10 @@ export class Vector3 implements Vector3Like {
   static readonly down = Object.freeze(new Vector3(0, -1, 0));
   static readonly left = Object.freeze(new Vector3(-1, 0, 0));
   static readonly right = Object.freeze(new Vector3(1, 0, 0));
-  /** The direction an unrotated object (and camera) faces: -Z. */
-  static readonly forward = Object.freeze(new Vector3(0, 0, -1));
-  static readonly back = Object.freeze(new Vector3(0, 0, 1));
+  /** (0, 0, 1): the direction an unrotated object (and camera) faces. Same as Unity. */
+  static readonly forward = Object.freeze(new Vector3(0, 0, 1));
+  /** (0, 0, -1). Same as Unity. */
+  static readonly back = Object.freeze(new Vector3(0, 0, -1));
 
   static from(value: Vector3Like): Vector3 {
     return new Vector3(value.x, value.y, value.z);
@@ -47,9 +52,10 @@ export class Vector3 implements Vector3Like {
     return Math.sqrt(this.sqrMagnitude);
   }
 
+  /** This vector with a length of 1, or `Vector3.zero` when its length is 1e-5 or less (as in Unity). */
   get normalized(): Vector3 {
     const length = this.magnitude;
-    return length > Mathf.epsilon ? new Vector3(this.x / length, this.y / length, this.z / length) : Vector3.zero;
+    return length > NORMALIZE_EPSILON ? new Vector3(this.x / length, this.y / length, this.z / length) : Vector3.zero;
   }
 
   /** Unity: `a + b`. */
@@ -86,6 +92,10 @@ export class Vector3 implements Vector3Like {
     return this.x * other.x + this.y * other.y + this.z * other.z;
   }
 
+  /**
+   * Cross product, same formula and result as Unity's `Vector3.Cross(this, other)`. In
+   * Unity's left-handed world `Vector3.Cross(Vector3.right, Vector3.up)` is `forward`.
+   */
   cross(other: Vector3Like): Vector3 {
     return new Vector3(
       this.y * other.z - this.z * other.y,
@@ -106,13 +116,16 @@ export class Vector3 implements Vector3Like {
     return new Vector3(this.x, this.y, z);
   }
 
-  /** Approximate equality, like Unity's `==` on vectors. */
+  /**
+   * Approximate equality: Unity's `a == b` on vectors (true when the two are less than
+   * `tolerance` apart, 1e-5 by default, as in Unity). `===` compares object identity and
+   * is false for two equal vectors; write `!a.equals(b)` for Unity's `a != b`.
+   */
   equals(other: Vector3Like, tolerance = 1e-5): boolean {
-    return (
-      Math.abs(this.x - other.x) <= tolerance &&
-      Math.abs(this.y - other.y) <= tolerance &&
-      Math.abs(this.z - other.z) <= tolerance
-    );
+    const dx = this.x - other.x;
+    const dy = this.y - other.y;
+    const dz = this.z - other.z;
+    return dx * dx + dy * dy + dz * dz < tolerance * tolerance;
   }
 
   toArray(): [number, number, number] {
@@ -150,7 +163,7 @@ export class Vector3 implements Vector3Like {
   static moveTowards(current: Vector3, target: Vector3, maxDistanceDelta: number): Vector3 {
     const delta = target.sub(current);
     const distance = delta.magnitude;
-    if (distance <= maxDistanceDelta || distance < Mathf.epsilon) return target;
+    if (distance <= maxDistanceDelta || distance < ENGINE_EPSILON) return target;
     return current.add(delta.mul(maxDistanceDelta / distance));
   }
 
@@ -161,7 +174,11 @@ export class Vector3 implements Vector3Like {
     return Math.acos(Mathf.clamp(from.dot(to) / denominator, -1, 1)) * Mathf.rad2Deg;
   }
 
-  /** Signed angle in degrees from `from` to `to`, measured around `axis`. */
+  /**
+   * Signed angle in degrees from `from` to `to`, measured around `axis`: positive when the
+   * turn is clockwise seen from the tip of `axis` (Unity's left-handed rule, so a turn from
+   * `forward` to `right` around `up` is +90, as in Unity).
+   */
   static signedAngle(from: Vector3, to: Vector3, axis: Vector3): number {
     const unsigned = Vector3.angle(from, to);
     return unsigned * Mathf.sign(axis.dot(from.cross(to)));
@@ -169,7 +186,7 @@ export class Vector3 implements Vector3Like {
 
   static project(vector: Vector3, onNormal: Vector3): Vector3 {
     const sqrMagnitude = onNormal.sqrMagnitude;
-    if (sqrMagnitude < Mathf.epsilon) return Vector3.zero;
+    if (sqrMagnitude < ENGINE_EPSILON) return Vector3.zero;
     return onNormal.mul(vector.dot(onNormal) / sqrMagnitude);
   }
 

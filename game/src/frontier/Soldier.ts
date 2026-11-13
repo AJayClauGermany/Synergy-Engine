@@ -2,7 +2,7 @@ import {
   CapsuleCollider,
   Color,
   Ease,
-  findObjectOfType,
+  findAnyObjectByType,
   GameObject,
   Material,
   Mesh,
@@ -81,7 +81,7 @@ export class Soldier extends NetworkBehaviour implements Combatant {
     // and subscribe for what changes later.
     this._match = Match.of(this.networkManager);
     this._match?.units.add(this);
-    this._board = findObjectOfType(FrontierBoard);
+    this._board = findAnyObjectByType(FrontierBoard);
     this._body = this.getComponentInChildren(MeshRenderer);
 
     this.name = `${this.team.value === 0 ? 'Blue' : 'Red'} ${this.type.value} ${this.networkObjectId}`;

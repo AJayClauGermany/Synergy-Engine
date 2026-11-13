@@ -70,7 +70,14 @@ universally needed. Otherwise document that games pass it via
   before inventing one. Note any deviation in the doc comment.
 - **Values are immutable** (`Vector3`, `Quaternion`, `Color`): getters return new
   instances, setters take them. Convert at the PlayCanvas boundary.
-- **Conventions:** right-handed, -Z forward, top-left screen space, degrees.
+- **Conventions:** Unity's: left-handed, +Z forward, Euler Z-X-Y, bottom-left screen space,
+  clockwise mesh winding, v = 0 at the bottom of a texture, degrees. PlayCanvas is
+  right-handed with -Z forward: convert every value that crosses into or out of it with
+  `core/handedness.ts` (mirror Z; rotations `(-x, -y, z, w)`). Never pass a Unity-space
+  value straight to a PlayCanvas call, or read one back without converting.
+- **Say where it differs, on the member.** When a member's behaviour differs from Unity's
+  page for it, or an agent could reasonably assume Unity's behaviour, its doc comment says
+  so ("Unity: ... Here: ..."). Agents read the hover text, not the guides.
 - **Expose the escape hatch** (`pcLight`, `pcCamera`, `pcMaterial`) so games are never
   blocked by a missing wrapper.
 - **No new dependencies** in `packages/engine` beyond `playcanvas`.

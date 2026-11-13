@@ -66,7 +66,8 @@ Find the row; do the check before the fix.
 | Do its fields have the values you set? | Set after `instantiate` on the template, not the instance; a `_private` field is not copied |
 | Is the method a message? | Only the names in `gameplay-scripting` are called. `tick()`, `init()`, `onStart()` are not |
 | Did it throw? | An exception in a message is reported in the browser console and fails `bun run screenshot`; in a headless test it fails the test |
-| A coroutine or `invoke` that stopped | Its GameObject was deactivated; they do not resume |
+| A coroutine that stopped | Its GameObject was deactivated; it does not resume. (An `invoke` keeps going, as in Unity: only `cancelInvoke` or destroy ends it) |
+| `tilemap.setColor` did nothing | The tile has `TileFlags.LockColor` (every `Tile` does by default, as in Unity): `removeTileFlags(cell, TileFlags.LockColor)` first |
 | Is `Time.timeScale` 0? | `update` still runs, but `Time.deltaTime` is 0, so nothing moves |
 
 **A click or key does nothing**

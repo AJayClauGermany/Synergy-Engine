@@ -145,18 +145,6 @@ function siteOf(node: Node): { parent: Node | null; child: Node } {
   return { parent, child };
 }
 
-/** The value of `1`, `-1` or `+1` written as a literal; null for anything else. */
-function numericLiteral(node: Node | undefined): number | null {
-  if (!node) return null;
-  if (node.type === 'Literal') return typeof node.value === 'number' ? node.value : null;
-  if (node.type === 'UnaryExpression' && (node.operator === '-' || node.operator === '+')) {
-    const value = numericLiteral(node.argument);
-    if (value === null) return null;
-    return node.operator === '-' ? -value : value;
-  }
-  return null;
-}
-
 /** The class a node sits in, or null at module level. */
 function enclosingClass(node: Node): ClassNode | null {
   for (let current: Node | null = node.parent; current; current = current.parent) {
@@ -493,46 +481,6 @@ const noUnsentMessage: Rule = {
 };
 
 /**
- * `new Vector3(0, 0, 1)`. In Unity that is forward. This engine is right-handed, forward
- * is -Z, and the same numbers point backward. Naming the direction removes the question.
- */
-const noZAxisLiteral: Rule = {
-  meta: {
-    type: 'problem',
-    messages: {
-      axis:
-        'new Vector3(0, 0, {{z}}) is Vector3.{{name}} here: the world is right-handed and forward is -Z ' +
-        "(in Unity forward is +Z). Write the direction by name, Vector3.forward or Vector3.back, so it cannot be Unity's by accident.",
-      vertical:
-        "The 'Vertical' axis is +1 for W and the up arrow, and forward is -Z here, so as the z of a Vector3 it moves backward " +
-        "(in Unity forward is +Z). Write Vector3.right.mul(horizontal).add(Vector3.forward.mul(vertical)), or negate it: -Input.getAxis('Vertical').",
-    },
-  },
-  create(context) {
-    return {
-      NewExpression(node) {
-        if (identifierName(node.callee) !== 'Vector3' || node.arguments.length !== 3) return;
-        const third = unwrap(node.arguments[2] as Node);
-        const axisCall = third.type === 'CallExpression' ? unwrap(third.callee) : null;
-        if (
-          third.type === 'CallExpression' &&
-          axisCall?.type === 'MemberExpression' &&
-          ['getAxis', 'getAxisRaw'].includes(identifierName(axisCall.property) ?? '') &&
-          third.arguments[0]?.type === 'Literal' &&
-          third.arguments[0].value === 'Vertical'
-        ) {
-          context.report({ node: third, messageId: 'vertical' });
-          return;
-        }
-        const [x, y, z] = node.arguments.map((argument) => numericLiteral(argument));
-        if (x !== 0 || y !== 0 || (z !== 1 && z !== -1)) return;
-        context.report({ node, messageId: 'axis', data: { z, name: z === -1 ? 'forward' : 'back' } });
-      },
-    };
-  },
-};
-
-/**
  * One exported script per file, in a file named after it: `Health` lives in `Health.ts`.
  * It is the project's convention (and Unity's requirement), and it is what makes a
  * script findable from its name in a hierarchy dump or an error message.
@@ -833,6 +781,7 @@ export const ENGINE_MEMBERS = [
   '_lookup',
   '_returned',
   '_send',
+  '_startInvoke',
   '_startQueued',
   '_started',
   '_wantsLive',
@@ -1022,7 +971,6 @@ export const rules = {
   'no-skipped-test': noSkippedTest,
   'no-unsent-message': noUnsentMessage,
   'no-value-keys': noValueKeys,
-  'no-z-axis-literal': noZAxisLiteral,
   'test-needs-expect': testNeedsExpect,
 } satisfies Record<string, Rule>;
 

@@ -114,8 +114,11 @@ Hex.range(center, 2); Hex.ring(center, 2); Hex.line(from, to); Hex.distance(a, b
   be shaded by the sun.
 - The meshes update at the end of the frame, block by block (16 x 16 cells), so editing
   cells every frame is fine on maps of tens of thousands of tiles. Setting
-  `tilemap.color` or a renderer field redoes the whole layer: tint cells with
-  `setColor(cell, ...)` for things that change often. In a headless test, call
+  `tilemap.color` or a renderer field redoes the whole layer: colour cells with
+  `setColor(cell, ...)` for things that change often. As in Unity, `setColor` replaces the
+  tile's colour, and does nothing on a `Tile` (they have `TileFlags.LockColor` by default)
+  until `removeTileFlags(cell, TileFlags.LockColor)`, or the tile is made with
+  `flags: TileFlags.None`. In a headless test, call
   `engine.step()` (or `renderer.rebuild()`) before inspecting what is drawn
   (`renderer.pcMeshInstances`); tile *data* is immediate.
 - Not available yet: isometric layout, animated tiles, tile colliders, elevation.

@@ -34,7 +34,11 @@ export class Color implements ColorLike {
     return new Color(value.r, value.g, value.b, value.a ?? 1);
   }
 
-  /** Parses `#rgb`, `#rrggbb` or `#rrggbbaa` (the leading `#` is optional). */
+  /**
+   * Parses `#rgb`, `#rrggbb` or `#rrggbbaa` (the leading `#` is optional) and throws on
+   * anything else. Unity: `ColorUtility.TryParseHtmlString`, which returns false instead
+   * and also knows colour names ("red").
+   */
   static fromHex(hex: string): Color {
     let digits = hex.trim().replace(/^#/, '');
     if (digits.length === 3 || digits.length === 4) {
@@ -70,20 +74,35 @@ export class Color implements ColorLike {
     }
   }
 
+  /** Same as Unity: `t` is clamped to [0, 1], and alpha is interpolated too. */
   static lerp(a: Color, b: Color, t: number): Color {
     const k = Mathf.clamp01(t);
     return new Color(a.r + (b.r - a.r) * k, a.g + (b.g - a.g) * k, a.b + (b.b - a.b) * k, a.a + (b.a - a.a) * k);
   }
 
-  /** Multiplies RGB (not alpha) by `factor`. */
-  mul(factor: number): Color {
-    return new Color(this.r * factor, this.g * factor, this.b * factor, this.a);
+  /**
+   * Unity's `Color * float` and `Color * Color`: a number scales all four channels,
+   * alpha too; a colour multiplies channel by channel (a tint). The result is not clamped.
+   *
+   * Same as Unity: alpha is scaled as well, so `c.mul(0.5)` is also half as opaque. To
+   * darken a colour and keep its alpha, write `c.mul(0.5).withAlpha(c.a)`.
+   */
+  mul(factor: number | ColorLike): Color {
+    if (typeof factor === 'number') {
+      return new Color(this.r * factor, this.g * factor, this.b * factor, this.a * factor);
+    }
+    return new Color(this.r * factor.r, this.g * factor.g, this.b * factor.b, this.a * (factor.a ?? 1));
   }
 
+  /** A copy with another alpha. Unity has no method for this: there you set `c.a` on a struct copy. */
   withAlpha(a: number): Color {
     return new Color(this.r, this.g, this.b, a);
   }
 
+  /**
+   * Unity compares colours with `==`. Here use this (`===` compares identity), with a
+   * per-channel `tolerance`, 1e-4 by default. A `ColorLike` without alpha counts as opaque.
+   */
   equals(other: ColorLike, tolerance = 1e-4): boolean {
     return (
       Math.abs(this.r - other.r) <= tolerance &&
@@ -93,7 +112,11 @@ export class Color implements ColorLike {
     );
   }
 
-  /** `#rrggbb`, or `#rrggbbaa` when not fully opaque. Handy for CSS. */
+  /**
+   * `#rrggbb`, or `#rrggbbaa` when not fully opaque. Handy for CSS. Unity's
+   * `ColorUtility.ToHtmlStringRGB(A)` gives the digits without `#`, upper case, and the
+   * RGBA one always with alpha.
+   */
   toHex(): string {
     const part = (value: number) =>
       Math.round(Mathf.clamp01(value) * 255)

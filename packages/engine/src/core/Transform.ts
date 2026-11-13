@@ -6,6 +6,7 @@ import { Component } from './Component';
 // fallow-ignore-next-line circular-dependency -- a GameObject owns its Transform and a Transform finds its GameObject; both are used in methods, never while the modules load
 import { gameObjectOf, isSceneRoot } from './GameObject';
 import { currentEngine } from './runtime';
+import { fromPlayCanvasQuat, fromPlayCanvasVec3, toPlayCanvasQuat, toPlayCanvasVec3 } from './handedness';
 
 /** Which coordinate system a movement is expressed in. */
 export enum Space {
@@ -14,12 +15,19 @@ export enum Space {
 }
 
 const scratchVec = new pc.Vec3();
+const scratchQuat = new pc.Quat();
 const scratchMat = new pc.Mat4();
 
 /**
  * Position, rotation and scale of a GameObject, plus its place in the hierarchy.
  *
- * Vectors and quaternions are immutable values: assign a new one to move.
+ * Same space as Unity: left-handed, Y up, `forward` is +Z, angles in degrees turning
+ * clockwise seen from the axis's tip. Values copied from a Unity scene or script mean
+ * the same here. (PlayCanvas, underneath, is right-handed; the engine converts.)
+ *
+ * Unlike Unity, vectors and quaternions are immutable values: assign a new one to move.
+ * `transform.position.x = 5` does not compile, and `transform.position.add(delta);` on
+ * its own line changes nothing.
  *
  *   transform.position = transform.position.add(Vector3.forward.mul(speed * Time.deltaTime));
  */
@@ -31,12 +39,13 @@ export class Transform extends Component implements Iterable<Transform> {
 
   // ---- World space ------------------------------------------------------------------
 
+  /** World-space position. */
   get position(): Vector3 {
-    return Vector3.from(this._node.getPosition());
+    return fromPlayCanvasVec3(this._node.getPosition());
   }
 
   set position(value: Vector3) {
-    this._node.setPosition(value.x, value.y, value.z);
+    this._node.setPosition(toPlayCanvasVec3(value, scratchVec));
   }
 
   // World rotation and scale are composed from the local values up the parent chain,
@@ -47,7 +56,7 @@ export class Transform extends Component implements Iterable<Transform> {
   private parentRotation(): Quaternion {
     let rotation = Quaternion.identity;
     for (let node = this._node.parent; node; node = node.parent) {
-      rotation = Quaternion.from(node.getLocalRotation()).mul(rotation);
+      rotation = fromPlayCanvasQuat(node.getLocalRotation()).mul(rotation);
     }
     return rotation;
   }
@@ -61,15 +70,20 @@ export class Transform extends Component implements Iterable<Transform> {
     return scale;
   }
 
+  /** World-space rotation. */
   get rotation(): Quaternion {
-    return this.parentRotation().mul(this._node.getLocalRotation());
+    return this.parentRotation().mul(this.localRotation);
   }
 
   set rotation(value: Quaternion) {
     this.localRotation = this.parentRotation().inverse().mul(value).normalized;
   }
 
-  /** World rotation as Euler angles in degrees. */
+  /**
+   * World rotation as Euler angles in degrees, each read back in [0, 360) as in Unity
+   * (Z, then X, then Y). Reading, adding and writing back does not always turn smoothly:
+   * keep the angle in a field of your own, or use `rotate`.
+   */
   get eulerAngles(): Vector3 {
     return this.rotation.eulerAngles;
   }
@@ -83,7 +97,7 @@ export class Transform extends Component implements Iterable<Transform> {
     return this.parentScale().scale(this._node.getLocalScale());
   }
 
-  /** The direction this object faces (its local -Z axis) in world space. */
+  /** The direction this object faces (its local +Z axis, the blue arrow) in world space. Setting it turns the object to face that way. */
   get forward(): Vector3 {
     return this.rotation.rotate(Vector3.forward);
   }
@@ -92,6 +106,7 @@ export class Transform extends Component implements Iterable<Transform> {
     this.rotation = Quaternion.lookRotation(value);
   }
 
+  /** Its local +X axis (the red arrow) in world space. */
   get right(): Vector3 {
     return this.rotation.rotate(Vector3.right);
   }
@@ -100,6 +115,7 @@ export class Transform extends Component implements Iterable<Transform> {
     this.rotation = Quaternion.fromToRotation(Vector3.right, value);
   }
 
+  /** Its local +Y axis (the green arrow) in world space. */
   get up(): Vector3 {
     return this.rotation.rotate(Vector3.up);
   }
@@ -110,28 +126,31 @@ export class Transform extends Component implements Iterable<Transform> {
 
   // ---- Local space ------------------------------------------------------------------
 
+  /** Position relative to the parent (the world, for a root object). */
   get localPosition(): Vector3 {
-    return Vector3.from(this._node.getLocalPosition());
+    return fromPlayCanvasVec3(this._node.getLocalPosition());
   }
 
   set localPosition(value: Vector3) {
-    this._node.setLocalPosition(value.x, value.y, value.z);
+    this._node.setLocalPosition(toPlayCanvasVec3(value, scratchVec));
   }
 
+  /** Rotation relative to the parent. */
   get localRotation(): Quaternion {
-    return Quaternion.from(this._node.getLocalRotation());
+    return fromPlayCanvasQuat(this._node.getLocalRotation());
   }
 
   set localRotation(value: Quaternion) {
-    this._node.setLocalRotation(value.x, value.y, value.z, value.w);
+    this._node.setLocalRotation(toPlayCanvasQuat(value, scratchQuat));
   }
 
+  /** `localRotation` as Euler angles in degrees, read back in [0, 360) as in Unity. See `eulerAngles`. */
   get localEulerAngles(): Vector3 {
-    return Vector3.from(this._node.getLocalEulerAngles());
+    return this.localRotation.eulerAngles;
   }
 
   set localEulerAngles(value: Vector3) {
-    this._node.setLocalEulerAngles(value.x, value.y, value.z);
+    this.localRotation = Quaternion.euler(value);
   }
 
   get localScale(): Vector3 {
@@ -276,24 +295,58 @@ export class Transform extends Component implements Iterable<Transform> {
   // ---- Movement ---------------------------------------------------------------------
 
   /**
-   * Moves by `translation`, measured in world units. By default the direction is relative
-   * to this object's own axes (`Space.Self`), so `translate(Vector3.forward)` moves one
-   * unit the way it is facing, whatever its parents' scale.
+   * Moves by `translation`, measured in world units. As in Unity, the direction is
+   * relative to this object's own axes by default (`Space.Self`), so
+   * `translate(Vector3.forward)` moves one unit the way it is facing, whatever the scale.
+   * Pass `Space.World` for world axes, or a Transform to use that object's axes.
    */
-  translate(translation: Vector3, relativeTo: Space = Space.Self): void {
-    const offset = relativeTo === Space.World ? translation : this.rotation.rotate(translation);
+  translate(translation: Vector3, relativeTo?: Space | Transform): void;
+  /** Unity's `Translate(x, y, z, relativeTo)`. */
+  translate(x: number, y: number, z: number, relativeTo?: Space | Transform): void;
+  translate(
+    first: Vector3 | number,
+    second?: number | Space | Transform,
+    third?: number,
+    fourth?: Space | Transform,
+  ): void {
+    const translation =
+      typeof first === 'number' ? new Vector3(first, typeof second === 'number' ? second : 0, third ?? 0) : first;
+    const relativeTo = (typeof first === 'number' ? fourth : (second as Space | Transform | undefined)) ?? Space.Self;
+    const offset =
+      relativeTo === Space.World
+        ? translation
+        : relativeTo === Space.Self
+          ? this.rotation.rotate(translation)
+          : relativeTo.transformDirection(translation);
     this.position = this.position.add(offset);
   }
 
-  /** Rotates by Euler angles in degrees, in local space by default. */
+  /**
+   * Rotates by Euler angles in degrees (Z, then X, then Y, as in Unity), about this
+   * object's own axes by default (`Space.Self`) or the world's (`Space.World`).
+   */
   rotate(eulers: Vector3, relativeTo?: Space): void;
-  /** Rotates `angle` degrees around `axis`, in local space by default. */
+  /** Unity's `Rotate(xAngle, yAngle, zAngle, relativeTo)`. */
+  rotate(xAngle: number, yAngle: number, zAngle: number, relativeTo?: Space): void;
+  /** Rotates `angle` degrees around `axis`, in local space by default. Same as Unity's `Rotate(axis, angle, relativeTo)`. */
   rotate(axis: Vector3, angle: number, relativeTo?: Space): void;
-  rotate(first: Vector3, second?: number | Space, third?: Space): void {
-    // (eulers), (eulers, space) or (axis, angle, space?).
-    const delta = typeof second === 'number' ? Quaternion.angleAxis(second, first) : Quaternion.euler(first);
-    const relativeTo = (typeof second === 'number' ? third : second) ?? Space.Self;
-    if (relativeTo === Space.World) this.rotation = delta.mul(this.rotation);
+  rotate(first: Vector3 | number, second?: number | Space, third?: number | Space, fourth?: Space): void {
+    let delta: Quaternion;
+    let relativeTo: Space | undefined;
+    if (typeof first === 'number') {
+      // (x, y, z, space?)
+      delta = Quaternion.euler(first, typeof second === 'number' ? second : 0, typeof third === 'number' ? third : 0);
+      relativeTo = fourth;
+    } else if (typeof second === 'number') {
+      // (axis, angle, space?)
+      delta = Quaternion.angleAxis(second, first);
+      relativeTo = typeof third === 'number' ? undefined : third;
+    } else {
+      // (eulers, space?)
+      delta = Quaternion.euler(first);
+      relativeTo = second;
+    }
+    if ((relativeTo ?? Space.Self) === Space.World) this.rotation = delta.mul(this.rotation);
     else this.localRotation = this.localRotation.mul(delta);
   }
 
@@ -304,7 +357,7 @@ export class Transform extends Component implements Iterable<Transform> {
     this.rotation = delta.mul(this.rotation);
   }
 
-  /** Turns so that forward points at `target`. */
+  /** Turns so that `forward` (+Z) points at `target`, with `up` as close to `worldUp` as possible. Same as Unity. */
   lookAt(target: Transform | Vector3, worldUp: Vector3 = Vector3.up): void {
     const point = target instanceof Transform ? target.position : target;
     const direction = point.sub(this.position);
@@ -316,18 +369,17 @@ export class Transform extends Component implements Iterable<Transform> {
 
   /** Local point -> world point (applies position, rotation and scale). */
   transformPoint(point: Vector3): Vector3 {
-    scratchVec.set(point.x, point.y, point.z);
-    return Vector3.from(this._node.getWorldTransform().transformPoint(scratchVec, scratchVec));
+    const world = this._node.getWorldTransform();
+    return fromPlayCanvasVec3(world.transformPoint(toPlayCanvasVec3(point, scratchVec), scratchVec));
   }
 
   /** World point -> local point. */
   inverseTransformPoint(point: Vector3): Vector3 {
     scratchMat.copy(this._node.getWorldTransform()).invert();
-    scratchVec.set(point.x, point.y, point.z);
-    return Vector3.from(scratchMat.transformPoint(scratchVec, scratchVec));
+    return fromPlayCanvasVec3(scratchMat.transformPoint(toPlayCanvasVec3(point, scratchVec), scratchVec));
   }
 
-  /** Local direction -> world direction (rotation only). */
+  /** Local direction -> world direction (rotation only; the length is kept). */
   transformDirection(direction: Vector3): Vector3 {
     return this.rotation.rotate(direction);
   }
@@ -339,15 +391,14 @@ export class Transform extends Component implements Iterable<Transform> {
 
   /** Local vector -> world vector (rotation and scale, no translation). */
   transformVector(vector: Vector3): Vector3 {
-    scratchVec.set(vector.x, vector.y, vector.z);
-    return Vector3.from(this._node.getWorldTransform().transformVector(scratchVec, scratchVec));
+    const world = this._node.getWorldTransform();
+    return fromPlayCanvasVec3(world.transformVector(toPlayCanvasVec3(vector, scratchVec), scratchVec));
   }
 
   /** World vector -> local vector. */
   inverseTransformVector(vector: Vector3): Vector3 {
     scratchMat.copy(this._node.getWorldTransform()).invert();
-    scratchVec.set(vector.x, vector.y, vector.z);
-    return Vector3.from(scratchMat.transformVector(scratchVec, scratchVec));
+    return fromPlayCanvasVec3(scratchMat.transformVector(toPlayCanvasVec3(vector, scratchVec), scratchVec));
   }
 
   override _copyFrom(source: this): void {

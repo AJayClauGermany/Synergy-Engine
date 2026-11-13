@@ -20,7 +20,7 @@ Cloudflare Workers (preview deploys) · Electrobun (desktop).
 | `bun run lint` / `typecheck` / `docs:check` / `lint:project` / `format` | One check by itself. `bun run lint path/to/File.ts` lints one file. `bun run check lint types` runs the ones named and ends with `OK so far`, not `PASSED` |
 | `bun run coverage` | Tests with coverage: per file, the lines no test reached |
 | `bun run build` | Production build into `dist/` |
-| `bun run screenshot` | Build, open in headless Chromium, save `.screenshots/game.png` and the page's log beside it (`game.log`); fails on page errors. `--hierarchy` prints the scene as text, `--logs` the log so far; `--devtools` shows the editor; `--renderer webgl2` forces WebGL2 (the game prefers WebGPU) |
+| `bun run screenshot` | Build, open in headless Chromium, save `.screenshots/game.png` and the page's log beside it (`game.log`); fails on page errors. `--hierarchy` prints the scene as text, `--logs` the log so far; `--devtools` shows the editor; `--renderer webgl2` forces WebGL2 (the game prefers WebGPU); `--players 2` opens two players in a local room and saves an image per player (`--on 2` drives player 2) |
 | `bun run logs` | Print `.logs/game.log`: what the game open under `bun run dev` logged (`--errors`, `--tail 50`) |
 | `bun run report` | Ask the game open under `bun run dev` for a report (screenshot, log, hierarchy, HUD text) and print its summary |
 | `bun run backend` | Convex dev deployment (interactive login the first time); writes its URL to `.env.local` |
@@ -41,13 +41,15 @@ through `varlock run --`); see `docs/environment.md`.
 game/                    THE GAME. Most work happens here. It holds two samples:
                          Skirmish (commands, turn-based) and Frontier (netcode, real-time).
   index.html             page shell: a canvas, plus the script tag
-  src/main.tsx           boot: create engine, register scenes, mount HUD, load scene
+  src/main.tsx           boot: create engine, register scenes, mount the HUD root, open the first screen
+  src/flow.ts            screens (Menu, Skirmish, Frontier, Showcase): openScreen, quitToMenu, loading overlay
+  src/localPlay.ts       testing several players on one machine: ?net=local&host=/join=&player=
   src/scenes/            scenes as functions (Unity: .unity files)
   src/behaviours/        MonoBehaviour scripts and prefabs
   src/rules/             Skirmish's pure rules: state, commands, check(), apply()
-  src/ui/                Preact HUD and CSS
+  src/ui/                Preact HUD and CSS; App.tsx is the one HUD root, following flow.ts
   src/hud.ts             Observables the HUD reads
-  src/online.ts          host/join helpers (PeerJS, Convex)
+  src/online.ts          host/join helpers (PeerJS, Convex, local windows)
   src/frontier/          the netcode sample, whole: data/ (map, tiles, sprite sheet as files),
                          rules.ts, Match.ts, Soldier.ts, board, player, scene, session, HUD
   test/                  rule tests, headless scene tests, simulated-network tests
@@ -78,7 +80,8 @@ docs/                    setup.md (accounts, secrets, first deploy), unity-to-sy
 
 Read `docs/unity-to-synergy.md` for the full map. The ones that cause bugs are below.
 `bun run check` catches many of them and says what to write instead (`docs/checks.md`),
-but not all: it cannot know which way you meant a vector to point.
+but not all. Each public API's doc comment also says where it differs from Unity: read the
+hover text of a member before assuming Unity's behaviour.
 
 1. **camelCase** methods and messages: `update()`, `getComponent(Health)`, `Input.getKeyDown(KeyCode.Space)`.
    Unity's spelling (`Update()`, `OnEnable()`) is a type error and an error when the script
@@ -86,13 +89,15 @@ but not all: it cannot know which way you meant a vector to point.
 2. **Vectors are immutable and have no operators**: `a.add(b)`, `v.mul(2)`, `q.rotate(v)`.
    `transform.position = transform.position.add(delta)`. A result that is not assigned is
    lost: `transform.position.add(delta);` on its own line does nothing.
-3. **Right-handed world, forward is -Z.** Always write `Vector3.forward` / `transform.forward`,
-   never `new Vector3(0, 0, 1)`; `new Vector3(h, 0, v)` from the input axes walks backward.
-   **Angles turn the other way about X and Y**: `Quaternion.euler(45, 0, 0)` tilts up, and
-   `rotate(Vector3.up, 90)` turns left. Negate a ported pitch and yaw, or aim with `lookAt`
-   / `Quaternion.lookRotation`, which need no angles.
-4. **Screen space is top-left origin, Y down, CSS pixels** (`Input.mousePosition`,
-   `camera.worldToScreenPoint`). A larger `y` is lower on screen.
+3. **Unity's axes and angles, unchanged.** Left-handed, Y up, `Vector3.forward` is (0, 0, 1),
+   Euler angles apply Z, X, then Y and read back in [0, 360), a positive yaw turns right,
+   lights shine along `transform.forward`, meshes wind clockwise with v = 0 at the bottom.
+   Numbers from a Unity scene or script mean the same here. PlayCanvas underneath is
+   right-handed with -Z forward; the engine mirrors Z at that boundary, so only code that
+   reaches past the API (`gameObject.entity`, `engine.app`, `pcCamera`...) sees its convention.
+4. **Screen space is Unity's (origin bottom-left, y up), in CSS pixels** (`Input.mousePosition`,
+   `camera.worldToScreenPoint`, `Screen.width`). HTML measures from the top:
+   `top = Screen.height - y` (`WorldAnchor` does it for you).
 5. **No `out` params, no `== null` for destroyed objects**: `const hit = Physics.raycast(ray); if (hit) ...`
    and `if (isAlive(target))`.
 6. **Never `new` a component.** `gameObject.addComponent(Type)`. Set up in `awake`/`start`, not a
@@ -101,7 +106,8 @@ but not all: it cannot know which way you meant a vector to point.
 7. **Coroutines are generators**: `*run(): IEnumerator { yield new WaitForSeconds(1); }`, started
    with `this.startCoroutine(this.run())` (call it). `*start()` runs as a coroutine, as in
    Unity; `*update()` and `async update()` are type errors.
-8. **Lights aim along -Y.** Use `light.direction = ...`.
+8. **The escape hatches are PlayCanvas's space**, not Unity's: `gameObject.entity.getPosition()`
+   has Z negated and rotations mirrored. Stay on the Unity-style API, or convert both ways.
 9. **C# habits that change meaning.** `a / b` never truncates (`Math.trunc(a / b)` for
    integer division; a `Vector3Int` or a cell refuses a fraction); objects used as
    `Map`/`Set` keys match by identity, not value (`cellKey(cell)` for cells); `array.sort()`
@@ -156,7 +162,7 @@ project is exported with `tools/unity`. `game/src/frontier/rules.ts` shows all o
 Multi-step sequences: a coroutine (which can `yield` a tween).
 
 **Mix 3D, sprites and UI images.** Meshes and `Assets.loadModel` models, `SpriteRenderer`
-(2D images in the world, facing +Z) and a `Canvas` with `Image` children (screen-space UI,
+(2D images in the world, seen from their -Z side, as in Unity) and a `Canvas` with `Image` children (screen-space UI,
 laid out with `RectTransform`) all live in one scene; see `game/src/scenes/ShowcaseScene.ts`.
 Load images with `Assets.loadSprite(url)` (they load as sRGB colour textures).
 
@@ -239,7 +245,8 @@ explains each check and every message of the project's own lint rules.
    behaviours can be tested in a real scene with `Engine.createHeadless()`, `engine.step()`
    and `engine.input.pressKey(...)` / `moveMouse(...)` / `pressMouseButton(...)`
    (copy the pattern in `game/test/scene.test.ts`). Networked behaviour: a host and
-   clients as simulated machines (copy `game/test/frontier.test.ts`).
+   clients as simulated machines (copy `game/test/frontier.test.ts`); to see it in real
+   pages, `bun run screenshot --scene Frontier --players 2` (one image per player).
 3. Anything visual: `bun run screenshot`, then look at the PNG. It can drive the game:
    `bun run screenshot --click 640,360 --key Space --eval "synergy.Time.frameCount"`.
 4. To see what is in the scene without an image, print `Debug.hierarchy()` in a test, or

@@ -28,6 +28,9 @@ complete examples; `game/src/ui/styles.css` holds the layout.
 
 ## Workflow
 
+0. **Find the screen it belongs to.** `game/src/ui/App.tsx` is the one HUD root: it
+   draws the current screen's HUD from `flow` (`game/src/flow.ts`) and the loading
+   overlay. A new screen is a case there and a scene; never mount a second root.
 1. **Decide what the element shows**, and add that to an `Observable` in
    `game/src/hud.ts` as plain data: numbers, strings, small objects. Not GameObjects,
    except as the target of a `WorldAnchor`.

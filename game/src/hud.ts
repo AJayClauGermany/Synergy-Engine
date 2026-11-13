@@ -17,7 +17,8 @@ export interface HudState {
 }
 
 export interface NetworkState {
-  mode: 'local' | 'connecting' | 'p2p' | 'convex';
+  /** 'windows': a local room between windows of this browser, for testing (`localPlay.ts`). */
+  mode: 'local' | 'connecting' | 'p2p' | 'windows' | 'convex';
   /** Code other players type to join. */
   roomCode: string | null;
   players: number;

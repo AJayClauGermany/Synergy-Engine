@@ -21,6 +21,7 @@ import {
   Sprite,
   Tile,
   TileBase,
+  TileFlags,
   type TileData,
   Tilemap,
   TilemapRenderer,
@@ -63,9 +64,9 @@ describe('Grid', () => {
       g.cellSize = new Vector3(2, 2, 1);
     });
     grid.transform.position = new Vector3(10, 0, 0);
-    expect(grid.cellToWorld({ x: 1, y: 1 }).equals(new Vector3(12, 0, -2))).toBe(true);
-    expect(grid.getCellCenterWorld({ x: 0, y: 0 }).equals(new Vector3(11, 0, -1))).toBe(true);
-    expect(grid.worldToCell(new Vector3(13.5, 0, -0.5)).equals({ x: 1, y: 0 })).toBe(true);
+    expect(grid.cellToWorld({ x: 1, y: 1 }).equals(new Vector3(12, 0, 2))).toBe(true);
+    expect(grid.getCellCenterWorld({ x: 0, y: 0 }).equals(new Vector3(11, 0, 1))).toBe(true);
+    expect(grid.worldToCell(new Vector3(13.5, 0, 0.5)).equals({ x: 1, y: 0 })).toBe(true);
     expect(grid.normal.equals(Vector3.up)).toBe(true);
     expect(grid.getCellCornersWorld({ x: 0, y: 0 }).length).toBe(4);
   });
@@ -214,6 +215,7 @@ describe('TilemapRenderer', () => {
     expect(drawn()[0]?.mesh).toBe(mesh as never);
 
     // Changing a tile, a colour or the grid layout triggers a rebuild.
+    terrain.removeTileFlags({ x: 0, y: 0 }, TileFlags.LockColor);
     terrain.setColor({ x: 0, y: 0 }, Color.red);
     engine.step();
     expect(drawn()[0]?.mesh).not.toBe(mesh as never);
@@ -261,6 +263,7 @@ describe('TilemapRenderer', () => {
     expect(new Set(before.map((instance) => instance.material)).size).toBe(1);
 
     // One cell tinted: one block has a new mesh, the other 63 are untouched and still usable.
+    terrain.removeTileFlags({ x: 40, y: 70 }, TileFlags.LockColor);
     terrain.setColor({ x: 40, y: 70 }, Color.red);
     engine.step();
     const after = instances();
@@ -312,7 +315,8 @@ describe('TilemapRenderer', () => {
           const positions: number[] = [];
           instance.mesh?.getPositions(positions);
           for (let i = 0; i < positions.length; i += 3) {
-            drawn.push(new Vector3(positions[i] ?? 0, positions[i + 1] ?? 0, positions[i + 2] ?? 0));
+            // Mesh data is in PlayCanvas's space: mirror Z back to compare with the grid.
+            drawn.push(new Vector3(positions[i] ?? 0, positions[i + 1] ?? 0, -(positions[i + 2] ?? 0)));
           }
         }
         const expected = cells.flatMap((cell) => grid.getCellCornersWorld(cell));

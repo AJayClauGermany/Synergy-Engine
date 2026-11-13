@@ -8,9 +8,15 @@ import {
   Camera,
   cellKey,
   CellLayout,
+  Color,
   destroy,
   Ease,
   Engine,
+  findAnyObjectByType,
+  findFirstObjectByType,
+  findObjectsByType,
+  FindObjectsInactive,
+  FindObjectsSortMode,
   GameObject,
   Grid,
   type IEnumerator,
@@ -26,18 +32,22 @@ import {
   MonoBehaviour,
   Observable,
   Prefab,
+  PrimitiveType,
   Random,
   SceneManager,
   Tile,
+  TileFlags,
   Tilemap,
   type TilemapData,
   Time,
   Tween,
+  UnityEvent,
   Vector2Int,
   Vector3,
   Vector3Int,
   WaitForSeconds,
 } from '@synergy/engine';
+import { ENGINE_EPSILON } from '../src/math/Mathf';
 
 let engine: Engine;
 
@@ -338,6 +348,47 @@ describe('tilemaps', () => {
     expect(() => tilemap.hasTile(worldPosition)).toThrow(/is not a cell/);
     expect(tilemap.getTile(tilemap.layoutGrid.worldToCell(worldPosition))).toBe(grass);
   });
+
+  test("setColor on a Tile's cell is ignored, as in Unity (LockColor by default), and says how to unlock it", () => {
+    const tilemap = makeTilemap();
+    const grass = new Tile({ name: 'grass', color: Color.green });
+    const cell = { x: 1, y: 1 };
+    tilemap.setTile(cell, grass);
+    expect(tilemap.getTileFlags(cell)).toBe(TileFlags.LockColor);
+    const said = warnings(() => {
+      tilemap.setColor(cell, Color.red);
+      tilemap.setColor(cell, Color.blue); // warned once, not every call
+    });
+    expect(said).toHaveLength(1);
+    expect(said[0]).toMatch(
+      /TileFlags\.LockColor.*Unity ignores the call too.*removeTileFlags\(cell, TileFlags\.LockColor\)/s,
+    );
+    expect(tilemap.getColor(cell)).toEqual(Color.green);
+
+    tilemap.removeTileFlags(cell, TileFlags.LockColor);
+    tilemap.setColor(cell, Color.red);
+    // Replaced, not multiplied with the tile's green (which would give black).
+    expect(tilemap.getColor(cell)).toEqual(Color.red);
+    // Painting the cell again brings back the tile's colour and flags.
+    tilemap.setTile(cell, null);
+    tilemap.setTile(cell, grass);
+    expect(tilemap.getColor(cell)).toEqual(Color.green);
+    expect(tilemap.getTileFlags(cell)).toBe(TileFlags.LockColor);
+  });
+
+  test('getTile<T> alone is a cast; getTile(cell, T) checks, like C# GetTile<T>', () => {
+    class DoorTile extends Tile {
+      open = false;
+    }
+    const tilemap = makeTilemap();
+    tilemap.setTile({ x: 0, y: 0 }, new Tile({ name: 'grass' }));
+    const door = new DoorTile({ name: 'door' });
+    tilemap.setTile({ x: 1, y: 0 }, door);
+    expect(tilemap.getTile({ x: 0, y: 0 }, DoorTile)).toBeNull();
+    expect(tilemap.getTile({ x: 1, y: 0 }, DoorTile)).toBe(door);
+    // The type parameter alone checks nothing: the grass tile comes back typed as a door.
+    expect(tilemap.getTile<DoorTile>({ x: 0, y: 0 })?.open).toBeUndefined();
+  });
 });
 
 describe('meshes', () => {
@@ -367,6 +418,47 @@ describe('meshes', () => {
     mesh.vertices = triangle.map((corner) => corner.add(new Vector3(10, 0, 0)));
     expect(renderer.bounds.min.x).toBeCloseTo(10);
     expect(copy.getComponent(MeshRenderer)?.bounds.min.x).toBeCloseTo(10);
+  });
+
+  test('changing a returned array in place changes nothing, as in Unity: assign it back', () => {
+    const mesh = new Mesh();
+    mesh.vertices = triangle;
+    mesh.vertices[0] = new Vector3(5, 5, 5);
+    expect(mesh.vertices[0]?.equals(Vector3.zero)).toBe(true);
+    const changed = mesh.vertices;
+    changed[0] = new Vector3(5, 5, 5);
+    mesh.vertices = changed;
+    expect(mesh.vertices[0]?.equals(new Vector3(5, 5, 5))).toBe(true);
+  });
+
+  test("the built-in shapes are shared and refuse changes; meshFilter.mesh is the object's own copy", () => {
+    const cube = GameObject.createPrimitive(PrimitiveType.Cube);
+    const shared = Mesh.primitive(PrimitiveType.Cube);
+    expect(() => {
+      shared.vertices = triangle;
+    }).toThrow(/meshFilter\.mesh/);
+    // Readable, in Unity's conventions: 24 corners of a unit cube.
+    expect(shared.vertices).toHaveLength(24);
+    expect(shared.vertices.every((v) => Math.abs(v.x) === 0.5 && Math.abs(v.z) === 0.5)).toBe(true);
+
+    const filter = cube.getComponent(MeshFilter) as MeshFilter;
+    expect(filter.sharedMesh).toBe(shared);
+    const own = filter.mesh;
+    expect(own).not.toBe(shared);
+    expect(own.name).toBe('Cube Instance');
+    expect(filter.mesh).toBe(own);
+    expect(filter.sharedMesh).toBe(own);
+    own.vertices = own.vertices.map((v) => v.mul(2));
+    expect((cube.getComponent(MeshRenderer) as MeshRenderer).bounds.size.x).toBeCloseTo(2);
+    // Other cubes keep the shared shape.
+    const other = GameObject.createPrimitive(PrimitiveType.Cube);
+    expect((other.getComponent(MeshRenderer) as MeshRenderer).bounds.size.x).toBeCloseTo(1);
+  });
+
+  test("a loaded model's mesh says it cannot be read instead of returning nothing", () => {
+    const mesh = Mesh.fromPlayCanvas([], 'Knight');
+    expect(mesh.isReadable).toBe(false);
+    expect(() => mesh.vertices).toThrow(/isReadable/);
   });
 });
 
@@ -496,5 +588,165 @@ describe('whole numbers and shared values', () => {
     };
     expect(layerNamed(map, 'Terrain').name).toBe('Terrain');
     expect(() => layerNamed(map, 'Ground')).toThrow('The map has no layer named "Ground". Its layers: "Terrain".');
+  });
+});
+
+describe("Unity's documented behaviour", () => {
+  test('Color.mul scales alpha too, like Color * float; a Color multiplies channel by channel', () => {
+    const halfSeen = new Color(1, 0.5, 0, 0.8);
+    expect(halfSeen.mul(0.5).equals(new Color(0.5, 0.25, 0, 0.4))).toBe(true);
+    expect(halfSeen.mul(0.5).withAlpha(halfSeen.a).a).toBe(0.8);
+    expect(halfSeen.mul(new Color(0.5, 1, 1, 0.5)).equals(new Color(0.5, 0.5, 0, 0.4))).toBe(true);
+  });
+
+  test("Mathf.epsilon is Unity's tiny value, and approximately uses Unity's relative formula", () => {
+    expect(Mathf.epsilon).toBe(1.401298e-45);
+    expect(Mathf.approximately(0.1 + 0.2, 0.3)).toBe(true);
+    expect(Mathf.approximately(1_000_000, 1_000_000.5)).toBe(true); // within one part in a million
+    expect(Mathf.approximately(1, 1.00001)).toBe(false);
+    expect(Mathf.approximately(0, 1e-9)).toBe(false); // near zero it is almost exact, as in Unity
+    // The engine's own tolerance is separate, so thresholds inside the engine did not move.
+    expect(ENGINE_EPSILON).toBe(1e-6);
+  });
+
+  test('UnityEvent.removeListener removes every registration of the function', () => {
+    const event = new UnityEvent();
+    let calls = 0;
+    const listener = () => calls++;
+    event.addListener(listener);
+    const removeSecond = event.addListener(listener);
+    event.invoke();
+    expect(calls).toBe(2); // added twice, called twice, as in Unity
+    removeSecond();
+    event.invoke();
+    expect(calls).toBe(3);
+    event.addListener(listener);
+    event.removeListener(listener);
+    event.invoke();
+    expect(calls).toBe(3);
+    expect(event.listenerCount).toBe(0);
+  });
+
+  test('getComponentInParent skips inactive parents unless asked, but always searches the object itself', () => {
+    class Marker extends MonoBehaviour {}
+    const root = new GameObject('Root');
+    root.addComponent(Marker);
+    const parent = new GameObject('Parent');
+    parent.transform.setParent(root.transform, false);
+    const parentMarker = parent.addComponent(Marker);
+    const child = new GameObject('Child');
+    child.transform.setParent(parent.transform, false);
+    const probe = child.addComponent(Marker);
+
+    expect(child.getComponentsInParent(Marker)).toHaveLength(3);
+    parent.setActive(false); // the child and the parent are now inactive in the hierarchy
+    expect(child.getComponentInParent(Marker)).toBe(probe); // itself, though inactive
+    expect(probe.getComponentsInParent(Marker)).toEqual([probe, root.getComponent(Marker) as Marker]);
+    expect(probe.getComponentsInParent(Marker, true)).toContain(parentMarker);
+    const parentless = new GameObject('Alone').addComponent(Marker);
+    parentless.gameObject.setActive(false);
+    expect(parentless.getComponentInParent(Marker)).toBe(parentless);
+  });
+
+  test('getComponentInChildren always searches the object itself; find("/A/B") starts at a root', () => {
+    class Marker extends MonoBehaviour {}
+    const army = new GameObject('Army');
+    const own = army.addComponent(Marker);
+    army.setActive(false);
+    expect(army.getComponentInChildren(Marker)).toBe(own);
+    expect(army.getComponentsInChildren(Marker)).toEqual([own]);
+    army.setActive(true);
+
+    const camp = new GameObject('Camp');
+    const nested = new GameObject('Army');
+    nested.transform.setParent(camp.transform, false);
+    const footman = new GameObject('Footman');
+    footman.transform.setParent(nested.transform, false);
+    expect(GameObject.find('Army/Footman')).toBe(footman); // a relative path matches below Camp
+    expect(GameObject.find('/Army/Footman')).toBeNull(); // the root Army has no Footman
+    expect(GameObject.find('/Camp/Army/Footman')).toBe(footman);
+  });
+
+  test('findObjectsByType leaves inactive objects out unless FindObjectsInactive.Include', () => {
+    class Marker extends MonoBehaviour {}
+    const a = new GameObject('A').addComponent(Marker);
+    const b = new GameObject('B').addComponent(Marker);
+    b.gameObject.setActive(false);
+    expect(findObjectsByType(Marker)).toEqual([a]);
+    expect(findObjectsByType(Marker, FindObjectsInactive.Include)).toEqual([a, b]);
+    // The deprecated sort-mode forms still mean "exclude inactive", as in Unity.
+    expect(findObjectsByType(Marker, FindObjectsSortMode.InstanceID)).toEqual([a]);
+    expect(findAnyObjectByType(Marker)).toBe(a);
+    expect(findFirstObjectByType(Marker)).toBe(a);
+    a.gameObject.setActive(false);
+    expect(findAnyObjectByType(Marker)).toBeNull();
+    expect(findAnyObjectByType(Marker, FindObjectsInactive.Include)).toBe(a);
+  });
+
+  test('stopAllCoroutines leaves invokes alone, and invokes outlive deactivation, as in Unity', () => {
+    class Launcher extends MonoBehaviour {
+      fired = 0;
+      launch() {
+        this.fired++;
+      }
+    }
+    const launcher = new GameObject('Launcher').addComponent(Launcher);
+    launcher.invokeRepeating(launcher.launch, 0.1, 0.1);
+    launcher.stopAllCoroutines();
+    expect(launcher.isInvoking(launcher.launch)).toBe(true);
+    launcher.gameObject.setActive(false);
+    launcher.enabled = false;
+    for (let i = 0; i < 30; i++) engine.step(1 / 60);
+    expect(launcher.fired).toBeGreaterThan(2);
+    // Scheduling one on an inactive object works too (a coroutine would throw).
+    launcher.invoke(launcher.launch, 0);
+    expect(launcher.isInvoking()).toBe(true);
+    launcher.cancelInvoke();
+    expect(launcher.isInvoking()).toBe(false);
+    const before = launcher.fired;
+    for (let i = 0; i < 30; i++) engine.step(1 / 60);
+    expect(launcher.fired).toBe(before);
+    // Passing the method's name, as in Unity, is refused with the fix.
+    // @ts-expect-error a string where the method goes: the mistake this test is about
+    expect(() => launcher.invoke('launch', 1)).toThrow(/Pass the method itself, not its name/);
+  });
+
+  test('stopCoroutine takes the generator that was started, like StopCoroutine(IEnumerator)', () => {
+    class Walker extends MonoBehaviour {
+      steps = 0;
+      *walk(): IEnumerator {
+        while (true) {
+          this.steps++;
+          yield null;
+        }
+      }
+    }
+    const walker = new GameObject('Walker').addComponent(Walker);
+    const routine = walker.walk();
+    walker.startCoroutine(routine);
+    engine.step(1 / 60);
+    const steps = walker.steps;
+    walker.stopCoroutine(walker.walk()); // a new generator: not the one running
+    engine.step(1 / 60);
+    expect(walker.steps).toBe(steps + 1);
+    walker.stopCoroutine(routine);
+    engine.step(1 / 60);
+    expect(walker.steps).toBe(steps + 1);
+    // @ts-expect-error by name, as Unity allows: not supported, and said so
+    expect(() => walker.stopCoroutine('walk')).toThrow(/by name.*not supported/);
+  });
+
+  test("stopCoroutine with another behaviour's coroutine stops it, but warns that Unity would not", () => {
+    class Idle extends MonoBehaviour {
+      *wait(): IEnumerator {
+        yield new WaitForSeconds(10);
+      }
+    }
+    const owner = new GameObject('Owner').addComponent(Idle);
+    const other = owner.gameObject.addComponent(Idle);
+    const coroutine = owner.startCoroutine(owner.wait());
+    const said = warnings(() => other.stopCoroutine(coroutine));
+    expect(said[0]).toMatch(/Unity would leave it running.*on the behaviour that started it/s);
+    expect(coroutine.isDone).toBe(true);
   });
 });

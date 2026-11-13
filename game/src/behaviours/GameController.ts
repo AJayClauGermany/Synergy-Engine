@@ -66,7 +66,7 @@ export class GameController extends MonoBehaviour {
    * Switches to a new session (local, peer-to-peer or Convex) and restarts the board from
    * that session's history.
    */
-  useSession(session: Session<Command>, mode: 'local' | 'p2p' | 'convex', roomCode: string | null = null) {
+  useSession(session: Session<Command>, mode: 'local' | 'p2p' | 'windows' | 'convex', roomCode: string | null = null) {
     for (const off of this.detach) off();
     if (session !== this.session) this.session.close();
     this.session = session;

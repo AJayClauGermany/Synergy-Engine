@@ -54,11 +54,11 @@ describe('rectangle layout', () => {
 
   test('a ground grid (XZY) runs right and forward, with layers stacking up', () => {
     const ground = shape({ cellSwizzle: CellSwizzle.XZY, cellSize: new Vector3(2, 2, 1) });
-    // One cell right, one cell forward: +X and -Z (forward) in this right-handed world.
-    expect(cellToLocal(ground, { x: 1, y: 1 }).equals(new Vector3(2, 0, -2))).toBe(true);
+    // One cell right, one cell forward: +X and +Z, as in Unity.
+    expect(cellToLocal(ground, { x: 1, y: 1 }).equals(new Vector3(2, 0, 2))).toBe(true);
     expect(cellToLocal(ground, { x: 0, y: 0, z: 3 }).equals(new Vector3(0, 3, 0))).toBe(true);
     expect(planeNormal(ground).equals(Vector3.up)).toBe(true);
-    expect(localToCell(ground, new Vector3(3, 0, -3)).equals({ x: 1, y: 1 })).toBe(true);
+    expect(localToCell(ground, new Vector3(3, 0, 3)).equals({ x: 1, y: 1 })).toBe(true);
   });
 
   test('cell size and gap', () => {

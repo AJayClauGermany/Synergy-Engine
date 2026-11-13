@@ -24,7 +24,7 @@ interface CellTemplate {
   shape: GridShape;
   normal: Vector3;
   tint: Color;
-  /** Each corner as an offset from `cellToLocal(cell)`, wound counter-clockwise, already lifted by the sorting order. */
+  /** Each corner as an offset from `cellToLocal(cell)`, wound clockwise seen from the normal's side (Unity's rule), already lifted by the sorting order. */
   corners: Vector3[];
   /** Where each corner sits inside the cell's bounding box, 0 to 1 on both axes: its place in the sprite. */
   fractions: [number, number][];
@@ -199,9 +199,10 @@ export class TilemapRenderer extends MonoBehaviour {
     const origin = { x: 0, y: 0, z: 0 };
     const anchor = cellToLocal(shape, origin);
     const outline = cellCorners(shape, origin);
-    // Winding must be counter-clockwise seen from the side the normal points to.
+    // Front faces are clockwise seen from the side the normal points to (Unity's rule);
+    // mirroring Z into PlayCanvas's space makes them the counter-clockwise it expects.
     const [first, second, third] = outline;
-    if (first && second && third && second.sub(first).cross(third.sub(first)).dot(normal) < 0) outline.reverse();
+    if (first && second && third && second.sub(first).cross(third.sub(first)).dot(normal) > 0) outline.reverse();
 
     // Texture coordinates come from where each corner sits inside the cell's bounding box,
     // measured in layout axes (x across the map, y up the map) whatever plane the grid is on.
@@ -241,11 +242,12 @@ export class TilemapRenderer extends MonoBehaviour {
         batches.set(texture, batch);
       }
 
-      const cell = entry.color;
-      const r = Math.round(data.color.r * tint.r * (cell?.r ?? 1) * 255);
-      const g = Math.round(data.color.g * tint.g * (cell?.g ?? 1) * 255);
-      const b = Math.round(data.color.b * tint.b * (cell?.b ?? 1) * 255);
-      const alpha = data.color.a * tint.a * (cell?.a ?? 1);
+      // As in Unity: the cell's colour (setColor's, or the tile's) times the layer's.
+      const cell = tilemap._cellColor(entry, data);
+      const r = Math.round(cell.r * tint.r * 255);
+      const g = Math.round(cell.g * tint.g * 255);
+      const b = Math.round(cell.b * tint.b * 255);
+      const alpha = cell.a * tint.a;
       const a = Math.round(alpha * 255);
       if (alpha < 0.999) batch.translucent = true;
 
@@ -255,8 +257,9 @@ export class TilemapRenderer extends MonoBehaviour {
       for (let i = 0; i < corners.length; i++) {
         const corner = corners[i] as Vector3;
         const [s, t] = fractions[i] as [number, number];
-        batch.positions.push(at.x + corner.x, at.y + corner.y, at.z + corner.z);
-        batch.normals.push(normal.x, normal.y, normal.z);
+        // Into PlayCanvas's right-handed space: mirror Z.
+        batch.positions.push(at.x + corner.x, at.y + corner.y, -(at.z + corner.z));
+        batch.normals.push(normal.x, normal.y, -normal.z);
         batch.uvs.push(u0 + (u1 - u0) * s, v0 + (v1 - v0) * t);
         batch.colors.push(r, g, b, a);
       }

@@ -5,9 +5,10 @@ import type { Engine } from '../core/Engine';
 import type { GameObject } from '../core/GameObject';
 import { adopters, PrimitiveType } from '../core/hooks';
 import { currentEngine } from '../core/runtime';
+import { fromPlayCanvasAabb } from '../core/handedness';
 import { Color } from '../math/Color';
 import { Bounds } from '../math/geometry';
-import type { Vector2 } from '../math/Vector2';
+import { Vector2 } from '../math/Vector2';
 import { Vector3 } from '../math/Vector3';
 
 /** A GPU texture. This is PlayCanvas's own class; load one with `Assets.loadTexture(url)`. */
@@ -15,139 +16,244 @@ export type Texture = pc.Texture;
 
 // ---- Mesh -------------------------------------------------------------------------------
 
-function buildPrimitive(device: pc.GraphicsDevice, type: PrimitiveType): pc.Mesh {
+/** A built-in shape, in PlayCanvas's space (right-handed, counter-clockwise, v = 0 at the top). */
+function primitiveGeometry(type: PrimitiveType): pc.Geometry {
   // Sizes follow Unity's built-in primitives.
   switch (type) {
     case PrimitiveType.Cube:
-      return pc.Mesh.fromGeometry(device, new pc.BoxGeometry());
+      return new pc.BoxGeometry();
     case PrimitiveType.Sphere:
-      return pc.Mesh.fromGeometry(
-        device,
-        new pc.SphereGeometry({ radius: 0.5, latitudeBands: 24, longitudeBands: 32 }),
-      );
+      return new pc.SphereGeometry({ radius: 0.5, latitudeBands: 24, longitudeBands: 32 });
     case PrimitiveType.Capsule:
-      return pc.Mesh.fromGeometry(device, new pc.CapsuleGeometry({ radius: 0.5, height: 2 }));
+      return new pc.CapsuleGeometry({ radius: 0.5, height: 2 });
     case PrimitiveType.Cylinder:
-      return pc.Mesh.fromGeometry(device, new pc.CylinderGeometry({ radius: 0.5, height: 2, capSegments: 32 }));
+      return new pc.CylinderGeometry({ radius: 0.5, height: 2, capSegments: 32 });
     case PrimitiveType.Plane:
-      return pc.Mesh.fromGeometry(
-        device,
-        new pc.PlaneGeometry({ halfExtents: new pc.Vec2(5, 5), widthSegments: 10, lengthSegments: 10 }),
-      );
+      return new pc.PlaneGeometry({ halfExtents: new pc.Vec2(5, 5), widthSegments: 10, lengthSegments: 10 });
     case PrimitiveType.Quad: {
+      // Unity's Quad: 1 x 1 on the XY plane, its front facing -Z (toward a default
+      // camera). In PlayCanvas's mirrored space that front faces +Z.
       const geometry = new pc.Geometry();
       geometry.positions = [-0.5, -0.5, 0, 0.5, -0.5, 0, 0.5, 0.5, 0, -0.5, 0.5, 0];
       geometry.normals = [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1];
-      // PlayCanvas texture coordinates have v = 0 at the top of the image.
       geometry.uvs = [0, 1, 1, 1, 1, 0, 0, 0];
       geometry.indices = [0, 1, 2, 0, 2, 3];
-      return pc.Mesh.fromGeometry(device, geometry);
+      return geometry;
     }
   }
+}
+
+/** The mesh data a script sees, in Unity's space and conventions. */
+interface MeshData {
+  vertices: Vector3[];
+  triangles: number[];
+  normals: Vector3[];
+  uv: Vector2[];
+}
+
+/**
+ * Unity-space mesh data -> PlayCanvas geometry: mirror Z, flip v (PlayCanvas puts v = 0 at
+ * the top of an image) and turn clockwise front faces into counter-clockwise ones.
+ */
+function toPlayCanvasGeometry(data: MeshData, autoNormals: boolean): pc.Geometry {
+  const geometry = new pc.Geometry();
+  geometry.positions = data.vertices.flatMap((v) => [v.x, v.y, -v.z]);
+  const indices: number[] = [];
+  for (let i = 0; i + 2 < data.triangles.length; i += 3) {
+    indices.push(data.triangles[i] as number, data.triangles[i + 2] as number, data.triangles[i + 1] as number);
+  }
+  geometry.indices = indices;
+  if (data.uv.length === data.vertices.length) geometry.uvs = data.uv.flatMap((v) => [v.x, 1 - v.y]);
+  if (data.normals.length === data.vertices.length && !autoNormals) {
+    geometry.normals = data.normals.flatMap((v) => [v.x, v.y, -v.z]);
+  } else {
+    geometry.calculateNormals();
+  }
+  return geometry;
+}
+
+/** The inverse of `toPlayCanvasGeometry`, for the built-in shapes. */
+function fromPlayCanvasGeometry(geometry: pc.Geometry): MeshData {
+  const positions = geometry.positions ?? [];
+  const normals = geometry.normals ?? [];
+  const uvs = geometry.uvs ?? [];
+  const indices = geometry.indices ?? [];
+  const vertices: Vector3[] = [];
+  for (let i = 0; i + 2 < positions.length; i += 3) {
+    vertices.push(new Vector3(positions[i] as number, positions[i + 1] as number, -(positions[i + 2] as number)));
+  }
+  const triangles: number[] = [];
+  for (let i = 0; i + 2 < indices.length; i += 3) {
+    triangles.push(indices[i] as number, indices[i + 2] as number, indices[i + 1] as number);
+  }
+  const normalList: Vector3[] = [];
+  for (let i = 0; i + 2 < normals.length; i += 3) {
+    normalList.push(new Vector3(normals[i] as number, normals[i + 1] as number, -(normals[i + 2] as number)));
+  }
+  const uv: Vector2[] = [];
+  for (let i = 0; i + 1 < uvs.length; i += 2) uv.push(new Vector2(uvs[i] as number, 1 - (uvs[i + 1] as number)));
+  return { vertices, triangles, normals: normalList, uv };
 }
 
 /**
  * Geometry that a MeshFilter can show. Three ways to get one:
  *
- *   Mesh.primitive(PrimitiveType.Cube)        // shared built-in shape
+ *   Mesh.primitive(PrimitiveType.Cube)        // shared built-in shape (read-only)
  *   const mesh = new Mesh();                   // build your own (e.g. a hex tile)
  *   mesh.vertices = [...]; mesh.triangles = [...]; mesh.recalculateNormals();
- *   // or from a loaded model, via its MeshFilter
+ *   meshFilter.mesh                            // this object's own copy, as in Unity
  *
- * Triangles are COUNTER-clockwise when seen from the front (Unity's are clockwise),
- * because the world is right-handed.
+ * Same conventions as Unity: positions in the object's local space (Z forward), front
+ * faces wound CLOCKWISE seen from the front, and texture coordinates with v = 0 at the
+ * BOTTOM of the image. Data written for a Unity mesh works unchanged.
+ *
+ * As in Unity, `vertices`, `triangles`, `normals` and `uv` return copies: change the
+ * copy and assign it back (`mesh.vertices = changed`). Editing the returned array in
+ * place changes nothing, exactly as in Unity.
  */
 export class Mesh {
   name = 'Mesh';
 
-  private vertexList: Vector3[] = [];
-  private triangleList: number[] = [];
-  private normalList: Vector3[] = [];
-  private uvList: Vector2[] = [];
+  private data: MeshData | null = { vertices: [], triangles: [], normals: [], uv: [] };
   /** @internal The MeshFilters drawing this mesh. They are redrawn when it changes. */
   readonly _users = new Set<MeshFilter>();
 
-  /**
-   * Corner positions. Assigning the array updates every MeshFilter that shows this mesh,
-   * as in Unity; after changing an array in place, call `markDirty()`.
-   */
+  /** The data as stored, filled in from the built-in shape on first use. */
+  private read(member: string): MeshData {
+    if (this.wrapped) {
+      throw new Error(
+        `Mesh "${this.name}" comes from a loaded model, and its ${member} cannot be read here (mesh.isReadable is false). ` +
+          `Unity refuses this too unless the model was imported with Read/Write enabled. Build the shape with \`new Mesh()\` instead.`,
+      );
+    }
+    if (!this.data) {
+      this.data = this.primitiveType ? fromPlayCanvasGeometry(primitiveGeometry(this.primitiveType)) : null;
+      this.data ??= { vertices: [], triangles: [], normals: [], uv: [] };
+    }
+    return this.data;
+  }
+
+  /** The data, about to be changed. A copy of a built-in shape stops sharing it here. */
+  private write(member: string): MeshData {
+    if (this.isBuiltIn) {
+      throw new Error(
+        `Mesh "${this.name}" is the built-in shape that every ${this.name} shares, so its ${member} cannot be changed. ` +
+          `Change this object's own copy: \`meshFilter.mesh.${member} = ...\` (reading meshFilter.mesh makes the copy, as in Unity).`,
+      );
+    }
+    const data = this.read(member);
+    this.primitiveType = null;
+    return data;
+  }
+
+  /** False for meshes of loaded models: their data stays on the GPU. Unity: `Mesh.isReadable`. */
+  get isReadable(): boolean {
+    return this.wrapped === null;
+  }
+
+  /** Corner positions in local space. A copy (see the class comment); assign to change. */
   get vertices(): Vector3[] {
-    return this.vertexList;
+    return [...this.read('vertices').vertices];
   }
 
   set vertices(value: Vector3[]) {
-    this.vertexList = value;
+    this.write('vertices').vertices = [...value];
     this.markDirty();
   }
 
-  /** Indices into `vertices`, three per triangle. */
+  /** Indices into `vertices`, three per triangle, clockwise seen from the front (Unity's winding). A copy. */
   get triangles(): number[] {
-    return this.triangleList;
+    return [...this.read('triangles').triangles];
   }
 
   set triangles(value: number[]) {
-    this.triangleList = value;
+    this.write('triangles').triangles = [...value];
     this.markDirty();
   }
 
-  /** One normal per vertex. Leave empty and call `recalculateNormals()` to generate them. */
+  /** One normal per vertex. Leave empty and call `recalculateNormals()` to generate them. A copy. */
   get normals(): Vector3[] {
-    return this.normalList;
+    return [...this.read('normals').normals];
   }
 
   set normals(value: Vector3[]) {
-    this.normalList = value;
+    this.write('normals').normals = [...value];
     this.autoNormals = false;
     this.markDirty();
   }
 
-  /** One texture coordinate per vertex. Optional. */
+  /** One texture coordinate per vertex, v = 0 at the bottom of the image (as in Unity). Optional. A copy. */
   get uv(): Vector2[] {
-    return this.uvList;
+    return [...this.read('uv').uv];
   }
 
   set uv(value: Vector2[]) {
-    this.uvList = value;
+    this.write('uv').uv = [...value];
     this.markDirty();
   }
 
   private primitiveType: PrimitiveType | null = null;
+  private isBuiltIn = false;
   private wrapped: pc.Mesh[] | null = null;
   private built: pc.Mesh | null = null;
   private autoNormals = false;
 
   private static readonly primitives = new Map<PrimitiveType, Mesh>();
 
-  /** A shared built-in shape. The same `Mesh` object is returned for the same type. */
+  /**
+   * A shared built-in shape, with Unity's sizes. The same `Mesh` object is returned for
+   * the same type, and it cannot be changed: read `meshFilter.mesh` for an object's own
+   * copy to edit.
+   */
   static primitive(type: PrimitiveType): Mesh {
     let mesh = Mesh.primitives.get(type);
     if (!mesh) {
       mesh = new Mesh();
-      mesh.name = type;
+      // Unity's names: "Cube", "Sphere", ...
+      mesh.name = type.charAt(0).toUpperCase() + type.slice(1);
       mesh.primitiveType = type;
+      mesh.isBuiltIn = true;
+      mesh.data = null;
       Mesh.primitives.set(type, mesh);
     }
     return mesh;
   }
 
-  /** Wraps existing PlayCanvas meshes (one per sub-mesh). */
+  /** Wraps existing PlayCanvas meshes (one per sub-mesh). Their data is not readable (`isReadable` is false). */
   static fromPlayCanvas(meshes: pc.Mesh | pc.Mesh[], name = 'Mesh'): Mesh {
     const mesh = new Mesh();
     mesh.name = name;
     mesh.wrapped = Array.isArray(meshes) ? meshes : [meshes];
+    mesh.data = null;
     return mesh;
+  }
+
+  /** @internal An independent copy, for `MeshFilter.mesh`. Named "<name> Instance", as in Unity. */
+  _copy(): Mesh {
+    const copy = new Mesh();
+    copy.name = `${this.name} Instance`;
+    copy.primitiveType = this.primitiveType;
+    copy.wrapped = this.wrapped;
+    copy.autoNormals = this.autoNormals;
+    copy.data = this.data
+      ? {
+          vertices: [...this.data.vertices],
+          triangles: [...this.data.triangles],
+          normals: [...this.data.normals],
+          uv: [...this.data.uv],
+        }
+      : null;
+    return copy;
   }
 
   /** Generates smooth normals from the triangles when the mesh is next built. */
   recalculateNormals(): void {
+    this.write('normals');
     this.autoNormals = true;
     this.markDirty();
   }
 
-  /**
-   * Call after editing `vertices`/`triangles`/`normals`/`uv` in place (`mesh.vertices[0] = ...`).
-   * Assigning a whole array does it for you. Every MeshFilter showing this mesh is redrawn.
-   */
+  /** Redraws every MeshFilter showing this mesh. Assigning any of the arrays does it for you. */
   markDirty(): void {
     const superseded = this.built;
     this.built = null;
@@ -167,9 +273,8 @@ export class Mesh {
     const meshes = this._resolve(currentEngine());
     let bounds: Bounds | null = null;
     for (const mesh of meshes) {
-      const min = Vector3.from(mesh.aabb.getMin());
-      const max = Vector3.from(mesh.aabb.getMax());
-      bounds = bounds ? bounds.encapsulate(min).encapsulate(max) : Bounds.fromMinMax(min, max);
+      const part = fromPlayCanvasAabb(mesh.aabb);
+      bounds = bounds ? bounds.encapsulate(part.min).encapsulate(part.max) : part;
     }
     return bounds ?? new Bounds();
   }
@@ -182,7 +287,7 @@ export class Mesh {
       const key = `mesh:${this.primitiveType}`;
       let mesh = engine.cache.get(key) as pc.Mesh | undefined;
       if (!mesh) {
-        mesh = buildPrimitive(device, this.primitiveType);
+        mesh = pc.Mesh.fromGeometry(device, primitiveGeometry(this.primitiveType));
         // Shared by many renderers; never let reference counting free it.
         mesh.incRefCount();
         engine.cache.set(key, mesh);
@@ -190,18 +295,10 @@ export class Mesh {
       return [mesh];
     }
     if (!this.built || this.built.device !== device) {
+      const data = this.read('vertices');
       // Not a drawable mesh yet (vertices assigned, triangles still to come): draw nothing.
-      if (this.vertices.length === 0 || this.triangles.length < 3) return [];
-      const geometry = new pc.Geometry();
-      geometry.positions = this.vertices.flatMap((v) => [v.x, v.y, v.z]);
-      geometry.indices = [...this.triangles];
-      if (this.uv.length === this.vertices.length) geometry.uvs = this.uv.flatMap((v) => [v.x, v.y]);
-      if (this.normals.length === this.vertices.length && !this.autoNormals) {
-        geometry.normals = this.normals.flatMap((v) => [v.x, v.y, v.z]);
-      } else {
-        geometry.calculateNormals();
-      }
-      this.built = pc.Mesh.fromGeometry(device, geometry);
+      if (data.vertices.length === 0 || data.triangles.length < 3) return [];
+      this.built = pc.Mesh.fromGeometry(device, toPlayCanvasGeometry(data, this.autoNormals));
       this.built.incRefCount();
     }
     return [this.built];
@@ -354,12 +451,19 @@ function syncRender(gameObject: GameObject, rebuildMeshes: boolean): void {
   render.enabled = !!renderer && renderer.enabled;
 }
 
-/** Holds the mesh a MeshRenderer on the same GameObject draws. */
+/**
+ * Holds the mesh a MeshRenderer on the same GameObject draws. As in Unity, `sharedMesh`
+ * is the mesh as assigned (shared with every other object using it), while reading
+ * `mesh` gives this object its own copy the first time, so editing it changes only this
+ * object.
+ */
 export class MeshFilter extends Component {
   static readonly disallowMultiple = true;
 
   /** @internal */
   _mesh: Mesh | null = null;
+  /** True once `mesh` has made this filter's own copy. */
+  private ownsMesh = false;
 
   override _attach(): void {
     const existing = this.gameObject.entity.render;
@@ -369,20 +473,32 @@ export class MeshFilter extends Component {
         existing.meshInstances.flatMap((instance) => (instance.mesh ? [instance.mesh] : [])),
         this.gameObject.name,
       );
+      this._mesh._users.add(this);
     } else {
       syncRender(this.gameObject, true);
     }
   }
 
-  get mesh(): Mesh | null {
-    return this._mesh;
+  private assign(value: Mesh | null, owned: boolean): void {
+    this._mesh?._users.delete(this);
+    this._mesh = value;
+    this.ownsMesh = owned;
+    value?._users.add(this);
+    syncRender(this.gameObject, true);
+  }
+
+  /**
+   * This object's own mesh. As in Unity, the first read copies the assigned mesh (or
+   * creates an empty one when there is none), so changes affect only this object; after
+   * that `sharedMesh` returns the same copy. Assigning sets the mesh as is.
+   */
+  get mesh(): Mesh {
+    if (!this.ownsMesh || !this._mesh) this.assign(this._mesh ? this._mesh._copy() : new Mesh(), true);
+    return this._mesh as Mesh;
   }
 
   set mesh(value: Mesh | null) {
-    this._mesh?._users.delete(this);
-    this._mesh = value;
-    value?._users.add(this);
-    syncRender(this.gameObject, true);
+    this.assign(value, false);
   }
 
   /** @internal The mesh's geometry changed: draw the new one. */
@@ -390,13 +506,13 @@ export class MeshFilter extends Component {
     syncRender(this.gameObject, true);
   }
 
-  /** Alias of `mesh`. (Unity distinguishes instanced and shared meshes; here they are the same.) */
+  /** The mesh as assigned, possibly shared with other objects: reading it never copies. Same as Unity. */
   get sharedMesh(): Mesh | null {
     return this._mesh;
   }
 
   set sharedMesh(value: Mesh | null) {
-    this.mesh = value;
+    this.assign(value, false);
   }
 
   override _destroy(): void {
@@ -406,8 +522,10 @@ export class MeshFilter extends Component {
   }
 
   override _copyFrom(source: this): void {
-    // PlayCanvas already cloned the mesh instances; just share the same Mesh object.
+    // PlayCanvas already cloned the mesh instances; share the same Mesh object, as a
+    // Unity clone shares the original's mesh until it reads `mesh`.
     this._mesh = source._mesh;
+    this.ownsMesh = false;
     this._mesh?._users.add(this);
   }
 }
@@ -512,9 +630,8 @@ export class MeshRenderer extends Behaviour {
   get bounds(): Bounds {
     let bounds: Bounds | null = null;
     for (const instance of renderComponent(this.gameObject).meshInstances) {
-      const min = Vector3.from(instance.aabb.getMin());
-      const max = Vector3.from(instance.aabb.getMax());
-      bounds = bounds ? bounds.encapsulate(min).encapsulate(max) : Bounds.fromMinMax(min, max);
+      const part = fromPlayCanvasAabb(instance.aabb);
+      bounds = bounds ? bounds.encapsulate(part.min).encapsulate(part.max) : part;
     }
     return bounds ?? new Bounds(this.transform.position, Vector3.zero);
   }

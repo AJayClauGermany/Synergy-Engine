@@ -159,3 +159,35 @@ that, with a host that plays and objects the host replicates.
 
 The PeerJS and Convex integrations are type-checked but have no automated tests here,
 because they need live external services. Try them by hand after changing them.
+
+### Several players on one machine
+
+Unity's Multiplayer Play Mode, in a browser: each window of the game is a player, and a
+`BroadcastChannelTransport` connects windows of one browser with no internet and no
+signalling server. It has the same shape as `PeerJsTransport` (`host`, `join`,
+`roomCode`, `hostId`), so a game switches between the two in one line:
+
+```ts
+import { BroadcastChannelTransport } from '@synergy/net';
+
+const room = await BroadcastChannelTransport.host({ prefix: 'my-game' });   // one window
+const guest = await BroadcastChannelTransport.join(room.roomCode, { prefix: 'my-game', id: 'player-2' });  // another
+```
+
+The sample game wires it up three ways (`game/src/localPlay.ts`):
+
+- **Buttons**, in development builds: "Test in windows" hosts a local room and opens a
+  second player's window; "+ Window" opens more. Keep them as separate windows side by
+  side: browsers pause the game loop of a hidden tab.
+- **Addresses**: `?net=local&host=CODE` in one window, `?net=local&join=CODE&player=2`
+  in another. `player=N` gives the window its own id in the session and its own Convex
+  player id (`persistentPlayerId(slot)` from `@synergy/net/convex`), because every
+  window of a browser shares localStorage.
+- **Headless**: `bun run screenshot --scene Frontier --players 2` opens both players in
+  one browser, waits until each reports itself connected (`data-net` on the page), and
+  saves `game-p1.png`, `game-p2.png` and a log for each. `--on 2` makes the following
+  `--click`/`--key`/`--eval` actions player 2's.
+
+Only windows of the same browser profile and site meet; a private window is a different
+profile.
+

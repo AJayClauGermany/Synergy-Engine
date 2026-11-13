@@ -317,7 +317,7 @@ describe('camera', () => {
     const camera = go.addComponent(Camera);
     camera.orthographic = true;
     camera.orthographicSize = 5;
-    camera.transform.position = new Vector3(0, 0, 10);
+    camera.transform.position = new Vector3(0, 0, -10);
     const cube = GameObject.createPrimitive(PrimitiveType.Cube);
     cube.transform.position = new Vector3(7, 0, 0);
     const clicks: string[] = [];
@@ -331,7 +331,7 @@ describe('camera', () => {
     engine.step();
     expect(camera.worldToScreenPoint(cube.transform.position).x).toBeGreaterThan(1000);
 
-    camera.transform.position = new Vector3(7, 0, 10); // pan: the cube is now dead centre
+    camera.transform.position = new Vector3(7, 0, -10); // pan: the cube is now dead centre
     expect(camera.worldToScreenPoint(cube.transform.position).x).toBeCloseTo(640);
     expect(camera.screenPointToRay({ x: 640, y: 360 }).origin.x).toBeCloseTo(7);
     engine.input.pressMouseButton(0);
@@ -389,9 +389,10 @@ describe('transform', () => {
     unit.transform.setParent(board.transform, false);
     unit.transform.eulerAngles = new Vector3(0, 90, 0);
     unit.transform.translate(Vector3.forward);
-    expect(unit.transform.position.equals(Vector3.left, 1e-4)).toBe(true);
+    // A yaw of 90 faces right, as in Unity.
+    expect(unit.transform.position.equals(Vector3.right, 1e-4)).toBe(true);
     unit.transform.translate(Vector3.up.mul(3), Space.World);
-    expect(unit.transform.position.equals(new Vector3(-1, 3, 0), 1e-4)).toBe(true);
+    expect(unit.transform.position.equals(new Vector3(1, 3, 0), 1e-4)).toBe(true);
   });
 });
 

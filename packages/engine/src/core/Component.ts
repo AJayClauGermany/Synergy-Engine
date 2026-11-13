@@ -95,6 +95,11 @@ export abstract class Component extends EngineObject {
     return this.gameObject.tag === tag;
   }
 
+  /**
+   * The first component of (or derived from) `type` on this GameObject, or `null`. Unity's
+   * `GetComponent<T>()` takes the type as a type argument; pass the class instead. Like
+   * Unity, a missing one is `null`: test the result (`?.`) before using it.
+   */
   getComponent<T extends Component>(type: ComponentClass<T>): T | null {
     this._lookup('getComponent', type);
     return this.gameObject.getComponent(type);
@@ -105,19 +110,35 @@ export abstract class Component extends EngineObject {
     return this.gameObject.getComponents(type);
   }
 
+  /**
+   * This GameObject, then its descendants depth first; the first match. Same as Unity:
+   * inactive children are skipped unless `includeInactive`; this GameObject is always searched.
+   */
   getComponentInChildren<T extends Component>(type: ComponentClass<T>, includeInactive = false): T | null {
     this._lookup('getComponentInChildren', type);
     return this.gameObject.getComponentInChildren(type, includeInactive);
   }
 
+  /** Every match on this GameObject and its descendants. See `getComponentInChildren`. */
   getComponentsInChildren<T extends Component>(type: ComponentClass<T>, includeInactive = false): T[] {
     this._lookup('getComponentsInChildren', type);
     return this.gameObject.getComponentsInChildren(type, includeInactive);
   }
 
-  getComponentInParent<T extends Component>(type: ComponentClass<T>): T | null {
+  /**
+   * This GameObject, then each parent; the first match. Inactive parents are skipped
+   * unless `includeInactive` is true; this GameObject itself is always searched. Same as
+   * `GameObject.getComponentInParent`, as in Unity.
+   */
+  getComponentInParent<T extends Component>(type: ComponentClass<T>, includeInactive = false): T | null {
     this._lookup('getComponentInParent', type);
-    return this.gameObject.getComponentInParent(type);
+    return this.gameObject.getComponentInParent(type, includeInactive);
+  }
+
+  /** Every match on this GameObject and its parents, nearest first. See `getComponentInParent`. */
+  getComponentsInParent<T extends Component>(type: ComponentClass<T>, includeInactive = false): T[] {
+    this._lookup('getComponentsInParent', type);
+    return this.gameObject.getComponentsInParent(type, includeInactive);
   }
 
   // ---- Internal lifecycle hooks -------------------------------------------------------

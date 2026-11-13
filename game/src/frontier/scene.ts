@@ -60,7 +60,7 @@ export const frontierScene: SceneDefinition<TilePalette<Terrain>> = {
     sun.intensity = 1.1;
     sun.shadows = LightShadows.Soft;
     sun.shadowDistance = 50;
-    sun.direction = new Vector3(-0.45, -1, -0.6);
+    sun.direction = new Vector3(-0.45, -1, 0.6);
 
     const board = new GameObject('Board').addComponent(FrontierBoard);
     board.palette = palette;

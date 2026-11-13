@@ -10,6 +10,15 @@
  *   bun run screenshot --renderer webgl2                # force WebGL2 (the game prefers WebGPU)
  *   bun run screenshot --devtools                       # a build with the editor, opened (Hierarchy, Inspector, Console)
  *   bun run screenshot --key Space --logs               # print what the page logged so far
+ *   bun run screenshot --scene Frontier --players 2     # two players in a local room: game-p1.png, game-p2.png
+ *   bun run screenshot --players 2 --on 2 --click 640,400 --on 1 --wait 500   # act as player 2, then look as 1
+ *
+ * Several players (Unity's Multiplayer Play Mode, headless): `--players N` opens N pages of
+ * one browser. Player 1 hosts a local room (`?net=local&host=CODE`), the others join it
+ * (`?join=CODE&player=2`, ...; see game/src/localPlay.ts), and the run waits until each
+ * page reports itself connected (`data-net` on its root element). Actions apply to the
+ * player chosen with `--on N` (player 1 to begin with). Each player gets its own image
+ * and log: `game-p1.png`, `game-p1.log`, `game-p2.png`, ...
  *
  * Size: --width, --height (CSS pixels) and --scale (device pixel ratio; use 2 for a sharp image to share).
  * The build keeps class names so messages are readable; --release tests the minified build that ships.
@@ -34,7 +43,8 @@ type Action =
   | { kind: 'wait'; ms: number }
   | { kind: 'eval'; source: string }
   | { kind: 'hierarchy' }
-  | { kind: 'logs' };
+  | { kind: 'logs' }
+  | { kind: 'on'; player: number };
 
 const root = path.resolve(import.meta.dir, '..');
 const options = {
@@ -49,6 +59,7 @@ const options = {
   build: true,
   release: false,
   devtools: false,
+  players: 1,
 };
 const actions: Action[] = [];
 
@@ -114,6 +125,12 @@ for (let i = 0; i < args.length; i++) {
     case '--logs':
       actions.push({ kind: 'logs' });
       break;
+    case '--players':
+      options.players = Math.max(1, Math.min(8, Math.trunc(Number(value()))));
+      break;
+    case '--on':
+      actions.push({ kind: 'on', player: Math.trunc(Number(value())) });
+      break;
     default:
       throw new Error(`Unknown option ${flag}. See the comment at the top of scripts/screenshot.ts.`);
   }
@@ -132,8 +149,13 @@ interface PageLike {
   mouse: { click(x: number, y: number): Promise<void> };
   keyboard: { press(key: string): Promise<void> };
 }
+interface ContextLike {
+  newPage(): Promise<PageLike>;
+}
 interface BrowserLike {
-  newPage(options: { viewport: { width: number; height: number }; deviceScaleFactor: number }): Promise<PageLike>;
+  // One context for every player: pages of one context share an origin's storage and
+  // BroadcastChannel, like windows of one browser profile.
+  newContext(options: { viewport: { width: number; height: number }; deviceScaleFactor: number }): Promise<ContextLike>;
   close(): Promise<void>;
 }
 interface PlaywrightLike {
@@ -204,57 +226,114 @@ const browser = await playwright.chromium.launch({
   executablePath: process.env.CHROMIUM_PATH || undefined,
 });
 const errors: string[] = [];
-// Every console message, as `[  1.234s] LEVEL text`, for the .log file beside the image.
-const logLines: string[] = [];
 const started = performance.now();
-const logLine = (level: string, text: string) => {
-  const seconds = ((performance.now() - started) / 1000).toFixed(3).padStart(8);
-  logLines.push(`[${seconds}s] ${level.toUpperCase().padEnd(5)} ${text}`);
-};
-let printedLines = 0;
 let exitCode = 0;
+
+/** One player's page, with everything it logged as `[  1.234s] LEVEL text`. */
+interface Player {
+  number: number;
+  page: PageLike;
+  logLines: string[];
+  printedLines: number;
+}
+
+const multiplayer = options.players > 1;
+const roomCode = `T${crypto.randomUUID().replace(/-/g, '').slice(0, 5).toUpperCase()}`;
+function playerUrl(number: number): string {
+  if (!multiplayer) return url;
+  const join = number === 1 ? `host=${roomCode}` : `join=${roomCode}&player=${number}`;
+  return `${url}${url.includes('?') ? '&' : '?'}net=local&${join}`;
+}
+
+const players: Player[] = [];
 try {
-  const page = await browser.newPage({
+  const context = await browser.newContext({
     viewport: { width: options.width, height: options.height },
     deviceScaleFactor: options.scale,
   });
-  page.on('console', (message) => {
-    const type = message.type() === 'warning' ? 'warn' : message.type();
-    logLine(type, message.text());
-    if (type === 'error') errors.push(message.text());
-  });
-  page.on('pageerror', (error) => {
-    logLine('error', `Uncaught ${String(error)}`);
-    errors.push(String(error));
-  });
+  for (let number = 1; number <= options.players; number++) {
+    const player: Player = { number, page: await context.newPage(), logLines: [], printedLines: 0 };
+    const tag = multiplayer ? `player ${number}: ` : '';
+    const logLine = (level: string, text: string) => {
+      const seconds = ((performance.now() - started) / 1000).toFixed(3).padStart(8);
+      player.logLines.push(`[${seconds}s] ${level.toUpperCase().padEnd(5)} ${text}`);
+    };
+    player.page.on('console', (message) => {
+      const type = message.type() === 'warning' ? 'warn' : message.type();
+      logLine(type, message.text());
+      if (type === 'error') errors.push(tag + message.text());
+    });
+    player.page.on('pageerror', (error) => {
+      logLine('error', `Uncaught ${String(error)}`);
+      errors.push(`${tag}${String(error)}`);
+    });
+    players.push(player);
+  }
 
-  await page.goto(url, { waitUntil: 'load' });
-  await page.waitForFunction(() => document.documentElement.dataset.ready === 'true', undefined, { timeout: 30_000 });
-  await page.waitForTimeout(options.settle);
-  const device = await page.evaluate('synergy.engine.app.graphicsDevice.deviceType');
+  // Every page loads at once, as the windows of a test would; joiners wait for the host.
+  await Promise.all(
+    players.map(async ({ page, number }) => {
+      await page.goto(playerUrl(number), { waitUntil: 'load' });
+      await page.waitForFunction(() => document.documentElement.dataset.ready === 'true', undefined, {
+        timeout: 30_000,
+      });
+    }),
+  );
+  if (multiplayer) {
+    await Promise.all(
+      players.map(async ({ page, number }) => {
+        try {
+          await page.waitForFunction(
+            () => ['hosting', 'joined'].includes(document.documentElement.dataset.net ?? ''),
+            undefined,
+            { timeout: 20_000 },
+          );
+        } catch {
+          const state = await page.evaluate('document.documentElement.dataset.net ?? "(not reported)"');
+          throw new Error(
+            `Player ${number} did not connect (data-net is ${String(state)}). The game must host or join from ` +
+              '?host= / ?join= and report it with data-net (see game/src/localPlay.ts).',
+          );
+        }
+      }),
+    );
+  }
+  const first = players[0] as Player;
+  await first.page.waitForTimeout(options.settle);
+  const device = await first.page.evaluate('synergy.engine.app.graphicsDevice.deviceType');
 
+  let current = first;
   for (const action of actions) {
+    const page = current.page;
+    if (action.kind === 'on') {
+      const next = players[action.player - 1];
+      if (!next) throw new Error(`--on ${action.player}: there are ${players.length} player(s); use --players.`);
+      current = next;
+      continue;
+    }
     if (action.kind === 'click') await page.mouse.click(action.x, action.y);
     else if (action.kind === 'key') await page.keyboard.press(action.code);
     else if (action.kind === 'wait') await page.waitForTimeout(action.ms);
     else if (action.kind === 'hierarchy') console.log(await page.evaluate('synergy.Debug.hierarchy()'));
     else if (action.kind === 'logs') {
-      console.log(logLines.slice(printedLines).join('\n') || '(nothing logged since the last --logs)');
-      printedLines = logLines.length;
+      console.log(current.logLines.slice(current.printedLines).join('\n') || '(nothing logged since the last --logs)');
+      current.printedLines = current.logLines.length;
     } else console.log(`${action.source} => ${JSON.stringify(await page.evaluate(action.source))}`);
     // Give the game a couple of frames to react before the next step.
     if (action.kind !== 'wait') await page.waitForTimeout(100);
   }
 
-  const out = path.resolve(root, options.out);
-  await mkdir(path.dirname(out), { recursive: true });
-  await page.screenshot({ path: out });
-  const logFile = out.replace(/\.png$/i, '') + '.log';
-  await Bun.write(logFile, logLines.length > 0 ? `${logLines.join('\n')}\n` : '');
-  console.log(
-    `Saved ${path.relative(process.cwd(), out)} (${options.width}x${options.height} at ${options.scale}x, ${String(device)}) ` +
-      `and its log, ${path.relative(process.cwd(), logFile)} (${logLines.length} lines)`,
-  );
+  const base = path.resolve(root, options.out).replace(/\.png$/i, '');
+  await mkdir(path.dirname(base), { recursive: true });
+  for (const player of players) {
+    const name = multiplayer ? `${base}-p${player.number}` : base;
+    await player.page.screenshot({ path: `${name}.png` });
+    await Bun.write(`${name}.log`, player.logLines.length > 0 ? `${player.logLines.join('\n')}\n` : '');
+    console.log(
+      `Saved ${path.relative(process.cwd(), `${name}.png`)} (${options.width}x${options.height} at ${options.scale}x, ` +
+        `${String(device)}) and its log, ${path.relative(process.cwd(), `${name}.log`)} (${player.logLines.length} lines)`,
+    );
+  }
 } catch (error) {
   errors.push(String(error));
 } finally {

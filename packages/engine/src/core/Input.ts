@@ -48,6 +48,12 @@ interface ButtonBinding {
 
 /** How fast `getAxis` moves toward its target, in units per second (Unity's default sensitivity/gravity). */
 const AXIS_SPEED = 3;
+/** Unity's default Input Manager sensitivity for "Mouse X", "Mouse Y" and "Mouse ScrollWheel". */
+const MOUSE_AXIS_SENSITIVITY = 0.1;
+/** Browser wheel events measure pixels; about this many make one wheel notch. */
+const PIXELS_PER_NOTCH = 100;
+/** ...or lines; browsers scroll this many per notch. */
+const LINES_PER_NOTCH = 3;
 
 /**
  * @internal Per-engine input state behind the static `Input` API. Tests and tools can
@@ -111,7 +117,10 @@ export class InputState {
     this.mouseReleased.add(button);
   }
 
-  /** Moves the pointer to canvas coordinates (CSS pixels, origin top-left). */
+  /**
+   * Moves the pointer to a screen point: CSS pixels from the BOTTOM-left of the game
+   * view, the space of `Input.mousePosition` and `camera.worldToScreenPoint`.
+   */
   moveMouse(x: number, y: number): void {
     if (this.mousePresent) {
       this.pendingMouseDelta = this.pendingMouseDelta.add(
@@ -122,6 +131,7 @@ export class InputState {
     this.mousePosition = new Vector3(x, y, 0);
   }
 
+  /** Turns the wheel: `deltaY` is notches, positive scrolling up/away, as in `Input.mouseScrollDelta`. */
   scroll(deltaX: number, deltaY: number): void {
     this.pendingScroll = this.pendingScroll.add(new Vector2(deltaX, deltaY));
   }
@@ -189,9 +199,9 @@ export class InputState {
   }
 
   getAxisRaw(name: string): number {
-    if (name === 'Mouse X') return this.mouseDelta.x;
-    if (name === 'Mouse Y') return this.mouseDelta.y;
-    if (name === 'Mouse ScrollWheel') return this.mouseScrollDelta.y;
+    if (name === 'Mouse X') return this.mouseDelta.x * MOUSE_AXIS_SENSITIVITY;
+    if (name === 'Mouse Y') return this.mouseDelta.y * MOUSE_AXIS_SENSITIVITY;
+    if (name === 'Mouse ScrollWheel') return this.mouseScrollDelta.y * MOUSE_AXIS_SENSITIVITY;
     const axis = this.axes.get(name);
     if (!axis) throw new Error(`Input axis "${name}" is not set up. Use Input.defineAxis("${name}", ...).`);
     const positive = axis.positive.some((code) => this.held.has(code)) ? 1 : 0;
@@ -249,7 +259,8 @@ export class InputState {
     const options = { signal: controller.signal };
     const position = (event: PointerEvent | WheelEvent) => {
       const rect = canvas.getBoundingClientRect();
-      this.moveMouse(event.clientX - rect.left, event.clientY - rect.top);
+      // Unity's screen space: origin at the bottom-left, y up.
+      this.moveMouse(event.clientX - rect.left, rect.bottom - event.clientY);
     };
     const isTyping = (event: KeyboardEvent) => {
       const element = event.target as HTMLElement | null;
@@ -300,8 +311,10 @@ export class InputState {
       'wheel',
       (event) => {
         position(event);
-        // One wheel notch is +/-1, positive when scrolling up/away, as in Unity.
-        this.scroll(-Math.sign(event.deltaX), -Math.sign(event.deltaY));
+        // One wheel notch is +/-1, positive when scrolling up/away, as in Unity. Trackpads
+        // send many small events, which add up to fractions of a notch.
+        const perNotch = event.deltaMode === 1 ? LINES_PER_NOTCH : event.deltaMode === 2 ? 1 : PIXELS_PER_NOTCH;
+        this.scroll(-event.deltaX / perNotch, -event.deltaY / perNotch);
         event.preventDefault();
       },
       { signal: controller.signal, passive: false },
@@ -325,8 +338,10 @@ function unityMouseButton(domButton: number): number {
 /**
  * Unity's `Input` (the classic Input Manager API).
  *
- * Screen positions are CSS pixels with the origin at the TOP-left of the canvas and Y
- * pointing down, matching the DOM and the Preact HUD. (Unity's origin is bottom-left.)
+ * Screen positions are Unity's: origin at the BOTTOM-left of the game view, y up. The
+ * one difference is the unit: CSS pixels rather than device pixels (`Screen.width` and
+ * `Screen.height` use the same unit, so fractions of the screen work as in Unity). HTML
+ * measures y from the top: `top = Screen.height - y`.
  */
 export class Input {
   /** True while `key` is held. */
@@ -365,32 +380,42 @@ export class Input {
     return currentEngine().input.getMouseButtonUp(button);
   }
 
-  /** Pointer position on the canvas in CSS pixels, origin top-left. `z` is always 0. */
   /**
    * True once the pointer has been over the game. Until then `mousePosition` is (0, 0),
-   * the top-left corner: check this before treating the position as "at the edge".
+   * the bottom-left corner: check this before treating the position as "at the edge".
+   * (Not in Unity.)
    */
   static get mousePresent(): boolean {
     return currentEngine().input.mousePresent;
   }
 
+  /** Pointer position in CSS pixels from the BOTTOM-left of the game view (y up), as in Unity. `z` is always 0. */
   static get mousePosition(): Vector3 {
     return currentEngine().input.mousePosition;
   }
 
-  /** Pointer movement since the previous frame, in CSS pixels. */
+  /** Pointer movement since the previous frame, in CSS pixels, y up. Same as Unity's `Input.mousePositionDelta`. */
   static get mousePositionDelta(): Vector2 {
     return currentEngine().input.mouseDelta;
   }
 
-  /** Wheel movement this frame. `y` is +1 per notch scrolling up/away. */
+  /**
+   * Wheel movement this frame, in notches: `y` is +1 per notch scrolling up/away, as in
+   * Unity. Trackpads give fractions.
+   */
   static get mouseScrollDelta(): Vector2 {
     return currentEngine().input.mouseScrollDelta;
   }
 
   /**
-   * A smoothed value in [-1, 1]. Built in: "Horizontal" (A/D, arrows), "Vertical" (W/S,
-   * arrows), "Mouse X", "Mouse Y", "Mouse ScrollWheel".
+   * A named axis, as set up in Unity's default Input Manager:
+   * - "Horizontal" (A/D, arrows) and "Vertical" (W/S, arrows): smoothed toward -1..1.
+   *   "Vertical" is positive for W/up; on the ground that is `Vector3.forward`, so
+   *   `new Vector3(getAxis('Horizontal'), 0, getAxis('Vertical'))` moves as in Unity.
+   * - "Mouse X" / "Mouse Y": movement this frame times 0.1 (Unity's default
+   *   sensitivity), not clamped; "Mouse Y" is positive moving up.
+   * - "Mouse ScrollWheel": 0.1 per notch, positive scrolling up/away.
+   * An unknown name throws, as in Unity.
    */
   static getAxis(name: string): number {
     return currentEngine().input.getAxis(name);

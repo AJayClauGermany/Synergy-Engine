@@ -4,13 +4,14 @@ import { Vector3 } from '../math/Vector3';
 import type { GameObject } from './GameObject';
 import { MonoBehaviour } from './MonoBehaviour';
 import { currentEngine } from './runtime';
+import { toPlayCanvasVec3 } from './handedness';
 
 const SPHERE_SEGMENTS = 24;
 const points: pc.Vec3[] = [];
 const colors: pc.Color[] = [];
 
 function point(v: Vector3): pc.Vec3 {
-  return new pc.Vec3(v.x, v.y, v.z);
+  return toPlayCanvasVec3(v);
 }
 
 /**

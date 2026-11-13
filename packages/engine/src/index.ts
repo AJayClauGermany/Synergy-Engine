@@ -42,6 +42,11 @@ export {
   destroy,
   destroyImmediate,
   dontDestroyOnLoad,
+  findAnyObjectByType,
+  findFirstObjectByType,
+  findObjectsByType,
+  FindObjectsInactive,
+  FindObjectsSortMode,
   findObjectOfType,
   findObjectsOfType,
 } from './core/Object';
@@ -51,6 +56,7 @@ export { Light, LightType, LightShadows } from './components/Light';
 export { Mesh, Material, MeshFilter, MeshRenderer, type Texture } from './components/rendering';
 export { Sprite, type SpriteRect, type SpriteOptions } from './components/Sprite';
 export { SpriteRenderer } from './components/SpriteRenderer';
+export { AudioClip, AudioSource, AudioListener } from './components/Audio';
 import './components/primitives';
 
 export { Collider, BoxCollider, SphereCollider, CapsuleCollider, type RaycastHit } from './physics/Collider';
@@ -76,7 +82,7 @@ export {
   type PathResult,
 } from './grid';
 export { Grid, type GridHit } from './tilemap/Grid';
-export { Tilemap, TileBase, Tile, type TileData } from './tilemap/Tilemap';
+export { Tilemap, TileBase, Tile, TileFlags, type TileData } from './tilemap/Tilemap';
 export { TilemapRenderer } from './tilemap/TilemapRenderer';
 export {
   TilePalette,

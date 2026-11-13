@@ -86,16 +86,14 @@ a whole project (what to export, what to port first).
    - `tilemap.SetTile(new Vector3Int(x, y, 0), tile)` → `tilemap.setTile({ x, y }, tile)`.
      Hex cell coordinates are the same as Unity's.
    - Mouse buttons keep Unity's numbering (1 is right).
-   - Rotation signs: a positive rotation about X or Y turns the opposite way to Unity's
-     (the world is right-handed). `Quaternion.Euler(45, 0, 0)` on a camera looked down
-     there and looks up here; `Rotate(Vector3.up, 90)` turned right and turns left. Negate
-     ported pitch and yaw, or better, use `lookAt` / `Quaternion.lookRotation`, which need
-     no angles. `Vector3.cross` and `signedAngle` change sign for the same reason.
-   - `transform.eulerAngles` read back: yaw comes back within -90 to 90, so
-     `eulerAngles = new Vector3(0, eulerAngles.y + 10, 0)` never completes a turn. Keep
-     the angle in a field, or use `transform.rotate`.
-   - `new Vector3(h, 0, v)` from `Input.GetAxis` → `Vector3.right.mul(h).add(Vector3.forward.mul(v))`.
-     *(checked)*
+   - Positions, directions, angles and screen coordinates port unchanged: the API uses
+     Unity's left-handed axes (forward is +Z), Euler order (Z, X, Y), rotation signs,
+     bottom-left screen origin and mesh winding. `new Vector3(h, 0, v)` from the input
+     axes walks forward, as in Unity. Only code that reaches into PlayCanvas
+     (`gameObject.entity`, `engine.app`) sees its mirrored space.
+   - `transform.eulerAngles` reads back in [0, 360) as in Unity, so the same caveat holds:
+     reading, adding and writing back can jump. Keep the angle in a field, or use
+     `transform.rotate`.
    - `IEnumerator Start()` → `*start(): IEnumerator`: it runs as a coroutine here too.
    - `Mathf.SmoothDamp(a, b, ref v, t)` → `[a, v] = Mathf.smoothDamp(a, b, v, t, Infinity, Time.deltaTime)`.
    - `list.Remove(x)` → `const i = list.indexOf(x); if (i >= 0) list.splice(i, 1);`

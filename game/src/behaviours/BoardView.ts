@@ -37,7 +37,7 @@ class TerrainTile extends Tile {
   /** Vary the shade a little from cell to cell so the map does not look flat. */
   override getTileData(cell: Vector3Int, tilemap: Tilemap): TileData {
     const shade = 0.92 + ((cell.x * 7 + cell.y * 13) % 3) * 0.04;
-    return { ...super.getTileData(cell, tilemap), color: this.color.mul(shade) };
+    return { ...super.getTileData(cell, tilemap), color: this.color.mul(shade).withAlpha(this.color.a) };
   }
 }
 

@@ -64,8 +64,8 @@ Smoothing toward a target, the same at 30 and at 144 frames a second. `rate` is 
 this.distance = Mathf.lerp(this.distance, this.targetDistance, 1 - Math.exp(-12 * Time.unscaledDeltaTime));
 ```
 
-Edge scrolling. Screen space has its origin at the **top left** and `y` grows downward,
-so the top edge is a small `y`. The screen's "up" is the rig's forward, which is -Z:
+Edge scrolling. Screen space is Unity's: origin at the **bottom left**, `y` grows upward,
+so the top edge is a large `y`. The screen's "up" is the rig's forward (+Z):
 
 ```ts
 edge = 24;        // pixels
@@ -122,18 +122,17 @@ the view's height in world units) in place of the distance. Everything else is t
 
 - **The camera glides to a corner when the game starts.** Edge scrolling read
   `Input.mousePosition` before the mouse had ever been over the canvas, when it is
-  `(0, 0)`: the top-left corner. Check `Input.mousePresent` first.
-- **Scrolling up moves the view down**, or the top edge does nothing. Screen `y` grows
-  downward here; Unity's grows upward. The top edge is `y < margin`.
+  `(0, 0)`: the bottom-left corner. Check `Input.mousePresent` first.
+- **HTML placed with screen coordinates sits upside down.** Screen `y` grows upward (as
+  in Unity) but CSS `top` grows downward: `top = Screen.height - y`.
 - **Faster on a fast machine, floatier on a slow one.** `Mathf.lerp(a, b, 0.1)` once per
   frame depends on the frame rate. Use `1 - Math.exp(-rate * dt)`.
 - **Panning goes sideways after rotating.** The input was added to the world position
   directly. Rotate it by the rig's rotation first.
 - **The camera stops when the game is paused**, so the player cannot look around.
   `Time.deltaTime` is zero at `Time.timeScale = 0`; use `Time.unscaledDeltaTime`.
-- **Rotating the wrong way.** A positive angle about Y turns counter-clockwise seen from
-  above (right-handed), the opposite of Unity. Decide by trying it, not from a Unity
-  tutorial's sign.
+- **Rotating the wrong way.** A positive angle about Y turns clockwise seen from above
+  (to the right), as in Unity. "Q turns left" therefore needs a negative yaw step.
 - **The view shows past the map** at one zoom level but not another. The limit is on the
   point looked at, and how much is visible grows with the distance. Shrink the bounds as
   the distance grows, or accept an edge of background at full zoom-out.

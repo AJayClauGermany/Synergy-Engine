@@ -1,4 +1,4 @@
-import { Mathf } from './Mathf';
+import { ENGINE_EPSILON } from './Mathf';
 import { Vector3 } from './Vector3';
 
 /** An infinite line starting at `origin` going along `direction` (always normalised). */
@@ -48,7 +48,7 @@ export class Plane {
    */
   raycast(ray: Ray): number | null {
     const denominator = ray.direction.dot(this.normal);
-    if (Math.abs(denominator) < Mathf.epsilon) return null;
+    if (Math.abs(denominator) < ENGINE_EPSILON) return null;
     const distance = -(ray.origin.dot(this.normal) + this.distance) / denominator;
     return distance >= 0 ? distance : null;
   }

@@ -39,14 +39,14 @@ export class Spinner extends MonoBehaviour {
 | 2 | Generics: `GetComponent<Health>()` | Pass the class: `getComponent(Health)` | Types do not exist at runtime in TypeScript. |
 | 3 | Operators: `a + b`, `v * 2`, `q * v` | Methods: `a.add(b)`, `v.mul(2)`, `q.rotate(v)` | No operator overloading. See the table below. |
 | 4 | `Vector3` is a mutable struct | `Vector3`, `Quaternion`, `Color` are **immutable**; every operation returns a new value | Gives struct-like value semantics. `transform.position.x = 5` is a compile error in both. |
-| 5 | Left-handed, forward is `+Z` | **Right-handed, forward is `-Z`** | Matches PlayCanvas and glTF. Use `Vector3.forward` / `transform.forward`, never literal axes: positions and directions then port unchanged. **Angles do not.** A positive rotation about X or Y turns the other way: `Quaternion.euler(45, 0, 0)` tilts *up* (Unity: down), `transform.rotate(Vector3.up, 90)` turns *left* (Unity: right), and `Vector3.cross` and `Vector3.signedAngle` change sign. Negate a ported pitch and yaw, or better, aim with `transform.lookAt` / `Quaternion.lookRotation`, which need no angles. |
-| 6 | Screen origin bottom-left, Y up | **Screen origin top-left, Y down**, in CSS pixels | Same space as the DOM and the Preact HUD. Affects `Input.mousePosition`, `Camera.worldToScreenPoint`. |
+| 5 | Screen units are device pixels | **CSS pixels** (origin bottom-left, y up, as in Unity) | `Input.mousePosition`, `Camera.worldToScreenPoint` and `Screen.width` share the unit, so fractions of the screen work as in Unity. HTML over the game measures y from the top: `top = Screen.height - y` (`WorldAnchor` does it). |
+| 6 | The scripting API and the renderer share one space | **Unity's space outside, PlayCanvas's inside** | Everything in this API is Unity's: left-handed, `forward` = (0, 0, 1), Euler Z-X-Y, positive yaw turns right. PlayCanvas, underneath, is right-handed with -Z forward; the engine mirrors Z at the boundary. Only the escape hatches (`gameObject.entity`, `engine.app`, `pcCamera`, ...) show PlayCanvas's numbers: there Z is negated and rotations are `(-x, -y, z, w)`. |
 | 7 | `Physics.Raycast(ray, out hit)` returns bool | `Physics.raycast(ray)` returns the hit or `null` | No `out` parameters. |
 | 8 | `if (target != null)` is false for destroyed objects | `if (isAlive(target))` | `==` cannot be overloaded. |
 | 9 | Scenes and prefabs are assets made in the editor | Scenes and prefabs are **functions** (`SceneManager.register`, `new Prefab`) | The editor ([devtools.md](devtools.md)) inspects a running game; it does not author scenes. Code is easy to diff and generate. |
-| 10 | Lights shine along `transform.forward` | Directional and spot lights shine along `-transform.up` | PlayCanvas convention. Set `light.direction` and forget about it. |
-| 11 | Euler order Z, X, Y | Euler order X, Y, Z | PlayCanvas convention. About X and Y the direction is also reversed (row 5). `eulerAngles` read back differently too: yaw comes back within -90 to 90 (135 reads as `(180, 45, 180)`), so `eulerAngles = new Vector3(0, eulerAngles.y + 10, 0)` never completes a turn. Keep the angle in a field of your own (as `CameraRig` does) or use `transform.rotate`. |
-| 12 | Mesh triangles are clockwise | Counter-clockwise | Follows from the right-handed world. |
+| 10 | `Light` has no direction property | `light.direction = v` turns the light to shine along `v` | A convenience; lights shine along `transform.forward` as in Unity. |
+| 11 | glTF importers flip the model into Unity's space | `Assets.loadModel` turns the model's nodes 180 degrees about Y | The model faces `forward` with its handedness intact, as with Unity's importers, but the local rotations of its inner nodes differ. Place and turn the root. |
+| 12 | `meshFilter.mesh` on a model imported without Read/Write throws | Meshes of loaded models are never readable (`mesh.isReadable` is false) | Their data stays on the GPU. Build editable shapes with `new Mesh()`. |
 | 13 | Rigidbody physics, collisions, triggers | **Not available yet.** Colliders exist for raycasts and overlap queries only | Kept out of the core to stay small. |
 | 14 | UI: uGUI / UI Toolkit | In-scene `Canvas` + `Image` for UI images; Preact (`@synergy/ui`) for interactive HUDs | See below. |
 | 15 | `Invoke("Method", 2f)` | `this.invoke(this.method, 2)` | Pass the function, not its name. |
@@ -66,6 +66,7 @@ export class Spinner extends MonoBehaviour {
 | `a == b` (approximate) | `a.equals(b)` |
 | `q1 * q2` | `q1.mul(q2)` |
 | `q * v` | `q.rotate(v)` |
+| `color * 0.5f` / `colorA * colorB` | `color.mul(0.5)` / `colorA.mul(colorB)`: alpha is scaled too, as in Unity (`color.mul(0.5).withAlpha(color.a)` keeps it) |
 | `transform.position += Vector3.up` | `transform.position = transform.position.add(Vector3.up)` |
 | `new Vector3(p.x, 0, p.z)` | `p.withY(0)` |
 
@@ -110,11 +111,11 @@ structs, only a test can show.
 | `new GameObject("Name")` | `new GameObject('Name')` |
 | `new GameObject("Name", typeof(A), typeof(B))` | `new GameObject('Name', A, B)` |
 | `go.AddComponent<T>()` | `go.addComponent(T)` |
-| `GetComponent<T>()`, `GetComponents`, `GetComponentInChildren`, `GetComponentInParent` | same names in camelCase, class as argument |
+| `GetComponent<T>()`, `GetComponents`, `GetComponentInChildren`, `GetComponentInParent`, `GetComponentsInParent` | same names in camelCase, class as argument, and `includeInactive` where Unity has it. As in Unity, the `...InParent` ones skip inactive parents unless `includeInactive` is true, and always search the object itself |
 | `go.SetActive(false)`, `activeSelf`, `activeInHierarchy` | `go.setActive(false)`, same properties |
 | `go.tag`, `CompareTag`, `go.layer` | same |
 | `GameObject.Find`, `FindWithTag`, `FindGameObjectsWithTag` | `GameObject.find`, `findWithTag`, `findGameObjectsWithTag` |
-| `FindFirstObjectByType<T>()`, `FindObjectsByType<T>()` | `findObjectOfType(T)`, `findObjectsOfType(T)` |
+| `FindAnyObjectByType<T>()`, `FindFirstObjectByType<T>()`, `FindObjectsByType<T>(FindObjectsInactive.Include)` | `findAnyObjectByType(T)`, `findFirstObjectByType(T)`, `findObjectsByType(T, FindObjectsInactive.Include)`. Results come in scene order; a `FindObjectsSortMode` is accepted and ignored (Unity 6 deprecates it). The old `findObjectOfType` / `findObjectsOfType` still work and are marked deprecated, as in Unity 6 |
 | `GameObject.CreatePrimitive(PrimitiveType.Cube)` | `GameObject.createPrimitive(PrimitiveType.Cube)` (Unity's sizes) |
 | `Instantiate(obj, pos, rot, parent)` | `instantiate(obj, pos, rot, parent)` |
 | `Destroy(obj, delay)`, `DestroyImmediate` | `destroy(obj, delay)`, `destroyImmediate` |
@@ -153,7 +154,12 @@ start() {
 
 `yield return x` becomes `yield x`. Also available: `WaitForSecondsRealtime`,
 `WaitForEndOfFrame`, `WaitForFixedUpdate`, `WaitWhile`, `CustomYieldInstruction`,
-`stopCoroutine`, `stopAllCoroutines`, `invoke`, `invokeRepeating`, `cancelInvoke`.
+`stopCoroutine` (the `Coroutine`, or the generator you started), `stopAllCoroutines`,
+`invoke`, `invokeRepeating`, `cancelInvoke`, `isInvoking`.
+
+As in Unity, an `invoke` is not a coroutine: `stopAllCoroutines` does not cancel it
+(`cancelInvoke` does), and it keeps going while the behaviour is disabled or its
+GameObject inactive. Coroutines end when the GameObject is deactivated.
 
 A coroutine may stop itself (deactivate or destroy its own object, call
 `stopAllCoroutines`); it ends at its next `yield`, and its `finally` blocks run.
@@ -175,41 +181,43 @@ Iterate children with `for (const child of transform)`.
 | `Time.deltaTime`, `time`, `timeScale`, `fixedDeltaTime`, `unscaledDeltaTime`, `frameCount` | same |
 | `Input.GetKey(KeyCode.W)`, `GetKeyDown`, `GetKeyUp` | `Input.getKey(KeyCode.W)`, ... |
 | `Input.GetMouseButtonDown(0)` (0 left, 1 right, 2 middle) | `Input.getMouseButtonDown(0)`, same numbering |
-| `Input.mousePosition`, `mouseScrollDelta` | same (top-left origin) |
+| `Input.mousePosition`, `mouseScrollDelta` | same: origin bottom-left, y up; units are CSS pixels. Scroll is in notches (fractions from trackpads) |
+| `Input.GetAxis("Mouse X")`, `"Mouse Y"`, `"Mouse ScrollWheel"` | same, with the default Input Manager's 0.1 sensitivity |
 | `Input.GetAxis("Horizontal")`, `GetButtonDown("Jump")` | `Input.getAxis('Horizontal')`, `Input.getButtonDown('Jump')` |
 | Input Manager settings | `Input.defineAxis(...)`, `Input.defineButton(...)` |
 | `Screen.width`, `Screen.height` | same (CSS pixels) |
-| `Debug.Log`, `LogWarning`, `LogError`, `LogException`, `Assert`, `DrawLine`, `DrawRay` | `Debug.log`, `logWarning`, `logError`, `logException`, `assert`, `drawLine`, `drawRay`. Unity's `context` argument goes last: `Debug.log('stuck', this.gameObject)` |
+| `Debug.Log`, `LogWarning`, `LogError`, `LogException`, `Assert`, `DrawLine`, `DrawRay` | `Debug.log`, `logWarning`, `logError`, `logException`, `assert`, `drawLine`, `drawRay`. Unity's `context` argument goes last: `Debug.log('stuck', this.gameObject)`. `drawLine(start, end, color, duration, depthTest)` as in Unity, drawn in development builds only |
 | `Debug.Break()`, `Debug.isDebugBuild` | same in camelCase; `break()` pauses the editor and does nothing without one |
 | `Application.logMessageReceived`, `LogType`, `Application.isEditor` | same |
 | `OnDrawGizmos`, `OnDrawGizmosSelected`, `Gizmos.DrawWireSphere` and the rest | same in camelCase, drawn while the editor is open ([devtools.md](devtools.md)) |
 | `ScreenCapture.CaptureScreenshot("a.png")` | `await ScreenCapture.captureScreenshot('a.png')` |
 | The Hierarchy, Inspector and Console windows | The editor in a development build: press <kbd>`</kbd> ([devtools.md](devtools.md)). As text: `Debug.hierarchy()`, `bun run logs` |
 | `EditorApplication.isPaused`, `Selection.activeGameObject`, `EditorPrefs` | the same names in `@synergy/devtools`, development builds only |
-| `Mathf.*` | `Mathf.*` in camelCase, for what Unity adds to the language: `clamp`, `clamp01`, `lerp`, `inverseLerp`, `moveTowards`, `smoothStep`, `repeat`, `pingPong`, `deltaAngle`, `lerpAngle`, `approximately`, `floorToInt`, `roundToInt` and the like. `Mathf.smoothDamp(current, target, velocity, smoothTime, maxSpeed, deltaTime)` returns `[value, velocity]` in place of `ref`, and needs its last two arguments (`Infinity`, `Time.deltaTime`). `round` and `roundToInt` send halfway values to the even number, as Unity does. Not there: `acos`, `asin`, `atan`, `exp`, `log`, `log10` (use `Math.acos` and so on, in radians) and `perlinNoise` |
+| `Mathf.*` | `Mathf.*` in camelCase, for what Unity adds to the language: `clamp`, `clamp01`, `lerp`, `inverseLerp`, `moveTowards`, `smoothStep`, `repeat`, `pingPong`, `deltaAngle`, `lerpAngle`, `approximately`, `floorToInt`, `roundToInt` and the like. `Mathf.smoothDamp(current, target, velocity, smoothTime, maxSpeed, deltaTime)` returns `[value, velocity]` in place of `ref`, and needs its last two arguments (`Infinity`, `Time.deltaTime`). `round` and `roundToInt` send halfway values to the even number, as Unity does. `Mathf.epsilon` is Unity's 1.401298e-45 and `approximately` is Unity's formula (relative, about one part in a million), so near zero use a tolerance of your own. Not there: `acos`, `asin`, `atan`, `exp`, `log`, `log10` (use `Math.acos` and so on, in radians) and `perlinNoise` |
 | `SceneManager.LoadScene("Main")` | `await SceneManager.loadScene('Main')` after `SceneManager.register('Main', build)`. For scenes that need assets, register `{ preload, build }` |
-| `Random.Range`, `Random.value` | `new Random(seed)` (the seed is required and a whole number): `Random.Range(int, int)` is `rangeInt(min, maxExclusive)`, `Random.Range(float, float)` is `range(min, max)`; also `value`, `pick`, `shuffle`, `state`. `list[random.range(0, list.length)]` is `undefined`: an index needs `rangeInt`, or `random.pick(list)` |
+| `Random.Range`, `Random.value` | `new Random(seed)` (the seed is required and a whole number): `Random.Range(int, int)` is `rangeInt(min, maxExclusive)`, `Random.Range(float, float)` is `range(min, max)` (and `value`), which never returns `max` where Unity's can; also `value`, `pick`, `shuffle`, `state`. `list[random.range(0, list.length)]` is `undefined`: an index needs `rangeInt`, or `random.pick(list)` |
 | `RenderSettings.ambientLight` | same |
-| `Camera.main`, `ScreenPointToRay`, `WorldToScreenPoint`, `ScreenToWorldPoint` | same in camelCase |
+| `Camera.main`, `ScreenPointToRay`, `WorldToScreenPoint`, `ScreenToWorldPoint`, the `Viewport` conversions | same in camelCase, same bottom-left origin |
 | `LayerMask.GetMask("Units")`, `NameToLayer` | `LayerMask.getMask('Units')`, `nameToLayer`; name layers with `LayerMask.define(8, 'Units')` |
-| `UnityEvent`, `event Action` | `UnityEvent<[args]>` with `addListener`, `invoke` |
+| `UnityEvent`, `event Action` | `UnityEvent<[args]>` with `addListener`, `removeListener` (removes every registration of that function, as in Unity), `invoke` |
 
 ### Rendering
 
 | Unity | Synergy |
 |-------|---------|
-| `MeshFilter.mesh`, `MeshRenderer.material` / `sharedMaterial` | same. `.material` copies on first access, as in Unity |
+| `MeshFilter.mesh` / `sharedMesh`, `MeshRenderer.material` / `sharedMaterial` | same. `.mesh` and `.material` copy on first access, as in Unity |
 | `new Material(shader)`, `material.color`, `mainTexture` | `new Material()`, `color`, `mainTexture`, `metallic`, `smoothness`, `emissionColor` |
-| `new Mesh { vertices, triangles }`, `RecalculateNormals()` | `new Mesh()`, `vertices`, `triangles`, `recalculateNormals()` |
+| `new Mesh { vertices, triangles, uv }`, `RecalculateNormals()` | `new Mesh()`, `vertices`, `triangles`, `uv`, `recalculateNormals()`: Unity's clockwise winding and bottom-up `v`. The arrays are copies, as in Unity: assign them back |
 | `Light` (type, color, intensity, range, spotAngle, shadows) | same, plus `direction` |
-| `Resources.Load` / Addressables | `await Assets.loadModel(url)`, `Assets.loadTexture(url)`, `Assets.loadSprite(url)` |
+| `Resources.Load` / Addressables | `await Assets.loadModel(url)`, `Assets.loadTexture(url)`, `Assets.loadSprite(url)`, `Assets.loadAudioClip(url)` |
+| `AudioSource` (`clip`, `volume`, `pitch`, `loop`, `mute`, `playOnAwake`, `spatialBlend`, `minDistance`, `maxDistance`, `isPlaying`, `time`, `Play(delay)`, `Stop`, `Pause`, `UnPause`, `PlayOneShot`, `PlayClipAtPoint`), `AudioClip.length`, `AudioListener` | same in camelCase, same defaults. `spatialBlend` is 2D below 0.5 and 3D from 0.5; sound starts after the player's first click or key (a browser rule); no mixer groups |
 
 ### Sprites (2D in a 3D scene)
 
 | Unity | Synergy |
 |-------|---------|
-| `Sprite`, `Sprite.Create(texture, rect, pivot, pixelsPerUnit)` | `new Sprite(texture, rect?, { pivot, pixelsPerUnit })`, `Sprite.create(...)`, `Sprite.slice(texture, columns, rows)`. `rect` is measured from the image's **top**-left |
-| `SpriteRenderer` (`sprite`, `color`, `flipX`, `flipY`, `sortingOrder`, `bounds`) | same. Faces +Z (toward an unrotated camera); unlit, alpha-blended, depth-tested against 3D meshes |
+| `Sprite`, `Sprite.Create(texture, rect, pivot, pixelsPerUnit)` | `new Sprite(texture, rect?, { pivot, pixelsPerUnit })`, `Sprite.create(...)`, `Sprite.slice(texture, columns, rows)`. `rect` is measured from the image's **top**-left. As in Unity, the `pivot` you pass is a fraction of the rect, and `sprite.pivot` reads it back in pixels |
+| `SpriteRenderer` (`sprite`, `color`, `flipX`, `flipY`, `sortingOrder`, `bounds`) | same; `flipX`/`flipY` mirror about the pivot, as in Unity. Faces +Z (toward an unrotated camera); unlit, alpha-blended, depth-tested against 3D meshes |
 | Sorting layers | Not available; use `sortingOrder` (higher draws on top, before distance is considered) |
 
 Sprites, meshes and loaded models share one scene and one depth buffer, so a cube in
@@ -222,9 +230,11 @@ with canvas UI.
 |-------|---------|
 | `Grid` (`cellSize`, `cellGap`, `cellLayout`, `cellSwizzle`) | same. Layouts: `Rectangle`, `Hexagon` (Unity's offset coordinates) |
 | `CellToWorld`, `WorldToCell`, `GetCellCenterWorld` | same in camelCase |
-| `Tilemap.SetTile`, `GetTile<T>`, `HasTile`, `SetTiles`, `FloodFill`, `SwapTile`, `ClearAllTiles`, `cellBounds`, `SetColor` | same in camelCase |
+| `Tilemap.SetTile`, `HasTile`, `SetTiles`, `FloodFill`, `SwapTile`, `ClearAllTiles`, `cellBounds` | same in camelCase |
+| `tilemap.GetTile<DoorTile>(cell)` | `tilemap.getTile(cell, DoorTile)`: `null` unless it is one, like Unity. `getTile<DoorTile>(cell)` compiles too, but only casts |
+| `SetColor`, `GetColor`, `SetTileFlags`, `AddTileFlags`, `RemoveTileFlags`, `TileFlags` | same in camelCase, with Unity's rules: `setColor` replaces the tile's colour, `setTile` resets it, and a `Tile` has `TileFlags.LockColor` by default, so `setColor` does nothing (here it warns once) until `removeTileFlags(cell, TileFlags.LockColor)` |
 | `Tilemap.BoxFill(position, tile, startX, startY, endX, endY)` | `tilemap.boxFill(tile, min, max)`: two corner cells, both inclusive |
-| `Tile`, `TileBase.GetTileData`, `Tile.gameObject` | `Tile`, `TileBase.getTileData`, `tile.gameObject` (a `Prefab` or GameObject) |
+| `Tile`, `TileBase.GetTileData`, `Tile.gameObject`, `Tile.flags` | `Tile`, `TileBase.getTileData`, `tile.gameObject` (a `Prefab` or GameObject), `tile.flags` |
 | Fields on a custom `Tile` class (climate, elevation) | `tile.data`, typed: `Tile<Terrain>` |
 | Tile assets and a painted Tilemap, made in the editor | `TilePalette.load(tiles)` and `createTilemaps(map, palette)` from JSON files; `tools/unity` exports them. See [content.md](content.md) |
 | `TilemapRenderer` Chunk mode | always on: one mesh per 16 x 16 block of cells |
@@ -283,7 +293,7 @@ applies them in the same order: [multiplayer.md](multiplayer.md).
 
 ## Not implemented yet
 
-Rigidbodies and collision/trigger messages, animation (Animator), audio (AudioSource),
+Rigidbodies and collision/trigger messages, animation (Animator), audio mixer groups and effects,
 particles, sorting layers, sliced/filled/clickable UI images, UI text, NavMesh (grid pathfinding exists), skyboxes, post-processing
 wrappers, gamepad and touch gestures.
 

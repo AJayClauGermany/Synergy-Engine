@@ -18,8 +18,8 @@ export enum CellLayout {
  * - `XZY`: the ground. Cell x goes right, cell y goes forward, layers stack upward.
  * - `YXZ` / `YZX`: the same two planes with x and y swapped (flat-top hexagons).
  *
- * Because this world is right-handed, "forward" on the ground is -Z; cell y therefore
- * increases away from a default camera, just as it does on screen in Unity.
+ * Same axes as Unity: on the ground (`XZY`) cell y runs along +Z (`Vector3.forward`), so a
+ * cell coordinate means the same place here as in a Unity scene.
  */
 export enum CellSwizzle {
   XYZ = 'xyz',
@@ -55,41 +55,39 @@ export function hexCellSize(width = 1): Vector3 {
   return new Vector3(width, (width * 2) / Math.sqrt(3), 1);
 }
 
-/** Reorders a layout-space position into grid-local space. Unity: `Grid.Swizzle`. */
+/** Reorders a layout-space position into grid-local space. Same as Unity's `Grid.Swizzle`. */
 export function swizzle(order: CellSwizzle, v: Vector3): Vector3 {
-  // Unity's permutation, then flip Z to go from its left-handed space to this one.
   switch (order) {
     case CellSwizzle.XYZ:
-      return new Vector3(v.x, v.y, -v.z);
+      return new Vector3(v.x, v.y, v.z);
     case CellSwizzle.XZY:
-      return new Vector3(v.x, v.z, -v.y);
+      return new Vector3(v.x, v.z, v.y);
     case CellSwizzle.YXZ:
-      return new Vector3(v.y, v.x, -v.z);
+      return new Vector3(v.y, v.x, v.z);
     case CellSwizzle.YZX:
-      return new Vector3(v.y, v.z, -v.x);
+      return new Vector3(v.y, v.z, v.x);
     case CellSwizzle.ZXY:
-      return new Vector3(v.z, v.x, -v.y);
+      return new Vector3(v.z, v.x, v.y);
     case CellSwizzle.ZYX:
-      return new Vector3(v.z, v.y, -v.x);
+      return new Vector3(v.z, v.y, v.x);
   }
 }
 
-/** The inverse of `swizzle`. Unity: `Grid.InverseSwizzle`. */
+/** The inverse of `swizzle`. Same as Unity's `Grid.InverseSwizzle`. */
 export function inverseSwizzle(order: CellSwizzle, v: Vector3): Vector3 {
-  const z = -v.z;
   switch (order) {
     case CellSwizzle.XYZ:
-      return new Vector3(v.x, v.y, z);
+      return new Vector3(v.x, v.y, v.z);
     case CellSwizzle.XZY:
-      return new Vector3(v.x, z, v.y);
+      return new Vector3(v.x, v.z, v.y);
     case CellSwizzle.YXZ:
-      return new Vector3(v.y, v.x, z);
+      return new Vector3(v.y, v.x, v.z);
     case CellSwizzle.YZX:
-      return new Vector3(z, v.x, v.y);
+      return new Vector3(v.z, v.x, v.y);
     case CellSwizzle.ZXY:
-      return new Vector3(v.y, z, v.x);
+      return new Vector3(v.y, v.z, v.x);
     case CellSwizzle.ZYX:
-      return new Vector3(z, v.y, v.x);
+      return new Vector3(v.z, v.y, v.x);
   }
 }
 
@@ -98,7 +96,7 @@ export function planeNormal(shape: GridShape): Vector3 {
   switch (shape.cellSwizzle) {
     case CellSwizzle.XYZ:
     case CellSwizzle.YXZ:
-      return Vector3.back; // +Z, toward a default camera
+      return Vector3.back; // -Z, toward a default camera (which sits at -Z looking along +Z)
     case CellSwizzle.XZY:
     case CellSwizzle.YZX:
       return Vector3.up;

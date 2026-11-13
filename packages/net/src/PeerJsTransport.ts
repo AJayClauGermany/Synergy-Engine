@@ -1,4 +1,5 @@
 import { type DataConnection, Peer, type PeerOptions } from 'peerjs';
+import { makeRoomCode, normalizeRoomCode } from './roomCode';
 import { Signal } from './Signal';
 import type { Transport } from './Transport';
 
@@ -15,15 +16,6 @@ export interface PeerJsOptions {
   peerOptions?: PeerOptions;
   /** Give up connecting after this many milliseconds. Default 15000. */
   timeoutMs?: number;
-}
-
-// No 0/O or 1/I, so codes survive being read out loud.
-const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-
-/** A short code players can share to find each other. */
-export function makeRoomCode(length = 6): string {
-  const random = crypto.getRandomValues(new Uint8Array(length));
-  return [...random].map((value) => CODE_ALPHABET[value % CODE_ALPHABET.length]).join('');
 }
 
 /**
@@ -78,7 +70,7 @@ export class PeerJsTransport implements Transport {
 
   /** Connects to the room with this code. Rejects if there is no such room. */
   static join(roomCode: string, options: PeerJsOptions = {}): Promise<PeerJsTransport> {
-    const code = roomCode.trim().toUpperCase();
+    const code = normalizeRoomCode(roomCode);
     const hostId = `${options.prefix ?? 'synergy'}-${code}`;
     const peer = options.peerOptions ? new Peer(options.peerOptions) : new Peer();
     return withTimeout(options.timeoutMs, peer, (resolve, reject) => {

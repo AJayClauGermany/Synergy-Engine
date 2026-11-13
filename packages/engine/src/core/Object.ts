@@ -11,7 +11,7 @@ import { Transform } from './Transform';
  * here it is a named function that fills in a fresh GameObject:
  *
  *   export const FootmanPrefab = new Prefab('Footman', (go) => {
- *     go.addComponent(MeshFilter).mesh = Mesh.primitive(PrimitiveType.Capsule);
+ *     go.addComponent(MeshFilter).sharedMesh = Mesh.primitive(PrimitiveType.Capsule);
  *     go.addComponent(MeshRenderer);
  *     go.addComponent(Health).max = 40;
  *   });
@@ -41,7 +41,10 @@ export function destroyImmediate(target: GameObject | Component): void {
   currentEngine().lifecycle.destroyNow(target);
 }
 
-/** Keeps a root GameObject alive when another scene is loaded. */
+/**
+ * Keeps a root GameObject alive when another scene is loaded. Unity only logs a warning
+ * for an object that has a parent and leaves it be; here that throws, with the name.
+ */
 export function dontDestroyOnLoad(target: GameObject | Component): void {
   const gameObject = target instanceof GameObject ? target : target.gameObject;
   if (gameObject.transform.parent) {
@@ -60,7 +63,11 @@ export function dontDestroyOnLoad(target: GameObject | Component): void {
  *
  * Passing a component clones its whole GameObject and returns the matching component.
  * Clones of a GameObject are named "Name(Clone)" as in Unity; prefab instances keep the
- * prefab's name.
+ * prefab's name (Unity names those "Name(Clone)" too).
+ *
+ * Same as Unity: with only a `parent`, the original's position and rotation are taken as
+ * local to the parent (Unity's `instantiateInWorldSpace = false`); with a `position`
+ * (and `rotation`), they are world values.
  */
 export function instantiate(original: Prefab, parent?: Transform | null): GameObject;
 export function instantiate(
@@ -194,21 +201,104 @@ function cloneHierarchy(source: GameObject, parentNode: pc.GraphNode): Map<objec
   return map;
 }
 
-/**
- * The first component of `type` on an active GameObject, or `null`. This walks every
- * loaded scene, so call it in `start`/`awake` and keep the result.
- * Unity: `Object.FindFirstObjectByType` (formerly `FindObjectOfType`).
- */
-export function findObjectOfType<T extends Component>(type: ComponentClass<T>): T | null {
-  return findObjectsOfType(type, 1)[0] ?? null;
+/** Unity's `FindObjectsInactive`: whether the `find...ByType` functions look at inactive GameObjects. */
+export enum FindObjectsInactive {
+  /** Only components on GameObjects active in the hierarchy (the default). */
+  Exclude = 0,
+  /** Components on inactive GameObjects too. */
+  Include = 1,
 }
 
-/** Every component of `type` on active GameObjects. Unity: `Object.FindObjectsByType`. */
-export function findObjectsOfType<T extends Component>(type: ComponentClass<T>, limit = Number.POSITIVE_INFINITY): T[] {
+/**
+ * Unity's `FindObjectsSortMode`. Unity 6 deprecates it, and so does this engine.
+ * @deprecated Leave it out: `findObjectsByType(T)`. Results always come in scene order here.
+ */
+export enum FindObjectsSortMode {
+  // Text, not Unity's 0 and 1, so that (type, sortMode) and (type, findObjectsInactive) can be told apart.
+  None = 'None',
+  InstanceID = 'InstanceID',
+}
+
+/**
+ * Every component of `type` (or derived from it) in the loaded scenes, in scene order
+ * (depth first, parents before children). Unity: `Object.FindObjectsByType<T>()`.
+ *
+ * Same as Unity: components on inactive GameObjects are left out unless you pass
+ * `FindObjectsInactive.Include`. Disabled components on active GameObjects are returned.
+ * Unlike Unity, it finds components only (no assets such as materials).
+ *
+ * This walks every loaded scene, so call it in `start`/`awake` and keep the result.
+ */
+export function findObjectsByType<T extends Component>(
+  type: ComponentClass<T>,
+  findObjectsInactive?: FindObjectsInactive,
+): T[];
+/**
+ * @deprecated Unity 6 deprecates the sort mode. Leave it out: results come in scene
+ * order here, whatever you pass, which is also what `FindObjectsSortMode.None` asks for.
+ */
+export function findObjectsByType<T extends Component>(type: ComponentClass<T>, sortMode: FindObjectsSortMode): T[];
+/** @deprecated Unity 6 deprecates the sort mode. Leave it out: results come in scene order here. */
+export function findObjectsByType<T extends Component>(
+  type: ComponentClass<T>,
+  findObjectsInactive: FindObjectsInactive,
+  sortMode: FindObjectsSortMode,
+): T[];
+export function findObjectsByType<T extends Component>(
+  type: ComponentClass<T>,
+  inactiveOrSort: FindObjectsInactive | FindObjectsSortMode = FindObjectsInactive.Exclude,
+  _sortMode?: FindObjectsSortMode, // accepted for Unity's signatures; scene order either way
+): T[] {
+  return findComponents(type, inactiveOrSort === FindObjectsInactive.Include, Number.POSITIVE_INFINITY);
+}
+
+/**
+ * The first component of `type` on an active GameObject, in scene order, or `null`.
+ * Unity: `Object.FindFirstObjectByType<T>()`. Unity's newest docs (6.6) deprecate it for
+ * `findAnyObjectByType`, because Unity's "first" depended on instance ids; here "first"
+ * is simply scene order, and both functions return the same object.
+ */
+export function findFirstObjectByType<T extends Component>(
+  type: ComponentClass<T>,
+  findObjectsInactive = FindObjectsInactive.Exclude,
+): T | null {
+  return findComponents(type, findObjectsInactive === FindObjectsInactive.Include, 1)[0] ?? null;
+}
+
+/**
+ * A component of `type` on an active GameObject, or `null`. Unity:
+ * `Object.FindAnyObjectByType<T>()`, which promises no particular one; here it is the
+ * first in scene order, the same as `findFirstObjectByType`. Walks every loaded scene:
+ * call it in `start`/`awake` and keep the result.
+ */
+export function findAnyObjectByType<T extends Component>(
+  type: ComponentClass<T>,
+  findObjectsInactive = FindObjectsInactive.Exclude,
+): T | null {
+  return findComponents(type, findObjectsInactive === FindObjectsInactive.Include, 1)[0] ?? null;
+}
+
+/**
+ * @deprecated Unity 6 renamed this: write `findAnyObjectByType(T)` (or `findFirstObjectByType(T)`).
+ * Behaves the same: the first component of `type` on an active GameObject, or `null`.
+ */
+export function findObjectOfType<T extends Component>(type: ComponentClass<T>): T | null {
+  return findComponents(type, false, 1)[0] ?? null;
+}
+
+/**
+ * @deprecated Unity 6 renamed this: write `findObjectsByType(T)`, with
+ * `FindObjectsInactive.Include` to look at inactive GameObjects too.
+ */
+export function findObjectsOfType<T extends Component>(type: ComponentClass<T>): T[] {
+  return findComponents(type, false, Number.POSITIVE_INFINITY);
+}
+
+function findComponents<T extends Component>(type: ComponentClass<T>, includeInactive: boolean, limit: number): T[] {
   const found: T[] = [];
   walkScenes((node) => {
     const gameObject = existingGameObjectOf(node);
-    if (gameObject?.activeInHierarchy) {
+    if (gameObject && !gameObject.isDestroyed && (includeInactive || gameObject.activeInHierarchy)) {
       for (const component of gameObject._components) {
         if (component instanceof type && found.length < limit) found.push(component);
       }

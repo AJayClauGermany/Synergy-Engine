@@ -6,7 +6,7 @@ import { NetworkObject } from './NetworkObject';
  * on its root, listed in the `NetworkManager`'s prefab list.
  *
  *   export const UnitPrefab = new NetworkPrefab('Unit', (go) => {
- *     go.addComponent(MeshFilter).mesh = Mesh.primitive(PrimitiveType.Capsule);
+ *     go.addComponent(MeshFilter).sharedMesh = Mesh.primitive(PrimitiveType.Capsule);
  *     go.addComponent(MeshRenderer);
  *     go.addComponent(Unit);
  *   });

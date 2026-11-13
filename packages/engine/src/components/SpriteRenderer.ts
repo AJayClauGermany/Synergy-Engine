@@ -7,6 +7,7 @@ import { Bounds } from '../math/geometry';
 import { Mathf } from '../math/Mathf';
 import { Vector3 } from '../math/Vector3';
 import type { Sprite } from './Sprite';
+import { fromPlayCanvasAabb } from '../core/handedness';
 
 /**
  * Sort keys are "distance from the camera, minus sortingOrder x this", so a higher
@@ -19,7 +20,8 @@ const MAX_SORTING_ORDER = 32767;
 
 /**
  * Draws a `Sprite` in the world: a flat, textured rectangle on the transform's XY plane,
- * facing +Z (toward an unrotated camera, which looks along -Z). Unity: `SpriteRenderer`.
+ * seen from its -Z side, like Unity's: an unrotated camera behind it (at -Z, looking along
+ * +Z) sees it the right way round. Unity: `SpriteRenderer`.
  *
  *   const coin = new GameObject('Coin');
  *   coin.addComponent(SpriteRenderer).sprite = await Assets.loadSprite(coinUrl);
@@ -100,7 +102,7 @@ export class SpriteRenderer extends Behaviour {
     this.rebuild();
   }
 
-  /** Tint multiplied with the sprite. An alpha below 1 fades it. */
+  /** Tint multiplied with the sprite. An alpha below 1 fades it. Same as Unity. */
   get color(): Color {
     return this._color;
   }
@@ -110,7 +112,11 @@ export class SpriteRenderer extends Behaviour {
     this.updateMaterial();
   }
 
-  /** Mirror horizontally, without changing the transform's scale. */
+  /**
+   * Mirror horizontally about the sprite's pivot, without changing the transform's scale.
+   * Same as Unity: only the drawing changes (colliders and children do not), and a sprite
+   * whose pivot is not centred moves to the other side of the transform's position.
+   */
   get flipX(): boolean {
     return this._flipX;
   }
@@ -120,7 +126,7 @@ export class SpriteRenderer extends Behaviour {
     this.rebuild();
   }
 
-  /** Mirror vertically. */
+  /** Mirror vertically about the sprite's pivot. Same as Unity; see `flipX`. */
   get flipY(): boolean {
     return this._flipY;
   }
@@ -148,7 +154,7 @@ export class SpriteRenderer extends Behaviour {
   get bounds(): Bounds {
     const instance = this.component.meshInstances[0];
     if (!instance) return new Bounds(this.transform.position, Vector3.zero);
-    return Bounds.fromMinMax(Vector3.from(instance.aabb.getMin()), Vector3.from(instance.aabb.getMax()));
+    return fromPlayCanvasAabb(instance.aabb);
   }
 
   private updateMaterial(): void {
@@ -173,12 +179,22 @@ export class SpriteRenderer extends Behaviour {
       return;
     }
     const { min, max } = sprite.bounds;
+    let [minX, minY, maxX, maxY] = [min.x, min.y, max.x, max.y];
     let [u0, v0, u1, v1] = sprite.uv;
-    if (this._flipX) [u0, u1] = [u1, u0];
-    if (this._flipY) [v0, v1] = [v1, v0];
+    // A flip mirrors the quad about the pivot (the transform's origin), as Unity's does:
+    // a sprite with its pivot at the left edge ends up on the other side of the origin.
+    if (this._flipX) {
+      [minX, maxX] = [-maxX, -minX];
+      [u0, u1] = [u1, u0];
+    }
+    if (this._flipY) {
+      [minY, maxY] = [-maxY, -minY];
+      [v0, v1] = [v1, v0];
+    }
     const geometry = new pc.Geometry();
-    // Bottom-left, bottom-right, top-right, top-left; counter-clockwise seen from +Z.
-    geometry.positions = [min.x, min.y, 0, max.x, min.y, 0, max.x, max.y, 0, min.x, max.y, 0];
+    // PlayCanvas's mirrored space, where the sprite's front (Unity's -Z side) is +Z:
+    // bottom-left, bottom-right, top-right, top-left, counter-clockwise seen from there.
+    geometry.positions = [minX, minY, 0, maxX, minY, 0, maxX, maxY, 0, minX, maxY, 0];
     geometry.normals = [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1];
     geometry.uvs = [u0, v0, u1, v0, u1, v1, u0, v1];
     geometry.indices = [0, 1, 2, 0, 2, 3];

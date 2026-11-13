@@ -3,6 +3,7 @@ import { type GameObject, gameObjectOf } from '../core/GameObject';
 import { currentEngine } from '../core/runtime';
 import type { Transform } from '../core/Transform';
 import type { Texture } from '../components/rendering';
+import { AudioClip } from '../components/Audio';
 import { Sprite, type SpriteOptions } from '../components/Sprite';
 
 function load<T>(url: string, type: string, data: Record<string, unknown> = {}): Promise<pc.Asset & { resource: T }> {
@@ -28,6 +29,8 @@ function load<T>(url: string, type: string, data: Record<string, unknown> = {}):
   return promise;
 }
 
+const HALF_TURN = new pc.Quat().setFromEulerAngles(0, 180, 0);
+
 /** A loaded 3D model (glTF/GLB). Call `instantiate()` for each copy you want in the scene. */
 export class Model {
   /** @internal */
@@ -39,11 +42,24 @@ export class Model {
   /**
    * Adds a copy of the model to the active scene (or under `parent`) and returns its
    * root GameObject. Child nodes are regular GameObjects with MeshFilter/MeshRenderer.
+   *
+   * As with Unity's glTF importers, the model faces the root's `transform.forward` (+Z)
+   * and keeps its handedness (text on it reads the right way round). The nodes inside
+   * are turned 180 degrees about Y to get there, so their local rotations differ from
+   * the same model imported into Unity; place and turn the root instead.
    */
   instantiate(parent: Transform | null = null): GameObject {
     const engine = currentEngine();
     const entity = this.container.instantiateRenderEntity();
     entity.name = this.name;
+    // glTF content faces +Z in its right-handed space, which is -Z (backward) once the
+    // engine's mirror to Unity's space is applied. A half turn about Y puts it facing
+    // forward with its handedness intact: exactly where Unity's importers put it.
+    for (const child of entity.children) {
+      const position = child.getLocalPosition();
+      child.setLocalPosition(-position.x, position.y, -position.z);
+      child.setLocalRotation(new pc.Quat().mul2(HALF_TURN, child.getLocalRotation()));
+    }
     (parent ? parent._node : engine.scenes.targetScene._root).addChild(entity);
     return engine.lifecycle.runDeferred(() => gameObjectOf(entity));
   }
@@ -81,6 +97,22 @@ export class Assets {
    */
   static async loadTexture(url: string, options: { srgb?: boolean } = {}): Promise<Texture> {
     return (await load<Texture>(url, 'texture', { srgb: options.srgb ?? true })).resource;
+  }
+
+  /**
+   * Loads a sound (`.mp3`, `.ogg`, `.wav`; what the browser can decode) for an
+   * `AudioSource`. Unity: `Resources.Load<AudioClip>`. Without a sound device (a headless
+   * engine) the clip has no data and a `length` of 0.
+   */
+  static async loadAudioClip(url: string): Promise<AudioClip> {
+    const asset = await load<pc.Sound>(url, 'audio');
+    const name =
+      url
+        .split(/[?#]/)[0]
+        ?.split('/')
+        .pop()
+        ?.replace(/\.[^.]+$/, '') ?? 'AudioClip';
+    return new AudioClip(name, asset);
   }
 
   /**
