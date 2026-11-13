@@ -124,7 +124,8 @@ This exact example runs as a test: `packages/netcode/test/example.test.ts`.
 | `NetworkSceneManager` (`LoadScene`, `OnLoadComplete`, `OnLoadEventCompleted`, `OnSynchronizeComplete`) | `sceneManager.loadScene(name)`, `onLoadComplete`, `onLoadEventCompleted`, `onSynchronizeComplete` (Single mode only) |
 | `NetworkConfig.ProtocolVersion`, `LoadSceneTimeOut` | `networkConfig.protocolVersion` (a string), `loadSceneTimeOut` |
 | `CustomMessagingManager` named messages | same, camelCase |
-| Unity Transport | a `Transport` from `@synergy/net`: `PeerJsTransport` online, `LoopbackHub` in tests |
+| Unity Transport | a `Transport` from `@synergy/net`: `PeerJsTransport` online, `BroadcastChannelTransport` between windows of one browser, `LoopbackHub` in tests |
+| Multiplayer Play Mode (virtual players) | windows of one browser in a local room: `hostGame(manager, { local: true })` / `joinGame(manager, code, { local: true })`, or `bun run screenshot --players N` headless. See "Several players on one machine" in [multiplayer.md](multiplayer.md) |
 | Unity Relay + Lobby | PeerJS signalling + the Convex lobby |
 
 ## Concepts

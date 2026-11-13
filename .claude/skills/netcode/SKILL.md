@@ -175,5 +175,10 @@ being refused, and a late joiner seeing the current state. **Assert on a client'
 not the host's**: the host holds the originals, so a test that only looks there passes
 with values that never arrived.
 
+Then see it in real pages: `bun run screenshot --scene <Scene> --players 2` hosts a
+local room in one page, joins it from another (`BroadcastChannelTransport`, no
+internet), and saves an image and a log per player; `--on 2 --click x,y` acts as player 2.
+The game must read `?host=`/`?join=` and report `data-net` (copy `game/src/localPlay.ts`).
+
 A pass is `bun run check` ending in `PASSED`. PeerJS, Convex and the lobby helpers have
 no automated tests: say so, and ask the user to host in one browser and join from another.

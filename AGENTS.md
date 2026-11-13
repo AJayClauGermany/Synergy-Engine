@@ -20,7 +20,7 @@ Cloudflare Workers (preview deploys) · Electrobun (desktop).
 | `bun run lint` / `typecheck` / `docs:check` / `lint:project` / `format` | One check by itself. `bun run lint path/to/File.ts` lints one file. `bun run check lint types` runs the ones named and ends with `OK so far`, not `PASSED` |
 | `bun run coverage` | Tests with coverage: per file, the lines no test reached |
 | `bun run build` | Production build into `dist/` |
-| `bun run screenshot` | Build, open in headless Chromium, save `.screenshots/game.png` and the page's log beside it (`game.log`); fails on page errors. `--hierarchy` prints the scene as text, `--logs` the log so far; `--devtools` shows the editor; `--renderer webgl2` forces WebGL2 (the game prefers WebGPU) |
+| `bun run screenshot` | Build, open in headless Chromium, save `.screenshots/game.png` and the page's log beside it (`game.log`); fails on page errors. `--hierarchy` prints the scene as text, `--logs` the log so far; `--devtools` shows the editor; `--renderer webgl2` forces WebGL2 (the game prefers WebGPU); `--players 2` opens two players in a local room and saves an image per player (`--on 2` drives player 2) |
 | `bun run logs` | Print `.logs/game.log`: what the game open under `bun run dev` logged (`--errors`, `--tail 50`) |
 | `bun run report` | Ask the game open under `bun run dev` for a report (screenshot, log, hierarchy, HUD text) and print its summary |
 | `bun run backend` | Convex dev deployment (interactive login the first time); writes its URL to `.env.local` |
@@ -41,13 +41,15 @@ through `varlock run --`); see `docs/environment.md`.
 game/                    THE GAME. Most work happens here. It holds two samples:
                          Skirmish (commands, turn-based) and Frontier (netcode, real-time).
   index.html             page shell: a canvas, plus the script tag
-  src/main.tsx           boot: create engine, register scenes, mount HUD, load scene
+  src/main.tsx           boot: create engine, register scenes, mount the HUD root, open the first screen
+  src/flow.ts            screens (Menu, Skirmish, Frontier, Showcase): openScreen, quitToMenu, loading overlay
+  src/localPlay.ts       testing several players on one machine: ?net=local&host=/join=&player=
   src/scenes/            scenes as functions (Unity: .unity files)
   src/behaviours/        MonoBehaviour scripts and prefabs
   src/rules/             Skirmish's pure rules: state, commands, check(), apply()
-  src/ui/                Preact HUD and CSS
+  src/ui/                Preact HUD and CSS; App.tsx is the one HUD root, following flow.ts
   src/hud.ts             Observables the HUD reads
-  src/online.ts          host/join helpers (PeerJS, Convex)
+  src/online.ts          host/join helpers (PeerJS, Convex, local windows)
   src/frontier/          the netcode sample, whole: data/ (map, tiles, sprite sheet as files),
                          rules.ts, Match.ts, Soldier.ts, board, player, scene, session, HUD
   test/                  rule tests, headless scene tests, simulated-network tests
@@ -243,7 +245,8 @@ explains each check and every message of the project's own lint rules.
    behaviours can be tested in a real scene with `Engine.createHeadless()`, `engine.step()`
    and `engine.input.pressKey(...)` / `moveMouse(...)` / `pressMouseButton(...)`
    (copy the pattern in `game/test/scene.test.ts`). Networked behaviour: a host and
-   clients as simulated machines (copy `game/test/frontier.test.ts`).
+   clients as simulated machines (copy `game/test/frontier.test.ts`); to see it in real
+   pages, `bun run screenshot --scene Frontier --players 2` (one image per player).
 3. Anything visual: `bun run screenshot`, then look at the PNG. It can drive the game:
    `bun run screenshot --click 640,360 --key Space --eval "synergy.Time.frameCount"`.
 4. To see what is in the scene without an image, print `Debug.hierarchy()` in a test, or

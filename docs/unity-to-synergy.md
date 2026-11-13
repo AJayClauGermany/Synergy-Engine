@@ -209,7 +209,8 @@ Iterate children with `for (const child of transform)`.
 | `new Material(shader)`, `material.color`, `mainTexture` | `new Material()`, `color`, `mainTexture`, `metallic`, `smoothness`, `emissionColor` |
 | `new Mesh { vertices, triangles, uv }`, `RecalculateNormals()` | `new Mesh()`, `vertices`, `triangles`, `uv`, `recalculateNormals()`: Unity's clockwise winding and bottom-up `v`. The arrays are copies, as in Unity: assign them back |
 | `Light` (type, color, intensity, range, spotAngle, shadows) | same, plus `direction` |
-| `Resources.Load` / Addressables | `await Assets.loadModel(url)`, `Assets.loadTexture(url)`, `Assets.loadSprite(url)` |
+| `Resources.Load` / Addressables | `await Assets.loadModel(url)`, `Assets.loadTexture(url)`, `Assets.loadSprite(url)`, `Assets.loadAudioClip(url)` |
+| `AudioSource` (`clip`, `volume`, `pitch`, `loop`, `mute`, `playOnAwake`, `spatialBlend`, `minDistance`, `maxDistance`, `isPlaying`, `time`, `Play(delay)`, `Stop`, `Pause`, `UnPause`, `PlayOneShot`, `PlayClipAtPoint`), `AudioClip.length`, `AudioListener` | same in camelCase, same defaults. `spatialBlend` is 2D below 0.5 and 3D from 0.5; sound starts after the player's first click or key (a browser rule); no mixer groups |
 
 ### Sprites (2D in a 3D scene)
 
@@ -292,7 +293,7 @@ applies them in the same order: [multiplayer.md](multiplayer.md).
 
 ## Not implemented yet
 
-Rigidbodies and collision/trigger messages, animation (Animator), audio (AudioSource),
+Rigidbodies and collision/trigger messages, animation (Animator), audio mixer groups and effects,
 particles, sorting layers, sliced/filled/clickable UI images, UI text, NavMesh (grid pathfinding exists), skyboxes, post-processing
 wrappers, gamepad and touch gestures.
 

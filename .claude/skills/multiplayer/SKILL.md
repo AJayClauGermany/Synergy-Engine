@@ -57,7 +57,9 @@ stores cooldowns as "ready at tick N". Never use a local clock for game time. Se
 
 - `CommandSession.local()`: one player, no network.
 - `CommandSession.host(transport, { validate })` / `.join(transport, hostId)` over any
-  `Transport`: `LoopbackHub` in tests, `PeerJsTransport` online.
+  `Transport`: `LoopbackHub` in tests, `PeerJsTransport` online, `BroadcastChannelTransport`
+  between windows of one browser (testing several players on one machine; `?net=local`,
+  `bun run screenshot --players 2`, see "Several players on one machine" in docs/multiplayer.md).
 - `lobby.openSession(code)` (`ConvexSession`): ordered and stored by Convex.
 
 Game code should depend only on `Session<C>`.

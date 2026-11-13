@@ -33,7 +33,8 @@ same engine, so there is no second renderer to integrate.
 | **URP, custom shaders, post-processing** | Globe rendering and effects | PlayCanvas materials through `material.pcMaterial`; nothing Unity-specific carries over | **To rebuild** |
 | **All In 1 Sprite Shader** | Outlines, construction fade | Fade: `material.color` alpha or a `Tween`. Outline: not wrapped | **To do** |
 | **2D Sprites** (SpriteRenderer) | Units and props as sprites | `Sprite` (pivot, pixels per unit), `SpriteRenderer` (`color`, `flipX/Y`, `sortingOrder`), `Assets.loadSprite`. No sorting layers or sprite animation | **Built in** |
-| **Unity Audio** | Music, sound effects | Not wrapped | **To do** |
+| **Unity Audio** | Music, sound effects | `AudioSource`, `AudioClip`, `AudioListener`, `Assets.loadAudioClip` (2D or 3D; no mixer groups) | **Built in** |
+| **Multiplayer Play Mode** | Testing several players on one machine | Windows of one browser in a local room (`BroadcastChannelTransport`); "Test in windows" in development builds; `bun run screenshot --players N` headless | **Built in** |
 | 2D Animation, Aseprite/PSD importers, SpriteShape, Tilemap Extras | Authoring pipeline | Export images and data; no runtime equivalent needed unless sprite animation is required | Later, if needed |
 | Timeline, Visual Scripting, Vivox | Installed; no clear use found | Nothing planned | Not needed |
 | Burst, Collections, Mathematics, Jobs | Runtime performance infrastructure | Plain TypeScript; Web Workers if profiling calls for it | Not needed yet |
@@ -158,14 +159,108 @@ in the game state so every player rolls the same numbers.
    a dedicated server is needed.
 5. Rebuild presentation: sprites, shaders, camera, audio, HUD.
 
+## Scenes, models and local testing
+
+From a review of how the original's scenes, FBX models and virtual-player testing map
+onto this engine (November 2026), with what has been built since.
+
+### Scene structure (built)
+
+The original has a main menu with a lobby, a game scene, and a metagame lobby holding a
+live map that several people play on. The sample game now has the same shape, all in
+one page, to copy:
+
+- **A scene per screen**, registered in `game/src/main.tsx`: `Menu`, the game scenes,
+  and (to add) the metagame. `game/src/flow.ts` moves between them (`openScreen`,
+  `quitToMenu`) with a loading overlay while a scene loads.
+- **One HUD root**, `game/src/ui/App.tsx`, mounted once at boot. It draws the HUD of
+  the current screen from the `flow` Observable; nothing is remounted per scene.
+- **Leaving a networked match shuts the network manager down first**, then loads the
+  next scene. Loading a scene alone is not enough: objects spawned with plain `spawn()`
+  outlive scene loads, as in Unity. Spawn match objects with `spawn(true)` (Frontier
+  does) and shut down on quit (`flow.ts` does).
+- **The connection lives outside the scenes**: the network manager is made once and
+  kept (`frontierManager()` in `flow.ts`); the host moves everyone between scenes with
+  `manager.sceneManager.loadScene`.
+- **Open question: who hosts the metagame map?** Netcode is hosted by a player's
+  machine, so the map ends when that player leaves. If it must stay up with nobody
+  online, its state belongs in Convex instead. Decide this before building it.
+- The game still opens on Skirmish; set the default in `main.tsx` to `Menu` when the
+  menu is the real entry point.
+
+### Several players on one machine (built)
+
+Unity's Multiplayer Play Mode opens up to four windows of the game. Here:
+
+- **In a development build**, "Test in windows" (in either sample's online panel)
+  hosts a local room and opens a second player's window; "+ Window" opens more. The
+  windows talk through `BroadcastChannelTransport` (`@synergy/net`): no internet, no
+  signalling server. Keep them as separate windows side by side: browsers pause the
+  game loop of a hidden tab.
+- **By address**, for any game: `?net=local&host=CODE` in one window,
+  `?net=local&join=CODE&player=2` in the others (`game/src/localPlay.ts`). `player=N`
+  gives each window its own id in the session and its own Convex player id
+  (`persistentPlayerId(slot)`), so windows no longer share one seat.
+- **Headless, for agents and CI**: `bun run screenshot --scene Frontier --players 2`
+  opens the players in one browser, waits until each reports itself connected, and
+  saves an image and a log per player; `--on 2` makes the next actions player 2's.
+- **The desktop app still opens one window** (`desktop/src/bun/index.ts`). Electrobun
+  can open more; whether its windows share an origin (which BroadcastChannel needs) has
+  not been checked.
+- Match logic does not need any of this: `TestNetwork` runs a host and clients as
+  simulated machines in one test (`game/test/frontier.test.ts`).
+
+### 3D models
+
+The original's models are FBX. The engine loads glTF only (`Assets.loadModel`, `.glb`).
+
+- **Convert once, offline, and commit the `.glb` files**: Blender, or a glTF exporter
+  inside Unity when the Unity materials matter. `tools/unity` does not export models.
+- **Check after converting**: size (FBX often carries a factor of 100 that Unity hides),
+  materials (custom shaders do not come across), and that moving parts are still
+  separate, named nodes with their pivots at the centre.
+- **Facing**: a loaded model faces its root's `transform.forward` (+Z), as Unity's glTF
+  importers place it. The engine gets there by turning the model's top-level nodes 180
+  degrees about Y, so their local rotations differ from the same file imported into
+  Unity. Place and turn the root, not those nodes.
+- **Vehicle wheels, turrets, rotors: no animation clips.** Find the part with
+  `transform.find` and turn it in `update()` from the vehicle's speed. This works today,
+  with two catches:
+  - turn it relative to where it is, `part.transform.rotate(Vector3.right, degrees)`.
+    Setting `localRotation` outright on a top-level node throws away the half turn
+    above and flips the part;
+  - the direction can come out reversed against the Unity original (Unity's FBX
+    importer mirrors X; this engine mirrors Z and turns the model). Check the sign by
+    eye rather than copying it from the C#.
+  Drop the animation tracks from those files when exporting.
+- **Walkers (two-legged and four-legged mechs) need skeletal clips, and the engine
+  cannot play them yet** (below). When exporting them: put every clip in the one `.glb`
+  under a clear name; rebuild Animator Controller logic in code (states and transitions
+  are Unity assets); bake clips shared through Unity's Humanoid retargeting onto each
+  skeleton; expect no IK and no root motion, so use clips that walk in place and match
+  their speed to the unit's.
+- **Check whether the mechs are skinned at all.** If they are rigid parts on animated
+  nodes, the clips are still needed but skinned rendering, which nothing here has
+  exercised, is not. Rigid parts animated at the top level run straight into the half
+  turn above: see the animation item below.
+
 ## Engine work this implies
 
-In rough priority order for this game:
+In rough priority order for this game. Done since the first version of this list:
+`AudioSource` / `AudioClip`, local multi-window testing, and the scene structure above.
 
-1. Sprite animation, if units are animated sheets (`SpriteRenderer` itself is built)
-2. `AudioSource` / `AudioClip`
+1. Skeletal animation for the walkers, when there are walkers to animate:
+   - switch on PlayCanvas's anim component system and its resource handlers in `Engine.create`;
+   - let a loaded `Model` hand out its clips by name (it keeps them private today);
+   - add an Animator component in Unity's shape (play, cross-fade, speed).
+
+   First move the model's half turn onto a wrapper node between the root and the file's
+   nodes, and bind the clips below it. A clip that animates a top-level node writes that
+   node's whole rotation, which would undo the turn and play the walker facing backward.
+   Test with a real walker `.glb`, including a screenshot of a skinned mesh.
+2. Sprite animation, if units are animated sheets (`SpriteRenderer` itself is built)
 3. Camera helper in the engine (focus, follow, confine)
 4. Outline and other per-object effects; post-processing wrappers
 5. Isometric layout, animated tiles, elevation (large maps are handled: tilemaps draw in blocks)
 6. Gamepad and touch gestures; input rebinding
-7. Rigidbody physics and animation, if a future game needs them
+7. Rigidbody physics, if a future game needs it

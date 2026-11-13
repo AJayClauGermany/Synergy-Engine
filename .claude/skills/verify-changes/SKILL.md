@@ -109,7 +109,9 @@ bun run screenshot --click 603,466 --click 606,365 --wait 700 --out .screenshots
 
 Options: `--click x,y` · `--key Space` · `--wait ms` · `--eval "<js>"` · `--hierarchy` · `--renderer webgl2` ·
 `--scene Name` · `--width/--height` · `--scale 2` · `--out file` ·
-`--url http://localhost:3000` (use a running dev server) · `--no-build` · `--release`.
+`--url http://localhost:3000` (use a running dev server) · `--no-build` · `--release` ·
+`--players N` (N pages in a local room: `game-p1.png`, `game-p2.png`, ...) with `--on N`
+to choose whose page the next actions drive.
 
 `--hierarchy` prints the live scene as text (`Debug.hierarchy()`): objects, components,
 positions, script fields. It is an action like the others, so
