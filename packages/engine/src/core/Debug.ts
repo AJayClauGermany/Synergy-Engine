@@ -139,7 +139,7 @@ export class Debug {
    *   Scene "Skirmish" (active)
    *     Camera Rig <CameraRig> at (0, 0, 0.8)
    *       | CameraRig: distance=15, camera=Main Camera (Transform)
-   *       Main Camera <Camera> tag=MainCamera at (0, 10.6, 11.4) rot (-45, 0, 0)
+   *       Main Camera <Camera> tag=MainCamera at (0, 12.3, -9.4) rot (55, 0, 0)
    *
    * Use it in a test to see why something is not where you expect, or from the browser
    * with `bun run screenshot --hierarchy`. Positions are world positions; they, rotation

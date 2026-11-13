@@ -128,6 +128,16 @@ function begin(manager: NetworkManager): () => boolean {
   return () => mine === request;
 }
 
+/**
+ * Leaves whatever match this machine is in, on purpose: nothing falls back to playing
+ * alone (as it does when a host goes away), and the HUD reads 'offline'. Quitting to the
+ * menu calls this; it destroys every networked object here and tells the others.
+ */
+export function stopPlaying(manager: NetworkManager): void {
+  begin(manager);
+  frontierOnline.value = { mode: 'offline', code: null, local: false, isHost: true, error: null };
+}
+
 /** Starts a match unless a later request has taken over. A start that was overtaken is not an error. */
 async function start(manager: NetworkManager, current: () => boolean): Promise<void> {
   try {

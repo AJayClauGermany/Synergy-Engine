@@ -77,6 +77,15 @@ describe('BroadcastChannelTransport', () => {
     await expect(BroadcastChannelTransport.join('SAME', { prefix: 'other-game', timeoutMs: 300 })).rejects.toThrow();
   });
 
+  test('a second window with an id already in the room is refused, not merged into the first', async () => {
+    const host = track(await BroadcastChannelTransport.host({ prefix: 'test-f' }));
+    track(await BroadcastChannelTransport.join(host.roomCode, { prefix: 'test-f', id: 'player-2' }));
+    await expect(
+      BroadcastChannelTransport.join(host.roomCode, { prefix: 'test-f', id: 'player-2', timeoutMs: 1000 }),
+    ).rejects.toThrow(/already plays as player-2/);
+    expect(host.peers).toEqual(['player-2']);
+  });
+
   test('a guest that starts before its host waits for it', async () => {
     const joining = BroadcastChannelTransport.join('LATE', { prefix: 'test-d' });
     await new Promise((resolve) => setTimeout(resolve, 100));

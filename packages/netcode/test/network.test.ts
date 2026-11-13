@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import { Time } from '@synergy/engine';
 import { CratePrefab, TestNetwork } from './harness';
 
@@ -36,7 +36,11 @@ describe('custom messages', () => {
     expect(() => alice.manager.customMessagingManager.sendNamedMessage('chat', 2, 1)).toThrow(
       /only send messages to the server/,
     );
-    expect(() => host.manager.customMessagingManager.sendNamedMessage('news', 9, 1)).toThrow(/not connected/);
+    // A client that is not (or no longer) connected: warned about and skipped, as NGO logs and drops it.
+    const warn = spyOn(console, 'warn').mockImplementation(() => {});
+    expect(() => host.manager.customMessagingManager.sendNamedMessage('news', 9, 1)).not.toThrow();
+    expect(warn.mock.calls.flat().join(' ')).toContain('client 9 is not connected');
+    warn.mockRestore();
   });
 
   test("the arguments in the old (name, data, clientId) order are refused with NGO's order", () => {
@@ -54,7 +58,10 @@ describe('custom messages', () => {
     expect(() => messages.sendNamedMessage('chat', 0)).toThrow(/no data/);
     // A number where the client id goes is a client id; one the client may not send to is refused.
     expect(() => messages.sendNamedMessage('chat', 1, 5)).toThrow(order);
-    expect(() => host.manager.customMessagingManager.sendNamedMessage('chat', 7, 'hi')).toThrow(order);
+    const warn = spyOn(console, 'warn').mockImplementation(() => {});
+    host.manager.customMessagingManager.sendNamedMessage('chat', 7, 'hi');
+    expect(warn.mock.calls.flat().join(' ')).toMatch(order);
+    warn.mockRestore();
     // A list of client ids, as NGO's IReadOnlyList<ulong> overload takes.
     const heard: unknown[] = [];
     messages.registerNamedMessageHandler('news', (_sender, data) => heard.push(data));

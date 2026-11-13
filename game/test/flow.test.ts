@@ -54,6 +54,13 @@ describe('screens', () => {
     expect(flow.value.screen).toBe('Menu');
   });
 
+  test('a screen whose scene fails to load leaves the previous screen in place', async () => {
+    await openScreen('Menu');
+    // Showcase is not registered in this test, so its load throws.
+    await expect(openScreen('Showcase')).rejects.toThrow();
+    expect(flow.value).toEqual({ screen: 'Menu', loading: null });
+  });
+
   test('leaving Frontier shuts its network down, so no networked object outlives the match', async () => {
     await openScreen('Frontier');
     engine.stepFrames(3);

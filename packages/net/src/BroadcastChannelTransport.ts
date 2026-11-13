@@ -22,7 +22,7 @@ export interface BroadcastChannelOptions {
 type Envelope =
   | { t: 'probe'; from: string }
   | { t: 'taken'; to: string }
-  | { t: 'hello'; from: string }
+  | { t: 'hello'; from: string; nonce: string }
   | { t: 'welcome'; from: string; to: string }
   | { t: 'refused'; to: string; reason: string }
   | { t: 'data'; from: string; to: string; d: string }
@@ -56,6 +56,8 @@ export class BroadcastChannelTransport implements Transport {
   readonly onPeerJoined = new Signal<[peerId: string]>();
   readonly onPeerLeft = new Signal<[peerId: string]>();
 
+  /** Host: which window holds each guest id (the nonce its hellos carry), so a second window with the same id is refused. */
+  private readonly holders = new Map<string, string>();
   /** Last time each connected peer was heard from (milliseconds, `Date.now()`). */
   private readonly lastHeard = new Map<string, number>();
   private readonly timer: ReturnType<typeof setInterval>;
@@ -141,7 +143,8 @@ export class BroadcastChannelTransport implements Transport {
         if (message.t === 'welcome' && message.to === localId) finish(null);
         else if (message.t === 'refused' && message.to === localId) finish(new Error(message.reason));
       };
-      const hello = () => post(channel, { t: 'hello', from: localId });
+      const nonce = crypto.randomUUID();
+      const hello = () => post(channel, { t: 'hello', from: localId, nonce });
       const retry = setInterval(hello, HELLO_RETRY_MS);
       const timer = setTimeout(
         () =>
@@ -194,6 +197,16 @@ export class BroadcastChannelTransport implements Transport {
           post(this.channel, { t: 'refused', to: message.from, reason: `The id ${message.from} is the host's.` });
           return;
         }
+        if (this.lastHeard.has(message.from) && this.holders.get(message.from) !== message.nonce) {
+          // Another window already plays as this id (two windows opened with the same ?player=).
+          post(this.channel, {
+            t: 'refused',
+            to: message.from,
+            reason: `Another window already plays as ${message.from} in room ${this.roomCode}. Give each window its own id.`,
+          });
+          return;
+        }
+        this.holders.set(message.from, message.nonce);
         // Repeated hellos (the guest retries until answered) are answered again, not re-joined.
         post(this.channel, { t: 'welcome', from: this.localId, to: message.from });
         this.connect(message.from);
@@ -222,6 +235,7 @@ export class BroadcastChannelTransport implements Transport {
   }
 
   private disconnect(peerId: string): void {
+    this.holders.delete(peerId);
     if (this.lastHeard.delete(peerId)) this.onPeerLeft.emit(peerId);
   }
 

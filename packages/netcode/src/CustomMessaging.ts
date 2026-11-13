@@ -64,14 +64,19 @@ export class CustomMessagingManager {
           `sendNamedMessage('${name}', ${id}, ...): a client can only send messages to the server (client 0). ${order}`,
         );
       }
-      if (manager.isServer && !manager.connectedClientsIds.includes(id)) {
-        throw new Error(
-          `sendNamedMessage('${name}', ${id}, ...): client ${id} is not connected ` +
-            `(connected: ${manager.connectedClientsIds.join(', ') || 'none'}). ${order}`,
-        );
-      }
     }
-    for (const id of ids as readonly number[]) manager._sendNamed(name, data[0], id);
+    for (const id of ids as readonly number[]) {
+      if (manager.isServer && !manager.connectedClientsIds.includes(id)) {
+        // As NGO does: a client that has just left is not an error worth stopping a script
+        // for. The message still names the order, in case the arguments were swapped.
+        console.warn(
+          `sendNamedMessage('${name}', ${id}, ...): client ${id} is not connected ` +
+            `(connected: ${manager.connectedClientsIds.join(', ') || 'none'}), so nothing was sent. ${order}`,
+        );
+        continue;
+      }
+      manager._sendNamed(name, data[0], id);
+    }
   }
 
   /** Server only: sends to every connected client (not to the host's own handler). */

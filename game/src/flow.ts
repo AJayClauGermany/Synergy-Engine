@@ -1,7 +1,7 @@
 import { isAlive, Observable, SceneManager } from '@synergy/engine';
 import type { NetworkManager } from '@synergy/netcode';
 import { frontierOnline } from './frontier/hud';
-import { createFrontierManager, hostOnline, joinOnline, playOffline } from './frontier/session';
+import { createFrontierManager, hostOnline, joinOnline, playOffline, stopPlaying } from './frontier/session';
 import { network } from './hud';
 import { reportNetwork } from './localPlay';
 import { hostPeerGame, joinPeerGame } from './online';
@@ -57,8 +57,11 @@ let opening = 0;
 export async function openScreen(screen: Screen, options: OpenOptions = {}): Promise<void> {
   const mine = ++opening;
   flow.value = { screen: flow.value.screen, loading: screen };
+  const previous = flow.value.screen;
   try {
-    if (flow.value.screen === 'Frontier' && screen !== 'Frontier') manager?.shutdown();
+    // Not a bare shutdown(): a joined match would take that for the host leaving and
+    // start playing alone again, in the middle of this load.
+    if (previous === 'Frontier' && screen !== 'Frontier' && manager) stopPlaying(manager);
     if (screen === 'Frontier') {
       // The network manager loads the scene, here and on every machine that joins.
       const frontier = frontierManager();
@@ -69,9 +72,12 @@ export async function openScreen(screen: Screen, options: OpenOptions = {}): Pro
       // Each screen's scene is registered under the screen's name (main.tsx).
       await SceneManager.loadScene(screen);
     }
-  } finally {
-    if (mine === opening) flow.value = { screen, loading: null };
+  } catch (error) {
+    // The scene did not load: keep the HUD of the screen that is still there.
+    if (mine === opening) flow.value = { screen: previous, loading: null };
+    throw error;
   }
+  if (mine === opening) flow.value = { screen, loading: null };
   // The Skirmish HUD needs the scene's GameController, so connect after it is up.
   if (screen === 'Skirmish' && mine === opening) {
     if (options.host) await hostPeerGame({ roomCode: options.host });

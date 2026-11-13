@@ -162,7 +162,7 @@ project is exported with `tools/unity`. `game/src/frontier/rules.ts` shows all o
 Multi-step sequences: a coroutine (which can `yield` a tween).
 
 **Mix 3D, sprites and UI images.** Meshes and `Assets.loadModel` models, `SpriteRenderer`
-(2D images in the world, facing +Z) and a `Canvas` with `Image` children (screen-space UI,
+(2D images in the world, seen from their -Z side, as in Unity) and a `Canvas` with `Image` children (screen-space UI,
 laid out with `RectTransform`) all live in one scene; see `game/src/scenes/ShowcaseScene.ts`.
 Load images with `Assets.loadSprite(url)` (they load as sRGB colour textures).
 
