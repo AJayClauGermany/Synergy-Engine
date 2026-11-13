@@ -57,7 +57,8 @@ describe('Sprite', () => {
   test('has Unity defaults: centred pivot, 100 pixels per unit', () => {
     const sprite = new Sprite(texture(200, 50));
     expect(sprite.rect).toEqual({ x: 0, y: 0, width: 200, height: 50 });
-    expect(sprite.pivot).toEqual(new Vector2(0.5, 0.5));
+    // As in Unity, the pivot property is in pixels from the rect's bottom-left: the centre.
+    expect(sprite.pivot).toEqual(new Vector2(100, 25));
     expect(sprite.size).toEqual(new Vector2(2, 0.5));
     expect(sprite.bounds.min).toEqual(new Vector3(-1, -0.25, 0));
   });
@@ -67,6 +68,8 @@ describe('Sprite', () => {
     expect(sprite.size).toEqual(new Vector2(2, 2));
     expect(sprite.bounds.min).toEqual(new Vector3(-1, 0, 0));
     expect(sprite.bounds.max).toEqual(new Vector3(1, 2, 0));
+    // Given as a fraction (as Sprite.Create takes it), read back in pixels (as Sprite.pivot gives it).
+    expect(sprite.pivot).toEqual(new Vector2(32, 0));
   });
 });
 
@@ -100,6 +103,21 @@ describe('SpriteRenderer', () => {
     expect(material.emissive.g).toBe(0.5);
     expect(material.blendType).toBe(pc.BLEND_NORMAL);
     expect(material.depthWrite).toBe(false);
+  });
+
+  test('flipX and flipY mirror the quad about the pivot, as in Unity', () => {
+    const go = new GameObject('Archer');
+    const renderer = go.addComponent(SpriteRenderer);
+    // Pivot at the bottom-left: unflipped, the sprite lies right of and above the origin.
+    renderer.sprite = new Sprite(texture(200, 100), undefined, { pivot: new Vector2(0, 0) });
+    expect([renderer.bounds.min.x, renderer.bounds.max.x]).toEqual([0, 2]);
+    renderer.flipX = true;
+    expect(renderer.bounds.min.x).toBeCloseTo(-2);
+    expect(renderer.bounds.max.x).toBeCloseTo(0);
+    expect(renderer.bounds.min.y).toBeCloseTo(0);
+    renderer.flipY = true;
+    expect(renderer.bounds.min.y).toBeCloseTo(-1);
+    expect(renderer.bounds.max.y).toBeCloseTo(0);
   });
 
   test('flipX mirrors the texture coordinates', () => {

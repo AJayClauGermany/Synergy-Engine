@@ -152,12 +152,14 @@ whose message says what to write. They are here so the message makes sense when 
 - **A private field that stops the script.** Name private fields with a leading
   underscore (they are then not copied by `instantiate`), but not with a name the engine
   uses itself (`_started`, `_enabled`, `_destroy`, ...): lint lists them.
-- **A coroutine or `invoke` that stops by itself.** Both end when the GameObject is
-  deactivated, and are not resumed when it comes back. Restart them in `onEnable`.
+- **A coroutine that stops by itself.** It ends when the GameObject is
+  deactivated, and is not resumed when it comes back. Restart it in `onEnable`. An
+  `invoke` is the opposite, as in Unity: it keeps going while the object is inactive or
+  the script disabled, and only `cancelInvoke` (not `stopAllCoroutines`) or destroy ends it.
 - **`Tween.to(...)` after its object is gone.** `Tween.move/scale/rotate` end with their
   object; a bare `Tween.to` does not: add `.setTarget(this.gameObject)`.
 - Lights shine along `transform.forward`, as in Unity; `light.direction = ...` aims one directly.
-- `GameObject.find` and `findObjectOfType` walk the scene: call them in `start`, cache
+- `GameObject.find` and `findAnyObjectByType` walk the scene: call them in `start`, cache
   the result.
 - `transform.translate(v)` moves along the object's own axes; `translate(v, Space.World)`
   along world axes.

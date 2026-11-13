@@ -21,6 +21,7 @@ import {
   Sprite,
   Tile,
   TileBase,
+  TileFlags,
   type TileData,
   Tilemap,
   TilemapRenderer,
@@ -214,6 +215,7 @@ describe('TilemapRenderer', () => {
     expect(drawn()[0]?.mesh).toBe(mesh as never);
 
     // Changing a tile, a colour or the grid layout triggers a rebuild.
+    terrain.removeTileFlags({ x: 0, y: 0 }, TileFlags.LockColor);
     terrain.setColor({ x: 0, y: 0 }, Color.red);
     engine.step();
     expect(drawn()[0]?.mesh).not.toBe(mesh as never);
@@ -261,6 +263,7 @@ describe('TilemapRenderer', () => {
     expect(new Set(before.map((instance) => instance.material)).size).toBe(1);
 
     // One cell tinted: one block has a new mesh, the other 63 are untouched and still usable.
+    terrain.removeTileFlags({ x: 40, y: 70 }, TileFlags.LockColor);
     terrain.setColor({ x: 40, y: 70 }, Color.red);
     engine.step();
     const after = instances();

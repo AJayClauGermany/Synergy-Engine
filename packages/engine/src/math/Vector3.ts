@@ -1,7 +1,4 @@
-import { Mathf } from './Mathf';
-
-/** Below this, a length or denominator counts as zero (engine tolerance, not `Mathf.epsilon`). */
-const TINY = 1e-6;
+import { ENGINE_EPSILON, Mathf } from './Mathf';
 
 /** Unity's `Vector3.kEpsilon`: shorter vectors normalise to zero. */
 const NORMALIZE_EPSILON = 1e-5;
@@ -166,7 +163,7 @@ export class Vector3 implements Vector3Like {
   static moveTowards(current: Vector3, target: Vector3, maxDistanceDelta: number): Vector3 {
     const delta = target.sub(current);
     const distance = delta.magnitude;
-    if (distance <= maxDistanceDelta || distance < TINY) return target;
+    if (distance <= maxDistanceDelta || distance < ENGINE_EPSILON) return target;
     return current.add(delta.mul(maxDistanceDelta / distance));
   }
 
@@ -189,7 +186,7 @@ export class Vector3 implements Vector3Like {
 
   static project(vector: Vector3, onNormal: Vector3): Vector3 {
     const sqrMagnitude = onNormal.sqrMagnitude;
-    if (sqrMagnitude < TINY) return Vector3.zero;
+    if (sqrMagnitude < ENGINE_EPSILON) return Vector3.zero;
     return onNormal.mul(vector.dot(onNormal) / sqrMagnitude);
   }
 

@@ -10,21 +10,38 @@ import { EngineObject } from './EngineObject';
 export class UnityEvent<Args extends unknown[] = []> {
   private listeners: ((...args: Args) => void)[] = [];
 
-  /** Adds a listener and returns a function that removes it again. */
+  /**
+   * Adds a listener and returns a function that removes it again. Same as Unity: adding
+   * the same function twice registers it twice, and it is called twice per `invoke`.
+   * Unity's returns nothing; the remover is an addition, and it removes only this one
+   * registration (`removeListener` removes them all).
+   */
   addListener(listener: (...args: Args) => void): () => void {
     this.listeners.push(listener);
-    return () => this.removeListener(listener);
+    let removed = false;
+    return () => {
+      if (removed) return;
+      removed = true;
+      const index = this.listeners.lastIndexOf(listener);
+      if (index >= 0) this.listeners.splice(index, 1);
+    };
   }
 
+  /**
+   * Removes every registration of `listener`, as Unity does. It must be the very function
+   * that was added: a new arrow such as `() => this.onDied()` is another function and
+   * removes nothing. Keep the function in a field, or keep the remover `addListener` returned.
+   */
   removeListener(listener: (...args: Args) => void): void {
-    const index = this.listeners.indexOf(listener);
-    if (index >= 0) this.listeners.splice(index, 1);
+    this.listeners = this.listeners.filter((existing) => existing !== listener);
   }
 
+  /** Removes every listener. Same as Unity's `RemoveAllListeners` (which keeps Inspector ones; there are none here). */
   removeAllListeners(): void {
     this.listeners = [];
   }
 
+  /** Calls the listeners in the order they were added. Listeners added or removed meanwhile count from the next `invoke`. */
   invoke(...args: Args): void {
     // Copy so listeners may add or remove listeners while being called.
     for (const listener of [...this.listeners]) listener(...args);

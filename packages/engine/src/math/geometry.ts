@@ -1,7 +1,5 @@
+import { ENGINE_EPSILON } from './Mathf';
 import { Vector3 } from './Vector3';
-
-/** Below this, a length or denominator counts as zero (engine tolerance, not `Mathf.epsilon`). */
-const TINY = 1e-6;
 
 /** An infinite line starting at `origin` going along `direction` (always normalised). */
 export class Ray {
@@ -50,7 +48,7 @@ export class Plane {
    */
   raycast(ray: Ray): number | null {
     const denominator = ray.direction.dot(this.normal);
-    if (Math.abs(denominator) < TINY) return null;
+    if (Math.abs(denominator) < ENGINE_EPSILON) return null;
     const distance = -(ray.origin.dot(this.normal) + this.distance) / denominator;
     return distance >= 0 ? distance : null;
   }

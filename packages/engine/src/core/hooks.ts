@@ -19,7 +19,7 @@ export enum PrimitiveType {
   Cube = 'cube',
   /** 10 x 10 on the XZ plane, facing up. */
   Plane = 'plane',
-  /** 1 x 1 on the XY plane, facing back (+Z), i.e. toward a default camera. */
+  /** 1 x 1 on the XY plane, its front facing back (-Z), toward a default camera. As in Unity. */
   Quad = 'quad',
 }
 

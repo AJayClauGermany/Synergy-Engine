@@ -18,6 +18,8 @@ import {
   PrimitiveType,
   Quaternion,
   SphereCollider,
+  Sprite,
+  SpriteRenderer,
   Vector2,
   Vector3,
 } from '../src';
@@ -111,6 +113,13 @@ describe('meshes in Unity conventions', () => {
     expect(bounds.size.equals(Vector3.one, 1e-4)).toBe(true);
     expect((cube.getComponent(MeshFilter) as MeshFilter).sharedMesh?.bounds.size.equals(Vector3.one, 1e-4)).toBe(true);
   });
+});
+
+test('sprite bounds come back in Unity space', () => {
+  const sprite = new GameObject('Coin').addComponent(SpriteRenderer);
+  sprite.sprite = new Sprite(new pc.Texture(engine.app.graphicsDevice, { width: 100, height: 100 }));
+  sprite.transform.position = new Vector3(0, 0, 5);
+  expect(sprite.bounds.center.z).toBeCloseTo(5);
 });
 
 describe('models', () => {

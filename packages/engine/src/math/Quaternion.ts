@@ -1,8 +1,5 @@
-import { Mathf } from './Mathf';
+import { ENGINE_EPSILON, Mathf } from './Mathf';
 import { Vector3, type Vector3Like } from './Vector3';
-
-/** Below this, a length or denominator counts as zero (engine tolerance, not `Mathf.epsilon`). */
-const TINY = 1e-6;
 
 /** Anything with x/y/z/w, e.g. a PlayCanvas `Quat`. */
 export interface QuaternionLike {
@@ -88,9 +85,9 @@ export class Quaternion implements QuaternionLike {
    */
   static lookRotation(forward: Vector3, up: Vector3 = Vector3.up): Quaternion {
     const f = forward.normalized;
-    if (f.sqrMagnitude < TINY) return Quaternion.identity;
+    if (f.sqrMagnitude < ENGINE_EPSILON) return Quaternion.identity;
     let right = up.cross(f);
-    if (right.sqrMagnitude < TINY) {
+    if (right.sqrMagnitude < ENGINE_EPSILON) {
       // `forward` is parallel to `up`: pick any perpendicular axis.
       right = (Math.abs(f.y) > 0.999 ? Vector3.forward : Vector3.up).cross(f);
     }
@@ -107,7 +104,7 @@ export class Quaternion implements QuaternionLike {
     if (d >= 1 - 1e-9) return Quaternion.identity;
     if (d <= -1 + 1e-9) {
       let axis = Vector3.right.cross(a);
-      if (axis.sqrMagnitude < TINY) axis = Vector3.up.cross(a);
+      if (axis.sqrMagnitude < ENGINE_EPSILON) axis = Vector3.up.cross(a);
       return Quaternion.angleAxis(180, axis);
     }
     const c = a.cross(b);
@@ -242,13 +239,13 @@ export class Quaternion implements QuaternionLike {
 
   get normalized(): Quaternion {
     const length = Math.sqrt(Quaternion.dot(this, this));
-    if (length < TINY) return Quaternion.identity;
+    if (length < ENGINE_EPSILON) return Quaternion.identity;
     return new Quaternion(this.x / length, this.y / length, this.z / length, this.w / length);
   }
 
   inverse(): Quaternion {
     const sqrLength = Quaternion.dot(this, this);
-    if (sqrLength < TINY) return Quaternion.identity;
+    if (sqrLength < ENGINE_EPSILON) return Quaternion.identity;
     return new Quaternion(-this.x / sqrLength, -this.y / sqrLength, -this.z / sqrLength, this.w / sqrLength);
   }
 

@@ -61,7 +61,7 @@ authoritative action handling) has to be ported from C# by hand. How it fits her
 - **Pathfinding and patterns** build on `findReachable` / `findPath` (terrain costs,
   blocked cells) and `Hex.range` / `Hex.ring` / `Hex.line` (weapon patterns, line of sight).
 - **Fog of war and overlays** are extra `Tilemap` layers over the terrain (semi-transparent
-  tiles, `setColor` per cell, or a tinted whole layer).
+  tiles, `setColor` per cell on tiles without `TileFlags.LockColor`, or a tinted whole layer).
 
 ### Simultaneous control, cooldowns and world ticks
 

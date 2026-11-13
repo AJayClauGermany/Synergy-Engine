@@ -781,6 +781,7 @@ export const ENGINE_MEMBERS = [
   '_lookup',
   '_returned',
   '_send',
+  '_startInvoke',
   '_startQueued',
   '_started',
   '_wantsLive',

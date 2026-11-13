@@ -1,7 +1,4 @@
-import { Mathf } from './Mathf';
-
-/** Below this, a length or denominator counts as zero (engine tolerance, not `Mathf.epsilon`). */
-const TINY = 1e-6;
+import { ENGINE_EPSILON, Mathf } from './Mathf';
 
 /**
  * Immutable 2D vector. Every operation returns a new instance, which gives the same
@@ -113,7 +110,7 @@ export class Vector2 {
   static moveTowards(current: Vector2, target: Vector2, maxDistanceDelta: number): Vector2 {
     const delta = target.sub(current);
     const distance = delta.magnitude;
-    if (distance <= maxDistanceDelta || distance < TINY) return target;
+    if (distance <= maxDistanceDelta || distance < ENGINE_EPSILON) return target;
     return current.add(delta.mul(maxDistanceDelta / distance));
   }
 
