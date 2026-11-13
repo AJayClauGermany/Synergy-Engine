@@ -144,7 +144,7 @@ that wrote it, and rules change.
 ```ts
 test('a save survives the round trip', () => {
   const state = apply(createGame(), { type: 'endTurn' });
-  expect(fromSave(toSave(state))).toEqual(state);
+  expect(fromSave(toSave(state))).toStrictEqual(state);
 });
 
 test('an old save is migrated, a newer one is refused', () => {
@@ -154,7 +154,8 @@ test('an old save is migrated, a newer one is refused', () => {
 });
 ```
 
-`toEqual` after the round trip is the test that catches a `Map`, a class instance or an
+`toStrictEqual` after the round trip (not `toEqual`, which lets a class instance and an
+`undefined` through) is the test that catches a `Map`, a class instance or an
 `undefined` in the state. Keep one real save file per released version under
 `game/test/` and load each in a test after every change to the state's shape.
 

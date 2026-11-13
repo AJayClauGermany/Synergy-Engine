@@ -189,3 +189,32 @@ describe('commands', () => {
     expect(wireProblem([1, undefined])).toContain('[1] is undefined');
   });
 });
+
+describe("the client's clock", () => {
+  test('a change sent in the middle of a tick (before an RPC) does not set the clock back', () => {
+    const { host, guest, onHost } = setup();
+    const quarterTick = 1 / 120; // the tick rate is 30: four frames to a tick
+    /** How many ticks the guest's idea of the server's clock trails it, summed over two ticks of frames. */
+    const lagOverTwoTicks = () => {
+      let lag = 0;
+      for (let frame = 0; frame < 8; frame++) {
+        net.pump(1, quarterTick);
+        lag += host.manager.localTime.tick - guest.manager.serverTime.tick;
+      }
+      return lag;
+    };
+    // A change sent as a tick begins: the guest sets its clock by it and trails by a frame.
+    host.run(() => {
+      onHost.hp.value -= 1;
+    });
+    net.pump(8, quarterTick);
+    const before = lagOverTwoTicks();
+    expect(before).toBeLessThanOrEqual(2);
+    // Three quarters of the way into a tick, write a value and call an RPC: the value is
+    // sent at once, carrying the tick the server is still in.
+    net.pump(3, quarterTick);
+    host.run(() => onHost.takeDamage(1));
+    net.pump(1, quarterTick);
+    expect(lagOverTwoTicks()).toBeLessThanOrEqual(before);
+  });
+});

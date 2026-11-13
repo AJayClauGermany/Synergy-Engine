@@ -198,15 +198,60 @@ function isBehaviour(owner: ClassNode, scriptsInFile: ReadonlySet<string>): bool
   return base !== null && (BEHAVIOUR_BASES.has(base) || scriptsInFile.has(base));
 }
 
+/** Members only a script has. A class that uses one through `this` is a script, whatever it extends. */
+const SCRIPT_MEMBERS = new Set([
+  'transform',
+  'gameObject',
+  'startCoroutine',
+  'stopCoroutine',
+  'stopAllCoroutines',
+  'getComponent',
+  'getComponents',
+  'getComponentInChildren',
+  'getComponentsInChildren',
+  'getComponentInParent',
+  'invoke',
+  'invokeRepeating',
+  'cancelInvoke',
+  'networkObject',
+  'networkManager',
+  'isOwner',
+  'isServer',
+  'isHost',
+]);
+
+/** Whether `node` reads `this.transform`, `this.startCoroutine` or another member only a script has. */
+function usesScriptMembers(node: Node): boolean {
+  if (
+    node.type === 'MemberExpression' &&
+    !node.computed &&
+    node.object.type === 'ThisExpression' &&
+    SCRIPT_MEMBERS.has(identifierName(node.property) ?? '')
+  ) {
+    return true;
+  }
+  for (const [key, value] of Object.entries(node)) {
+    if (key === 'parent') continue;
+    for (const child of Array.isArray(value) ? value : [value]) {
+      if (isNode(child) && usesScriptMembers(child)) return true;
+    }
+  }
+  return false;
+}
+
 /**
- * Whether `owner` is a script as far as this file shows: it is one by `isBehaviour`, or it
- * extends some class and declares a message the engine sends. That second case is a
- * script whose base is imported (`class Archer extends UnitView`).
+ * Whether `owner` is a script as far as this file shows: it is one by `isBehaviour`, or its
+ * base class comes from another file and it uses a script's own members
+ * (`class Archer extends UnitView { update() { this.transform... } }`). A class that merely
+ * has an `update()` is not taken for one: state machines and emitters have those too.
+ * `plainInFile` collects the classes of this file found not to be scripts.
  */
-function looksLikeScript(owner: ClassNode, scriptsInFile: ReadonlySet<string>): boolean {
+function looksLikeScript(owner: ClassNode, scriptsInFile: ReadonlySet<string>, plainInFile: Set<string>): boolean {
   if (isBehaviour(owner, scriptsInFile)) return true;
-  if (!owner.superClass) return false;
-  return (MESSAGES as readonly string[]).some((message) => findMethod(owner, message) !== null);
+  const base = identifierName(owner.superClass);
+  const script = base !== null && !plainInFile.has(base) && usesScriptMembers(owner.body);
+  if (!script && owner.id) plainInFile.add(owner.id.name);
+  return script;
 }
 
 /** A file name without its folders and extension: `game/src/Unit.test.ts` gives `Unit.test`. */
@@ -414,9 +459,10 @@ const noUnsentMessage: Rule = {
   },
   create(context) {
     const scriptsInFile = new Set<string>();
+    const plainInFile = new Set<string>();
 
     function check(owner: ClassNode): void {
-      if (!looksLikeScript(owner, scriptsInFile)) return;
+      if (!looksLikeScript(owner, scriptsInFile, plainInFile)) return;
       const ownerName = identifierName(owner.id) ?? 'This class';
       if (owner.id) scriptsInFile.add(owner.id.name);
       for (const member of owner.body.body) {
@@ -701,19 +747,15 @@ const noInlineRemove: Rule = {
   },
 };
 
-/** Methods of the value types that return a new value and change nothing. */
-const PURE_METHODS = new Set([
-  'sub',
-  'mul',
-  'div',
-  'neg',
-  'cross',
-  'withX',
-  'withY',
-  'withZ',
-  'withAlpha',
-  'encapsulate',
-]);
+/** Methods only the engine's value types have. They return a new value and change nothing. */
+const PURE_METHODS = new Set(['neg', 'withX', 'withY', 'withZ', 'withAlpha', 'encapsulate']);
+/**
+ * Names the value types share with things that do change in place: a `Set` has `add`, a
+ * canvas has `scale`, and PlayCanvas's own `Vec3` (reached through `gameObject.entity`)
+ * has `add`, `sub`, `mul`, `div` and `cross` that change the vector. These count only when
+ * the receiver is plainly one of the engine's values.
+ */
+const SHARED_METHODS = new Set(['add', 'sub', 'mul', 'div', 'cross', 'scale', 'rotate', 'lerp']);
 /** Properties that hold a value type. `x.position.add(v)` cannot be a Set's or a list's `add`. */
 const VALUE_PROPERTIES = new Set([
   'position',
@@ -759,8 +801,7 @@ const noDiscardedResult: Rule = {
           (receiver.type === 'MemberExpression' && VALUE_PROPERTIES.has(identifierName(receiver.property) ?? '')) ||
           (receiver.type === 'NewExpression' && VALUE_TYPES.has(identifierName(receiver.callee) ?? '')) ||
           VALUE_TYPES.has(staticMember(receiver)?.[0] ?? '');
-        // `set.add(x)` and `context.scale(2, 2)` are real changes: those names count only on a value.
-        if (PURE_METHODS.has(method) || (onValue && ['add', 'scale', 'rotate', 'lerp'].includes(method))) {
+        if (PURE_METHODS.has(method) || (onValue && SHARED_METHODS.has(method))) {
           context.report({ node: call, messageId: 'discarded', data: { method } });
         }
       },
@@ -814,10 +855,11 @@ const noEngineMember: Rule = {
   },
   create(context) {
     const scriptsInFile = new Set<string>();
+    const plainInFile = new Set<string>();
     const taken = new Set<string>(ENGINE_MEMBERS);
 
     function check(owner: ClassNode): void {
-      if (!looksLikeScript(owner, scriptsInFile)) return;
+      if (!looksLikeScript(owner, scriptsInFile, plainInFile)) return;
       if (owner.id) scriptsInFile.add(owner.id.name);
       for (const member of owner.body.body) {
         if (member.type !== 'MethodDefinition' && member.type !== 'PropertyDefinition') continue;
@@ -896,7 +938,18 @@ const networkMembers: Rule = {
       if (networked && owner.id) networkedInFile.add(owner.id.name);
       for (const member of owner.body.body) {
         if (member.type === 'StaticBlock' || member.static) continue;
-        if (networked && member.type === 'MethodDefinition' && member.kind === 'method' && !member.computed) {
+        // A private method is not something another machine could have been meant to call:
+        // it is the body of a handler, moved out of its field (`private onMoveRpc(...)`).
+        const hidden =
+          member.type === 'MethodDefinition' &&
+          (member.accessibility === 'private' || member.accessibility === 'protected');
+        if (
+          networked &&
+          member.type === 'MethodDefinition' &&
+          member.kind === 'method' &&
+          !member.computed &&
+          !hidden
+        ) {
           const name = identifierName(member.key);
           if (name?.endsWith('Rpc')) context.report({ node: member.key, messageId: 'rpcMethod', data: { name } });
         }

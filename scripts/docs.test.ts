@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, setDefaultTimeout, test } from 'bun:test';
 import {
   type Block,
   checkBlocks,
@@ -67,6 +67,10 @@ describe('the shape of a block', () => {
     expect(shapeOf('const a = 1;\nsession.submit(...);', 'ts')).toMatchObject({ line: 2 });
   });
 });
+
+// Each of these starts the type checker, up to four times. On one slow core, with every
+// other check running beside it, that has taken most of the default five seconds.
+setDefaultTimeout(30_000);
 
 describe('compiling blocks against the engine', () => {
   test('a block that uses the engine as it is passes, with or without its imports', async () => {

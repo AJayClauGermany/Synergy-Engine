@@ -133,11 +133,15 @@ export class Tween extends CustomYieldInstruction {
 
   /**
    * Cancels every running tween whose target is `target`. Returns how many were cancelled.
-   * A component stands for its GameObject, so `Tween.kill(this.transform)` and
-   * `Tween.kill(this.gameObject)` are the same (DOTween: `transform.DOKill()`).
+   * `Tween.move`, `scale` and `rotate` belong to the GameObject, so a Transform stands for
+   * it here: `Tween.kill(this.transform)` is `Tween.kill(this.gameObject)` (DOTween:
+   * `transform.DOKill()`). Any other target, such as a script given to `setTarget(this)`,
+   * means only the tweens tied to that very object.
    */
   static kill(target: EngineObject): number {
-    return currentEngine().tweens.killTarget(ownerOf(target));
+    const tweens = currentEngine().tweens;
+    const isTransform = target instanceof Component && target === target.gameObject.transform;
+    return tweens.killTarget(target) + (isTransform ? tweens.killTarget(target.gameObject) : 0);
   }
 
   // ---- Options (chainable) ------------------------------------------------------------
@@ -169,7 +173,7 @@ export class Tween extends CustomYieldInstruction {
 
   /** Ties the tween to an object: it is cancelled when that object is destroyed. */
   setTarget(target: EngineObject): this {
-    this._target = ownerOf(target);
+    this._target = target;
     return this;
   }
 
@@ -231,11 +235,6 @@ export class Tween extends CustomYieldInstruction {
     this.completed = true;
     for (const handler of this.completeHandlers) handler();
   }
-}
-
-/** A tween on a component belongs to its GameObject: destroying or killing either ends it. */
-function ownerOf(target: EngineObject): EngineObject {
-  return target instanceof Component ? target.gameObject : target;
 }
 
 /** @internal Runs every tween of one engine. */

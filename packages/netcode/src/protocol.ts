@@ -56,6 +56,7 @@ export type ServerMessage =
   | { t: 'spawn'; obj: SpawnData }
   | { t: 'despawn'; o: number }
   | { t: 'owner'; o: number; w: number }
-  | { t: 'sync'; tick: number; u: VarUpdate[] }
+  /** `mid`: sent between ticks (before an RPC, a despawn), so it does not say when the tick began. */
+  | { t: 'sync'; tick: number; u: VarUpdate[]; mid?: true }
   | { t: 'rpc'; o: number; b: number; n: string; a: unknown[]; from: number }
   | { t: 'msg'; n: string; d: unknown; from: number };

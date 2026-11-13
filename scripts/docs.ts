@@ -742,13 +742,17 @@ export function checkSkill(
 
 /** Every Markdown file that is part of the project. */
 export function markdownFiles(root = ROOT): string[] {
-  const skip = /(^|\/)(node_modules|dist|\.git|\.screenshots|\.claude\/worktrees|convex\/_generated)(\/|$)/;
+  const skip =
+    /(^|\/)(node_modules|dist|\.git|\.screenshots|\.wrangler|\.hutch|\.fallow|\.claude\/worktrees|convex\/_generated)(\/|$)/;
   return [...new Bun.Glob('**/*.md').scanSync({ cwd: root, dot: true })].filter((file) => !skip.test(file)).toSorted();
 }
 
 export async function checkDocs(root = ROOT): Promise<{ findings: Finding[]; files: number; blocks: number }> {
   const files = markdownFiles(root);
-  const read = (file: string) => readFileSync(path.join(root, file), 'utf8');
+  // A Windows checkout may have \r\n line ends. Every check here reads line by line, and a
+  // stray \r would make a fence, a front-matter line or a heading match nothing: the file
+  // would be read as having no code in it and pass.
+  const read = (file: string) => readFileSync(path.join(root, file), 'utf8').replace(/\r\n?/g, '\n');
   const manifest = JSON.parse(read('package.json')) as { scripts?: Record<string, string> };
   const scripts = new Set(Object.keys(manifest.scripts ?? {}));
   const skills = new Set(files.flatMap((file) => SKILL_FILE.exec(file)?.[1] ?? []));

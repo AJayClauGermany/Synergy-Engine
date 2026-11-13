@@ -1,0 +1,3 @@
+# Text files are stored and checked out with \n line ends on every system. The checks read
+# files line by line, and Git for Windows would otherwise hand them \r\n.
+* text=auto eol=lf

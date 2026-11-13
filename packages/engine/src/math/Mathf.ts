@@ -121,6 +121,12 @@ export const Mathf = {
     maxSpeed: number,
     deltaTime: number,
   ): [value: number, velocity: number] {
+    if (!Number.isFinite(deltaTime)) {
+      throw new RangeError(
+        `Mathf.smoothDamp: deltaTime is ${deltaTime}. The last two arguments are (maxSpeed, deltaTime), in Unity's order: ` +
+          'Mathf.smoothDamp(current, target, velocity, smoothTime, Infinity, Time.deltaTime).',
+      );
+    }
     const time = Math.max(0.0001, smoothTime);
     const omega = 2 / time;
     const x = omega * deltaTime;

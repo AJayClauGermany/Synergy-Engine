@@ -124,7 +124,8 @@ function isUntouched(root: GameObject): boolean {
  */
 function checkPrefabBuild(prefab: Prefab, root: GameObject, made: unknown): void {
   const fix = `Add to the GameObject build() is given: new Prefab('${prefab.name}', (go) => { go.addComponent(...); }).`;
-  if (made instanceof GameObject && made !== root) {
+  // (An arrow that returns what it just added, `(go) => instantiate(Child, go.transform)`, is fine.)
+  if (made instanceof GameObject && made !== root && !made.transform.isChildOf(root.transform)) {
     currentEngine().reportError(
       new Error(
         `Prefab "${prefab.name}": build() made and returned a GameObject of its own ("${made.name}"). ` +

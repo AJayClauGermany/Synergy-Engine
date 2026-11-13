@@ -4,8 +4,12 @@
 # To commit work in progress anyway: git commit --no-verify
 
 # The checks read the files on disk, not what is staged. With changes left unstaged (or new
-# files not added) they would pass or fail on something other than this commit.
-if ! git diff --quiet || [ -n "$(git ls-files --others --exclude-standard -- '*.ts' '*.tsx' '*.md' '*.json')" ]; then
+# source files not added) they would pass or fail on something other than this commit.
+# Only the folders the checks read count: an editor's settings or a notes file of your own
+# is none of their business.
+SOURCES="game packages scripts tools docs convex cloudflare .claude/skills"
+# shellcheck disable=SC2086 # the list is meant to split into several paths
+if ! git diff --quiet || [ -n "$(git ls-files --others --exclude-standard -- $SOURCES)" ]; then
   echo "pre-commit: there are changes or new files that are not staged, so the checks would test files"
   echo "that are not in this commit. Stage them (git add), or stash them (git stash -k -u), and commit again."
   exit 1

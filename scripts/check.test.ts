@@ -106,7 +106,9 @@ describe('what is type-checked', () => {
   // and never type-checked: `bun run check` says PASSED over a type error in it.
   test('every TypeScript file in the project belongs to a tsconfig', () => {
     const root = path.resolve(import.meta.dir, '..');
-    const skip = /(^|\/)(node_modules|dist|\.git|\.screenshots|\.claude\/worktrees|convex\/_generated|desktop)(\/|$)/;
+    // Not the project's own: what tools leave behind (wrangler writes .ts files while it runs).
+    const skip =
+      /(^|\/)(node_modules|dist|\.git|\.screenshots|\.wrangler|\.hutch|\.fallow|\.claude\/worktrees|convex\/_generated|desktop)(\/|$)/;
     const files = [...new Bun.Glob('**/*.{ts,tsx}').scanSync({ cwd: root, dot: true })].filter(
       (file) => !skip.test(file),
     );
