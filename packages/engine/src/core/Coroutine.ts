@@ -103,6 +103,15 @@ export class Coroutine {
   }
 }
 
+/** A yielded value as text for an error message. A GameObject or a bigint has no JSON form. */
+function describe(value: unknown): string {
+  try {
+    return JSON.stringify(value) ?? typeof value;
+  } catch {
+    return String(value);
+  }
+}
+
 function isIterator(value: unknown): value is Iterator<Yieldable, unknown, unknown> {
   return typeof value === 'object' && value !== null && typeof (value as Iterator<unknown>).next === 'function';
 }
@@ -271,8 +280,7 @@ export class CoroutineScheduler {
       );
       return (phase) => phase === 'update' && settled;
     }
-    const shown =
-      typeof value === 'function' ? `the function ${(value as { name: string }).name}` : JSON.stringify(value);
+    const shown = typeof value === 'function' ? `the function ${(value as { name: string }).name}` : describe(value);
     throw new TypeError(
       `A coroutine yielded ${shown}, which is not something to wait on. Yield null (one frame), ` +
         'a wait such as new WaitForSeconds(1) (with `new`), a Tween, a Coroutine, a promise, or another generator.',

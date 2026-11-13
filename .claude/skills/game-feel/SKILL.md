@@ -50,12 +50,18 @@ keeps it safe to add late and safe in multiplayer.
 ## Patterns
 
 A pop: start squashed, spring back. The scale ends exactly at rest because the tween's
-last value is its target.
+last value is its target. Keep the tween, so that the next pop can end this one and
+nothing else; and pop a child that holds only the mesh (`body` here), so the pop cannot
+fight a move of the object itself.
 
 ```ts
-transform.localScale = new Vector3(1.3, 0.7, 1.3);
-Tween.kill(gameObject);                       // an earlier pop still running would fight this one
-Tween.scale(transform, Vector3.one, 0.18).setEase(Ease.OutBack);
+private _pop: Tween | null = null;
+
+pop(body: Transform) {
+  this._pop?.kill();                           // an earlier pop still running would fight this one
+  body.localScale = new Vector3(1.3, 0.7, 1.3);
+  this._pop = Tween.scale(body, Vector3.one, 0.18).setEase(Ease.OutBack);
+}
 ```
 
 Hit-stop: slow time for a moment of real time. Hits overlap, so only the newest call
@@ -141,8 +147,11 @@ animated in CSS: see the `hud-ui` skill.
 - **Shaking the unit instead of the camera** moves what raycasts and clicks hit. Shake
   the camera, or a child that holds only the mesh.
 - **Scale creeps after repeated pops.** A new tween started from a half-finished one.
-  `Tween.kill(gameObject)` first and tween to an absolute rest value, never "current
-  times 1.2".
+  Kill the earlier pop first (keep the tween it returned) and tween to an absolute rest
+  value, never "current times 1.2".
+- **The unit stops halfway when it is hit.** `Tween.kill(gameObject)` ends every tween on
+  the object, the move in flight included. Kill the one tween you mean, or put the effect
+  on a child.
 - **A tween on a destroyed object.** `Tween.move/scale/rotate` stop by themselves when
   their object is destroyed. `Tween.to(...)` has no object: add `.setTarget(gameObject)`
   or it keeps calling your function.

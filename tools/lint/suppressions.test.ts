@@ -7,7 +7,7 @@ import path from 'node:path';
 
 const ROOT = path.resolve(import.meta.dir, '../..');
 const SKIP =
-  /(^|\/)(node_modules|dist|\.git|\.screenshots|\.claude\/worktrees|convex\/_generated|desktop\/\.hutch)(\/|$)/;
+  /(^|\/)(node_modules|dist|\.git|\.screenshots|\.wrangler|\.fallow|\.claude\/worktrees|convex\/_generated|desktop\/\.hutch|\.hutch)(\/|$)/;
 /** Files that write these comments inside strings, as the subject of their own tests. */
 const ABOUT_SUPPRESSIONS = new Set(['tools/lint/suppressions.test.ts']);
 

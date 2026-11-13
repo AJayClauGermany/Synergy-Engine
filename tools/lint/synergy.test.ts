@@ -144,6 +144,8 @@ const CASES: Record<RuleName, { valid: (string | Snippet)[]; invalid: Snippet[] 
       // Not a script, so nothing sends it messages either way.
       'class Machine { onStart() {} onTriggerEnter() {} }',
       'class Machine extends Base { onStart() {} }',
+      // Nor is a state of a state machine, whose own code calls its onStart().
+      "import { UnitState } from './UnitState'; class Patrol extends UnitState { onStart() {} update() { this.unit.transform.translate(step); } }",
       // Unity's capitals are a type error already; one report is enough.
       'class Unit extends MonoBehaviour { Update() {} }',
       'class Unit extends MonoBehaviour { static onStart() {} }',
@@ -172,7 +174,7 @@ const CASES: Record<RuleName, { valid: (string | Snippet)[]; invalid: Snippet[] 
       },
       // So is one whose base is imported, when it declares a message the engine sends.
       {
-        code: "import { UnitView } from './UnitView'; export class Archer extends UnitView { update() {} onTriggerEnter() {} }",
+        code: "import { UnitView } from './UnitView'; export class Archer extends UnitView { update() { this.transform.rotate(Vector3.up, 1); } onTriggerEnter() {} }",
         errors: ['Archer.onTriggerEnter()'],
       },
       // A message written as a field is no more a message.
@@ -301,16 +303,18 @@ const CASES: Record<RuleName, { valid: (string | Snippet)[]; invalid: Snippet[] 
       'const next = a.sub(b).mul(2);',
       // Real changes that happen to share a name.
       'seen.add(cell); list.add(item);',
+      // PlayCanvas's own vectors (through gameObject.entity) do change in place.
+      'offset.sub(target); offset.mul(v); side.cross(a, b); matrix.mul(other);',
       'context.scale(2, 2); this.transform.rotate(Vector3.up, 90);',
       'bounds = bounds.encapsulate(point);',
       'return velocity.mul(Time.deltaTime);',
     ],
     invalid: [
       { code: 'this.transform.position.add(step);', errors: ['.add() returns a new value'] },
-      { code: 'velocity.mul(0.5);', errors: ['.mul() returns a new value'] },
+      { code: 'this.transform.forward.mul(0.5);', errors: ['.mul() returns a new value'] },
       { code: 'bounds.encapsulate(point);', errors: ['.encapsulate()'] },
       { code: 'unit.transform.localScale.scale(Vector3.one.mul(2));', errors: ['.scale()'] },
-      { code: 'Vector3.zero.add(offset); target.sub(origin);', errors: ['.add()', '.sub()'] },
+      { code: 'Vector3.zero.add(offset); new Vector3(1, 2, 3).sub(origin);', errors: ['.add()', '.sub()'] },
       { code: 'color.withAlpha(0.5);', errors: ['.withAlpha()'] },
     ],
   },
@@ -321,6 +325,9 @@ const CASES: Record<RuleName, { valid: (string | Snippet)[]; invalid: Snippet[] 
       'class Pool { _started = false; _destroy() {} }',
       // Engine code overriding its own hooks says so.
       'class Light extends Behaviour { override _attach() {} override _destroy() {} }',
+      // A state machine and an emitter have update() and start() too, and are not scripts.
+      'class UnitState { update() {} } class Patrol extends UnitState { _started = false; _enabled = true; update() {} }',
+      "import { Emitter } from './Emitter'; class Connection extends Emitter { _live = false; _send() {} start() {} }",
     ],
     invalid: [
       {
@@ -332,7 +339,7 @@ const CASES: Record<RuleName, { valid: (string | Snippet)[]; invalid: Snippet[] 
         errors: ['A._live', 'A._destroy'],
       },
       {
-        code: "import { UnitView } from './UnitView'; class Archer extends UnitView { _enabled = true; update() {} }",
+        code: "import { UnitView } from './UnitView'; class Archer extends UnitView { _enabled = true; update() { this.transform.rotate(Vector3.up, 1); } }",
         errors: ['Archer._enabled'],
       },
     ],
@@ -345,6 +352,8 @@ const CASES: Record<RuleName, { valid: (string | Snippet)[]; invalid: Snippet[] 
       'class Unit extends NetworkBehaviour { readonly stock = new NetworkVariable({ wood: 0, ore: 0 }); readonly squad = new NetworkList<number>(); }',
       // Not networked: a method may be called anything.
       'class Radio { pingRpc() {} }',
+      // The body of a handler, moved out of its field.
+      'class Unit extends NetworkBehaviour { readonly moveRpc = this.serverRpc((x: number) => this.onMoveRpc(x)); private onMoveRpc(x: number) { this.x.value = x; } }',
     ],
     invalid: [
       {

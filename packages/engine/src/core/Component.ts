@@ -60,6 +60,9 @@ export abstract class Component extends EngineObject {
    */
   private _lookup(method: string, type: { readonly name: string }): void {
     if (!unfinished.has(this)) return;
+    // What the class says it requires was added before it, whatever the order of the calls.
+    const required = (this.constructor as { requireComponents?: readonly unknown[] }).requireComponents ?? [];
+    if (required.includes(type)) return;
     const self = this.constructor.name;
     throw new Error(
       `${self}: ${method}(${type.name}) was called in a field initialiser or constructor, while ${self} is still being created. ` +

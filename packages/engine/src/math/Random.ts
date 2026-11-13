@@ -17,12 +17,13 @@ export class Random {
   private current: number;
 
   /**
-   * `seed` is a whole number, and it is required: a generator made without one would give
-   * every caller the same sequence, and a fraction (`Math.random()`) would be cut to 0.
-   * In rules, use a seed kept in the game state; in view code `Date.now()` will do.
+   * `seed` is required: a generator made without one would give every caller the same
+   * sequence. It becomes a 32-bit integer, so a fraction below 1 (`Math.random()`) would
+   * always be seed 0, and that is refused. In rules, use a seed kept in the game state; in
+   * view code `Date.now()` will do.
    */
   constructor(seed: number) {
-    if (!Number.isInteger(seed)) {
+    if (!Number.isFinite(seed) || (seed !== 0 && Math.abs(seed) < 1)) {
       throw new RangeError(
         `new Random(${seed}): the seed must be a whole number. It becomes a 32-bit integer, so every ` +
           'fraction below 1 would be the same seed. Use a number stored in the game state, or Date.now() in view code.',

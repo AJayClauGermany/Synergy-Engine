@@ -574,7 +574,7 @@ export class NetworkManager extends MonoBehaviour {
   }
 
   private flushServer(): void {
-    const told = this.sendVariableChanges();
+    const told = this.sendVariableChanges(false);
     // With nothing to say, still tell clients what tick it is now and then.
     const heartbeat = this.tick - this.lastHeartbeatTick >= this.networkConfig.tickRate;
     if (!heartbeat) return;
@@ -591,7 +591,7 @@ export class NetworkManager extends MonoBehaviour {
    * clients as the RPC first and the new value a tick later, and a value written just
    * before `despawn()` would never reach them at all.
    */
-  private sendVariableChanges(): Set<number> {
+  private sendVariableChanges(betweenTicks = true): Set<number> {
     const perClient = new Map<number, VarUpdate[]>();
     for (const variable of this.dirtyVariables) {
       const behaviour = variable._behaviour;
@@ -613,7 +613,10 @@ export class NetworkManager extends MonoBehaviour {
       }
       variable._resetDirty();
     }
-    for (const [id, updates] of perClient) this.sendTo(id, { t: 'sync', tick: this.tick, u: updates });
+    // A client sets its clock by when a sync arrives. One sent in the middle of a tick must
+    // not do that, or the client would run up to a tick behind until the next one.
+    const mid = betweenTicks ? ({ mid: true } as const) : {};
+    for (const [id, updates] of perClient) this.sendTo(id, { t: 'sync', tick: this.tick, u: updates, ...mid });
     return new Set(perClient.keys());
   }
 
@@ -714,8 +717,12 @@ export class NetworkManager extends MonoBehaviour {
         break;
       }
       case 'sync':
-        this.serverTickAtSync = message.tick;
-        this.clockAtSync = this.clock;
+        // Variable changes are also sent between ticks (before an RPC, a despawn). Only a
+        // sync sent as a tick begins says where the server's clock is.
+        if (!message.mid) {
+          this.serverTickAtSync = message.tick;
+          this.clockAtSync = this.clock;
+        }
         for (const update of message.u) this.applyUpdate(update, null);
         break;
       case 'rpc': {
@@ -1072,7 +1079,7 @@ export class NetworkManager extends MonoBehaviour {
           }
         }
       });
-      if (updates.length > 0) this.sendTo(newOwner, { t: 'sync', tick: this.tick, u: updates });
+      if (updates.length > 0) this.sendTo(newOwner, { t: 'sync', tick: this.tick, u: updates, mid: true });
     }
   }
 

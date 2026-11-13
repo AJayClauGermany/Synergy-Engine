@@ -8,6 +8,8 @@ import {
   Camera,
   cellKey,
   CellLayout,
+  destroy,
+  Ease,
   Engine,
   GameObject,
   Grid,
@@ -144,6 +146,20 @@ describe('coroutines', () => {
     new GameObject('Confused').addComponent(Confused);
     expect(() => engine.step()).toThrow(/the function WaitForSeconds.*new WaitForSeconds\(1\)/s);
   });
+
+  test('the same sentence comes out for a yielded GameObject, which has no JSON form', () => {
+    class Lost extends MonoBehaviour {
+      start() {
+        // @ts-expect-error a GameObject is not something to wait on
+        this.startCoroutine(this.run());
+      }
+      *run() {
+        yield this.gameObject;
+      }
+    }
+    new GameObject('Lost').addComponent(Lost);
+    expect(() => engine.step()).toThrow(/which is not something to wait on/);
+  });
 });
 
 describe('components', () => {
@@ -164,6 +180,22 @@ describe('components', () => {
       return enemy;
     });
     expect(() => instantiate(Enemy)).toThrow(/build\(\) made and returned a GameObject of its own.*\(go\) =>/s);
+  });
+
+  test('a build function may return what it added to the instance', () => {
+    const Child = new Prefab('Child', (go) => {
+      go.addComponent(BoxCollider);
+    });
+    const Squad = new Prefab('Squad', (go) => instantiate(Child, go.transform));
+    expect(instantiate(Squad).transform.childCount).toBe(1);
+  });
+
+  test('a component the class requires may be looked up in a field: it is always there first', () => {
+    class Armoured extends MonoBehaviour {
+      static readonly requireComponents = [BoxCollider];
+      readonly box = this.getComponent(BoxCollider);
+    }
+    expect(new GameObject('Tank').addComponent(Armoured).box).not.toBeNull();
   });
 
   test('a prefab that adds nothing is warned about once; one that only tags is not', () => {
@@ -250,7 +282,7 @@ describe('time and scenes', () => {
 });
 
 describe('tweens', () => {
-  test('Tween.kill takes the transform or the script as well as the GameObject', () => {
+  test('Tween.kill takes the transform as well as the GameObject', () => {
     const unit = new GameObject('Unit');
     Tween.move(unit.transform, new Vector3(10, 0, 0), 1);
     engine.stepFrames(5);
@@ -258,6 +290,32 @@ describe('tweens', () => {
     const stoppedAt = unit.transform.position.x;
     engine.stepFrames(5);
     expect(unit.transform.position.x).toBe(stoppedAt);
+  });
+
+  test("a script's own tween is its own: killing it leaves the object's move alone, and it ends with the script", () => {
+    class Glow extends MonoBehaviour {
+      calls = 0;
+      flash() {
+        Tween.kill(this);
+        Tween.to(1, 0, 0.5, () => this.calls++).setTarget(this);
+      }
+    }
+    const unit = new GameObject('Unit');
+    const glow = unit.addComponent(Glow);
+    Tween.move(unit.transform, new Vector3(10, 0, 0), 1).setEase(Ease.Linear);
+    glow.flash();
+    engine.stepSeconds(0.25);
+    glow.flash(); // cancels the first flash, not the move
+    engine.stepSeconds(1);
+    expect(unit.transform.position.x).toBeCloseTo(10);
+
+    glow.flash();
+    engine.stepFrames(2);
+    destroy(glow); // the script only: the GameObject lives on
+    engine.step(); // destroy() takes effect at the end of the frame
+    const before = glow.calls;
+    engine.stepFrames(10);
+    expect(glow.calls).toBe(before);
   });
 });
 
@@ -328,6 +386,32 @@ describe('Observable', () => {
     expect(told).toBe(1);
   });
 
+  test('a shared constant set again is not a change in place, and is not warned about', () => {
+    const NONE: readonly string[] = Object.freeze([]);
+    const selection = new Observable<readonly string[]>(NONE);
+    expect(
+      warnings(() => {
+        selection.value = NONE;
+      }),
+    ).toEqual([]);
+  });
+
+  test('what comes out is still usable as what went in: tuples, and objects with methods', () => {
+    class Session {
+      private log: string[] = [];
+      submit(line: string) {
+        this.log.push(line);
+      }
+    }
+    const size = new Observable<[number, number]>([4, 3]);
+    const [width, height] = size.value;
+    expect(width * height).toBe(12);
+    const current = new Observable<Session | null>(new Session());
+    const session: Session | null = current.value;
+    session?.submit('ready');
+    expect(session).not.toBeNull();
+  });
+
   test('changing the value in place does not compile', () => {
     const hud = new Observable({ gold: 0, items: ['sword'] });
     const scores = new Observable(new Map<string, number>());
@@ -386,16 +470,23 @@ describe('whole numbers and shared values', () => {
   test('a generator needs a whole-number seed, so two games are not secretly the same', () => {
     // @ts-expect-error the seed is required
     expect(() => new Random()).toThrow(RangeError);
-    expect(() => new Random(Math.random() + 0.5)).toThrow(/the seed must be a whole number/);
+    expect(() => new Random(0.37)).toThrow(/the seed must be a whole number/); // what Math.random() gives
+    expect(() => new Random(Number.NaN)).toThrow(RangeError);
     expect(new Random(7).rangeInt(0, 100)).toBe(new Random(7).rangeInt(0, 100));
+    // A clock reading has a fraction and was always a usable seed.
+    expect(new Random(1731450000123.75).rangeInt(0, 100)).toBe(new Random(1731450000123).rangeInt(0, 100));
   });
 
   test('Mathf.smoothDamp takes maxSpeed before deltaTime, as in Unity', () => {
     // @ts-expect-error both are required, so a call in the old order (deltaTime fifth, nothing sixth) does not compile
-    Mathf.smoothDamp(0, 100, 0, 0.3, 1 / 60);
+    expect(() => Mathf.smoothDamp(0, 100, 0, 0.3, 1 / 60)).toThrow(RangeError);
     const [limited] = Mathf.smoothDamp(0, 100, 0, 0.3, 10, 1 / 60);
     const [free] = Mathf.smoothDamp(0, 100, 0, 0.3, Infinity, 1 / 60);
     expect(limited).toBeLessThan(free);
+    // Six arguments in the old order still compile; the infinite "deltaTime" gives it away.
+    expect(() => Mathf.smoothDamp(0, 100, 0, 0.3, 1 / 60, Infinity)).toThrow(
+      /\(maxSpeed, deltaTime\), in Unity's order/,
+    );
   });
 
   test('a layer that is not in the map is named, with the ones that are', () => {

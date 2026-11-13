@@ -37,8 +37,11 @@ export class UnityEvent<Args extends unknown[] = []> {
 
 /**
  * A value as something to read, not to change in place: an array without `push`, an
- * object whose fields cannot be assigned, a Map without `set`. Engine objects (a
- * GameObject, a component) are handed over as they are.
+ * object whose fields cannot be assigned, a Map without `set`. It goes one level deep.
+ * Anything with methods (a GameObject, a session, a Material: a class instance) is handed
+ * over as it is, since there is no telling its own fields from its workings.
+ *
+ * A generic helper returns this type too: `function read<T>(o: Observable<T>): ReadonlyValue<T>`.
  *
  * This is what `observable.value` gives. The Observable only knows it changed when it is
  * given a new value, so `hud.value.gold += 5` would change what the HUD should show and
@@ -46,15 +49,24 @@ export class UnityEvent<Args extends unknown[] = []> {
  */
 export type ReadonlyValue<T> = T extends EngineObject | ((...args: never[]) => unknown)
   ? T
-  : T extends readonly (infer Item)[]
-    ? readonly Item[]
+  : T extends readonly unknown[]
+    ? Readonly<T>
     : T extends ReadonlyMap<infer Key, infer Value>
       ? ReadonlyMap<Key, Value>
       : T extends ReadonlySet<infer Item>
         ? ReadonlySet<Item>
         : T extends object
-          ? Readonly<T>
+          ? HasMethods<T> extends true
+            ? T
+            : Readonly<T>
           : T;
+
+/** Whether any member of `T` is a function: the mark of a class instance rather than plain data. */
+type HasMethods<T> = true extends {
+  [Key in keyof T]-?: T[Key] extends (...args: never[]) => unknown ? true : never;
+}[keyof T]
+  ? true
+  : false;
 
 /**
  * A value that tells subscribers when it changes. This is the bridge between game code
@@ -84,7 +96,15 @@ export class Observable<T> {
     if (Object.is(this.current, next)) {
       // The same object or array again: it was changed in place and handed back, which
       // looks like an update and tells no subscriber.
-      if (typeof next === 'object' && next !== null && !(next instanceof EngineObject) && !this.warned) {
+      // (A frozen value or an empty list cannot have been changed: a shared constant set again.)
+      const unchangeable = Object.isFrozen(next) || (Array.isArray(next) && next.length === 0);
+      if (
+        typeof next === 'object' &&
+        next !== null &&
+        !(next instanceof EngineObject) &&
+        !unchangeable &&
+        !this.warned
+      ) {
         this.warned = true;
         console.warn(
           'An Observable was given the object it already holds, so nothing was told that it changed. ' +
