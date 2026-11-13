@@ -1,4 +1,15 @@
-import { Input, KeyCode, Mathf, MonoBehaviour, Quaternion, Time, type Transform, Vector3 } from '@synergy/engine';
+import {
+  Color,
+  Gizmos,
+  Input,
+  KeyCode,
+  Mathf,
+  MonoBehaviour,
+  Quaternion,
+  Time,
+  type Transform,
+  Vector3,
+} from '@synergy/engine';
 
 /**
  * A strategy-game camera. This object sits on the ground at the point being looked at;
@@ -60,6 +71,14 @@ export class CameraRig extends MonoBehaviour {
 
   lateUpdate() {
     this.apply();
+  }
+
+  /** In the editor, with the rig selected: where the focus point may go, and where it is. */
+  protected onDrawGizmosSelected() {
+    Gizmos.color = Color.yellow;
+    Gizmos.drawWireCube(Vector3.zero, new Vector3(this.bounds * 2, 0, this.bounds * 2));
+    Gizmos.color = Color.cyan;
+    Gizmos.drawRay(this.transform.position, Vector3.up.mul(2));
   }
 
   private apply() {

@@ -1,10 +1,15 @@
 /**
- * Builds the game into a static site: `bun run build [--outdir dist] [--keep-names]`.
+ * Builds the game into a static site: `bun run build [--outdir dist] [--keep-names] [--devtools]`.
  * The output can be hosted anywhere, wrapped by Electrobun, or served by the Cloudflare Worker.
  *
  * `--keep-names` leaves class and function names as written, so error messages
  * ("Exception in UnitView.update") and `Debug.hierarchy()` are readable. The screenshot
  * tool builds this way. It makes the download about a sixth larger, so releases do without.
+ *
+ * A build is a release build: `process.env.NODE_ENV` is "production", so the devtools
+ * (`packages/devtools`: the editor, the log file, reports) are left out entirely.
+ * `--devtools` keeps them, for `bun run screenshot --devtools` and for testing the editor
+ * on a static server; never ship that build.
  */
 import { cp, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -14,7 +19,11 @@ import { parseArgs } from 'node:util';
 const root = path.resolve(import.meta.dir, '..');
 const { values } = parseArgs({
   args: Bun.argv.slice(2),
-  options: { outdir: { type: 'string', default: 'dist' }, 'keep-names': { type: 'boolean', default: false } },
+  options: {
+    outdir: { type: 'string', default: 'dist' },
+    'keep-names': { type: 'boolean', default: false },
+    devtools: { type: 'boolean', default: false },
+  },
 });
 const outdir = path.resolve(root, values.outdir);
 
@@ -53,7 +62,10 @@ const result = await Bun.build({
   sourcemap: 'linked',
   // Only variables starting with PUBLIC_ are inlined into the bundle. Never put secrets in them.
   env: 'PUBLIC_*',
-  define: { 'process.env.NODE_ENV': '"production"', 'process.env.PUBLIC_BUILD_ID': JSON.stringify(buildId) },
+  define: {
+    'process.env.NODE_ENV': values.devtools ? '"development"' : '"production"',
+    'process.env.PUBLIC_BUILD_ID': JSON.stringify(buildId),
+  },
 });
 
 if (!result.success) {
@@ -70,6 +82,6 @@ const script = result.outputs
   .filter((output) => output.path.endsWith('.js'))
   .reduce((total, output) => total + output.size, 0);
 console.log(
-  `Built ${path.relative(root, outdir)}/ (build ${buildId}) in ${Math.round(performance.now() - started)} ms ` +
+  `Built ${path.relative(root, outdir)}/ (build ${buildId}${values.devtools ? ', with devtools' : ''}) in ${Math.round(performance.now() - started)} ms ` +
     `(${result.outputs.length} files, ${(bytes / 1024).toFixed(0)} kB total, ${(script / 1024).toFixed(0)} kB of JavaScript)`,
 );

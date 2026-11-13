@@ -5,7 +5,7 @@ export * from './math';
 
 export { Engine, type EngineOptions } from './core/Engine';
 export { EngineObject, isAlive } from './core/EngineObject';
-export { nameType } from './core/typeNames';
+export { nameType, typeNameOf } from './core/typeNames';
 export { GameObject, gameObjectOf } from './core/GameObject';
 export { Component, Behaviour, type ComponentClass, type ConcreteComponentClass } from './core/Component';
 export { MonoBehaviour } from './core/MonoBehaviour';
@@ -28,6 +28,9 @@ export {
 export { Time } from './core/Time';
 export { Input, KeyCode, Screen } from './core/Input';
 export { Debug } from './core/Debug';
+export { Application, LogType } from './core/Application';
+export { Gizmos } from './core/Gizmos';
+export { ScreenCapture } from './core/ScreenCapture';
 export type { HierarchyOptions } from './core/hierarchy';
 export { RenderSettings } from './core/RenderSettings';
 export { UnityEvent, Observable, type ReadonlyValue } from './core/events';

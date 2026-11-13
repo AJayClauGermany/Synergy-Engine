@@ -15,8 +15,10 @@ desktop/dist/
 desktop/build/
 desktop/artifacts/
 
-# Agent screenshots
+# Agent screenshots, and what the devtools write in development (docs/devtools.md)
 .screenshots/
+.logs/
+.reports/
 
 # Worktrees that agent tools create for parallel work
 .claude/worktrees/

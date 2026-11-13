@@ -1,6 +1,7 @@
 import * as synergy from '@synergy/engine';
 import { Engine, SceneManager } from '@synergy/engine';
 import { mountUI } from '@synergy/ui';
+import { buildId } from './env';
 import { FrontierHud } from './frontier/FrontierHud';
 import { FRONTIER_SCENE } from './frontier/scene';
 import { createFrontierManager, playOffline } from './frontier/session';
@@ -13,6 +14,13 @@ SceneManager.register('Skirmish', buildSkirmishScene);
 SceneManager.register('Showcase', buildShowcaseScene);
 
 async function main() {
+  // The editor (Unity's Hierarchy, Inspector and Console), the log file and reports, for
+  // development builds only. A release build replaces the condition with `false` and
+  // leaves the whole package out (docs/devtools.md).
+  const devtools = process.env.NODE_ENV !== 'production' ? await import('@synergy/devtools') : null;
+  // Before anything else, so that a failure while starting is in the log too.
+  devtools?.startLogCapture();
+
   const canvas = document.getElementById('game') as HTMLCanvasElement;
   const params = new URLSearchParams(location.search);
   // WebGPU wherever the browser or webview has it, WebGL2 everywhere else (PlayCanvas
@@ -22,7 +30,9 @@ async function main() {
 
   // For the browser console and automated tools (see scripts/screenshot.ts):
   //   synergy.GameObject.find('Board'), synergy.engine.stop(), synergy.engine.step(), ...
-  Object.assign(globalThis, { synergy: { ...synergy, engine } });
+  //   synergy.editor.report('note'), synergy.editor.logs.text() in a development build.
+  const editor = devtools?.attachEditor(engine, { header: `build ${buildId}` });
+  Object.assign(globalThis, { synergy: { ...synergy, engine, editor } });
 
   // `?scene=Name` opens a different registered scene, handy while building new ones.
   const requested = params.get('scene');

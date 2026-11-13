@@ -43,7 +43,7 @@ export class Spinner extends MonoBehaviour {
 | 6 | Screen origin bottom-left, Y up | **Screen origin top-left, Y down**, in CSS pixels | Same space as the DOM and the Preact HUD. Affects `Input.mousePosition`, `Camera.worldToScreenPoint`. |
 | 7 | `Physics.Raycast(ray, out hit)` returns bool | `Physics.raycast(ray)` returns the hit or `null` | No `out` parameters. |
 | 8 | `if (target != null)` is false for destroyed objects | `if (isAlive(target))` | `==` cannot be overloaded. |
-| 9 | Scenes and prefabs are assets made in the editor | Scenes and prefabs are **functions** (`SceneManager.register`, `new Prefab`) | There is no editor. Code is easy to diff and generate. |
+| 9 | Scenes and prefabs are assets made in the editor | Scenes and prefabs are **functions** (`SceneManager.register`, `new Prefab`) | The editor ([devtools.md](devtools.md)) inspects a running game; it does not author scenes. Code is easy to diff and generate. |
 | 10 | Lights shine along `transform.forward` | Directional and spot lights shine along `-transform.up` | PlayCanvas convention. Set `light.direction` and forget about it. |
 | 11 | Euler order Z, X, Y | Euler order X, Y, Z | PlayCanvas convention. About X and Y the direction is also reversed (row 5). `eulerAngles` read back differently too: yaw comes back within -90 to 90 (135 reads as `(180, 45, 180)`), so `eulerAngles = new Vector3(0, eulerAngles.y + 10, 0)` never completes a turn. Keep the angle in a field of your own (as `CameraRig` does) or use `transform.rotate`. |
 | 12 | Mesh triangles are clockwise | Counter-clockwise | Follows from the right-handed world. |
@@ -179,8 +179,13 @@ Iterate children with `for (const child of transform)`.
 | `Input.GetAxis("Horizontal")`, `GetButtonDown("Jump")` | `Input.getAxis('Horizontal')`, `Input.getButtonDown('Jump')` |
 | Input Manager settings | `Input.defineAxis(...)`, `Input.defineButton(...)` |
 | `Screen.width`, `Screen.height` | same (CSS pixels) |
-| `Debug.Log`, `LogWarning`, `LogError`, `DrawLine`, `DrawRay` | `Debug.log`, `logWarning`, `logError`, `drawLine`, `drawRay` |
-| The Hierarchy and Inspector windows | `Debug.hierarchy()`: the loaded scenes as text, with each script's field values |
+| `Debug.Log`, `LogWarning`, `LogError`, `LogException`, `Assert`, `DrawLine`, `DrawRay` | `Debug.log`, `logWarning`, `logError`, `logException`, `assert`, `drawLine`, `drawRay`. Unity's `context` argument goes last: `Debug.log('stuck', this.gameObject)` |
+| `Debug.Break()`, `Debug.isDebugBuild` | same in camelCase; `break()` pauses the editor and does nothing without one |
+| `Application.logMessageReceived`, `LogType`, `Application.isEditor` | same |
+| `OnDrawGizmos`, `OnDrawGizmosSelected`, `Gizmos.DrawWireSphere` and the rest | same in camelCase, drawn while the editor is open ([devtools.md](devtools.md)) |
+| `ScreenCapture.CaptureScreenshot("a.png")` | `await ScreenCapture.captureScreenshot('a.png')` |
+| The Hierarchy, Inspector and Console windows | The editor in a development build: press <kbd>`</kbd> ([devtools.md](devtools.md)). As text: `Debug.hierarchy()`, `bun run logs` |
+| `EditorApplication.isPaused`, `Selection.activeGameObject`, `EditorPrefs` | the same names in `@synergy/devtools`, development builds only |
 | `Mathf.*` | `Mathf.*` in camelCase, for what Unity adds to the language: `clamp`, `clamp01`, `lerp`, `inverseLerp`, `moveTowards`, `smoothStep`, `repeat`, `pingPong`, `deltaAngle`, `lerpAngle`, `approximately`, `floorToInt`, `roundToInt` and the like. `Mathf.smoothDamp(current, target, velocity, smoothTime, maxSpeed, deltaTime)` returns `[value, velocity]` in place of `ref`, and needs its last two arguments (`Infinity`, `Time.deltaTime`). `round` and `roundToInt` send halfway values to the even number, as Unity does. Not there: `acos`, `asin`, `atan`, `exp`, `log`, `log10` (use `Math.acos` and so on, in radians) and `perlinNoise` |
 | `SceneManager.LoadScene("Main")` | `await SceneManager.loadScene('Main')` after `SceneManager.register('Main', build)`. For scenes that need assets, register `{ preload, build }` |
 | `Random.Range`, `Random.value` | `new Random(seed)` (the seed is required and a whole number): `Random.Range(int, int)` is `rangeInt(min, maxExclusive)`, `Random.Range(float, float)` is `range(min, max)`; also `value`, `pick`, `shuffle`, `state`. `list[random.range(0, list.length)]` is `undefined`: an index needs `rangeInt`, or `random.pick(list)` |

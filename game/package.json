@@ -5,6 +5,7 @@
   "type": "module",
   "description": "Your game. Everything in here is yours to change.",
   "dependencies": {
+    "@synergy/devtools": "workspace:*",
     "@synergy/engine": "workspace:*",
     "@synergy/net": "workspace:*",
     "@synergy/netcode": "workspace:*",
