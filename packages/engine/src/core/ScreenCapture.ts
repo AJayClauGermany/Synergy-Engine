@@ -7,7 +7,8 @@ import { currentEngine } from './runtime';
  *   await ScreenCapture.captureScreenshot('turn-3.png');
  *
  * Both calls wait for the next frame to be drawn (the drawing buffer can only be read
- * just after a frame), or draw one at once when the game is paused. A headless engine
+ * just after a frame), or draw one themselves when the game is paused or the tab is in
+ * the background and draws no frames. A headless engine
  * draws nothing and resolves to `null`.
  */
 export class ScreenCapture {
@@ -48,12 +49,23 @@ export class ScreenCapture {
         return null;
       }
     };
-    if (!engine.isRunning) {
+    const drawNow = () => {
       engine.app.render();
-      return Promise.resolve(read());
-    }
+      return read();
+    };
+    if (!engine.isRunning) return Promise.resolve(drawNow());
     return new Promise((resolve) => {
-      engine.app.once('frameend', () => resolve(read()));
+      // A background tab draws no frames, and the game may be paused before the next one:
+      // then draw one here rather than wait for a frame that is not coming.
+      const fallback = setTimeout(() => {
+        engine.app.off('frameend', onFrame);
+        resolve(drawNow());
+      }, 250);
+      const onFrame = () => {
+        clearTimeout(fallback);
+        resolve(read());
+      };
+      engine.app.once('frameend', onFrame);
     });
   }
 }

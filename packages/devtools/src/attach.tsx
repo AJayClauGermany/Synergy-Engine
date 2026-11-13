@@ -119,6 +119,7 @@ export function attachEditor(engine: Engine, options: AttachEditorOptions = {}):
       engine.app.systems.off('postUpdate', drawGizmos);
       offSelect();
       offErrors();
+      offBadge();
       render(null, root);
       root.remove();
       style.remove();
@@ -222,7 +223,7 @@ export function attachEditor(engine: Engine, options: AttachEditorOptions = {}):
   }
 
   // The badge only has to change when an error arrives.
-  logs.subscribe((entry, repeated) => {
+  const offBadge = logs.subscribe((entry, repeated) => {
     if (!isOpen && !repeated && entry.level === 'error') draw();
   });
 
