@@ -56,6 +56,7 @@ export { Light, LightType, LightShadows } from './components/Light';
 export { Mesh, Material, MeshFilter, MeshRenderer, type Texture } from './components/rendering';
 export { Sprite, type SpriteRect, type SpriteOptions } from './components/Sprite';
 export { SpriteRenderer } from './components/SpriteRenderer';
+export { AudioClip, AudioSource, AudioListener } from './components/Audio';
 import './components/primitives';
 
 export { Collider, BoxCollider, SphereCollider, CapsuleCollider, type RaycastHit } from './physics/Collider';

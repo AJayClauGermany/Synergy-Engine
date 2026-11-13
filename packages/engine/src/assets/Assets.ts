@@ -3,6 +3,7 @@ import { type GameObject, gameObjectOf } from '../core/GameObject';
 import { currentEngine } from '../core/runtime';
 import type { Transform } from '../core/Transform';
 import type { Texture } from '../components/rendering';
+import { AudioClip } from '../components/Audio';
 import { Sprite, type SpriteOptions } from '../components/Sprite';
 
 function load<T>(url: string, type: string, data: Record<string, unknown> = {}): Promise<pc.Asset & { resource: T }> {
@@ -96,6 +97,22 @@ export class Assets {
    */
   static async loadTexture(url: string, options: { srgb?: boolean } = {}): Promise<Texture> {
     return (await load<Texture>(url, 'texture', { srgb: options.srgb ?? true })).resource;
+  }
+
+  /**
+   * Loads a sound (`.mp3`, `.ogg`, `.wav`; what the browser can decode) for an
+   * `AudioSource`. Unity: `Resources.Load<AudioClip>`. Without a sound device (a headless
+   * engine) the clip has no data and a `length` of 0.
+   */
+  static async loadAudioClip(url: string): Promise<AudioClip> {
+    const asset = await load<pc.Sound>(url, 'audio');
+    const name =
+      url
+        .split(/[?#]/)[0]
+        ?.split('/')
+        .pop()
+        ?.replace(/\.[^.]+$/, '') ?? 'AudioClip';
+    return new AudioClip(name, asset);
   }
 
   /**

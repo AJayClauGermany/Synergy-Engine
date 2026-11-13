@@ -33,8 +33,9 @@ export interface EngineOptions {
    */
   throwOnError?: boolean;
   /**
-   * Extra PlayCanvas component systems (e.g. `pc.SoundComponentSystem`). Render, camera,
-   * light, screen and element (the last two back `Canvas`/`Image`) are always on.
+   * Extra PlayCanvas component systems (e.g. `pc.AnimComponentSystem`). Render, camera,
+   * light, screen and element (the last two back `Canvas`/`Image`), sound and audio
+   * listener are always on.
    */
   componentSystems?: (typeof pc.ComponentSystem)[];
   /** Extra PlayCanvas resource handlers. Texture and container (glTF) are always on. */
@@ -153,9 +154,19 @@ export class Engine {
       pc.LightComponentSystem,
       pc.ScreenComponentSystem,
       pc.ElementComponentSystem,
+      // AudioSource and AudioListener. Nothing is heard until a script plays a clip.
+      pc.SoundComponentSystem,
+      pc.AudioListenerComponentSystem,
       ...(options.componentSystems ?? []),
     ];
-    appOptions.resourceHandlers = [pc.TextureHandler, pc.ContainerHandler, ...(options.resourceHandlers ?? [])];
+    appOptions.resourceHandlers = [
+      pc.TextureHandler,
+      pc.ContainerHandler,
+      pc.AudioHandler,
+      ...(options.resourceHandlers ?? []),
+    ];
+    // Makes no AudioContext until a sound plays, and none at all where there is none (headless).
+    appOptions.soundManager = new pc.SoundManager();
     options.configure?.(appOptions);
 
     this.app = new pc.AppBase(this.canvas);
