@@ -120,11 +120,12 @@ describe('SpriteRenderer', () => {
     const near = new GameObject('Near').addComponent(SpriteRenderer);
     const far = new GameObject('Far').addComponent(SpriteRenderer);
     near.sprite = far.sprite = new Sprite(texture());
-    far.transform.position = new Vector3(0, 0, -10);
+    far.transform.position = new Vector3(0, 0, 10);
     const key = (renderer: SpriteRenderer) => {
       const instance = renderer.gameObject.entity.render?.meshInstances[0];
       if (!instance?.calculateSortDistance) throw new Error('no sort callback');
-      // A camera at z = 10 looking down -Z. PlayCanvas draws larger keys first.
+      // A camera at z = -10 looking along +Z (Unity space), which is z = 10 looking down -Z
+      // in PlayCanvas's mirrored space, where this callback runs. Larger keys draw first.
       return instance.calculateSortDistance(instance, new pc.Vec3(0, 0, 10), new pc.Vec3(0, 0, -1));
     };
     expect(key(far)).toBeGreaterThan(key(near)); // far draws first, by distance

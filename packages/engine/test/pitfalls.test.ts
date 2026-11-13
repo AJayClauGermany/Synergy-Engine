@@ -26,6 +26,7 @@ import {
   MonoBehaviour,
   Observable,
   Prefab,
+  PrimitiveType,
   Random,
   SceneManager,
   Tile,
@@ -367,6 +368,47 @@ describe('meshes', () => {
     mesh.vertices = triangle.map((corner) => corner.add(new Vector3(10, 0, 0)));
     expect(renderer.bounds.min.x).toBeCloseTo(10);
     expect(copy.getComponent(MeshRenderer)?.bounds.min.x).toBeCloseTo(10);
+  });
+
+  test('changing a returned array in place changes nothing, as in Unity: assign it back', () => {
+    const mesh = new Mesh();
+    mesh.vertices = triangle;
+    mesh.vertices[0] = new Vector3(5, 5, 5);
+    expect(mesh.vertices[0]?.equals(Vector3.zero)).toBe(true);
+    const changed = mesh.vertices;
+    changed[0] = new Vector3(5, 5, 5);
+    mesh.vertices = changed;
+    expect(mesh.vertices[0]?.equals(new Vector3(5, 5, 5))).toBe(true);
+  });
+
+  test("the built-in shapes are shared and refuse changes; meshFilter.mesh is the object's own copy", () => {
+    const cube = GameObject.createPrimitive(PrimitiveType.Cube);
+    const shared = Mesh.primitive(PrimitiveType.Cube);
+    expect(() => {
+      shared.vertices = triangle;
+    }).toThrow(/meshFilter\.mesh/);
+    // Readable, in Unity's conventions: 24 corners of a unit cube.
+    expect(shared.vertices).toHaveLength(24);
+    expect(shared.vertices.every((v) => Math.abs(v.x) === 0.5 && Math.abs(v.z) === 0.5)).toBe(true);
+
+    const filter = cube.getComponent(MeshFilter) as MeshFilter;
+    expect(filter.sharedMesh).toBe(shared);
+    const own = filter.mesh;
+    expect(own).not.toBe(shared);
+    expect(own.name).toBe('Cube Instance');
+    expect(filter.mesh).toBe(own);
+    expect(filter.sharedMesh).toBe(own);
+    own.vertices = own.vertices.map((v) => v.mul(2));
+    expect((cube.getComponent(MeshRenderer) as MeshRenderer).bounds.size.x).toBeCloseTo(2);
+    // Other cubes keep the shared shape.
+    const other = GameObject.createPrimitive(PrimitiveType.Cube);
+    expect((other.getComponent(MeshRenderer) as MeshRenderer).bounds.size.x).toBeCloseTo(1);
+  });
+
+  test("a loaded model's mesh says it cannot be read instead of returning nothing", () => {
+    const mesh = Mesh.fromPlayCanvas([], 'Knight');
+    expect(mesh.isReadable).toBe(false);
+    expect(() => mesh.vertices).toThrow(/isReadable/);
   });
 });
 

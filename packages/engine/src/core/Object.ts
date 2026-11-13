@@ -11,7 +11,7 @@ import { Transform } from './Transform';
  * here it is a named function that fills in a fresh GameObject:
  *
  *   export const FootmanPrefab = new Prefab('Footman', (go) => {
- *     go.addComponent(MeshFilter).mesh = Mesh.primitive(PrimitiveType.Capsule);
+ *     go.addComponent(MeshFilter).sharedMesh = Mesh.primitive(PrimitiveType.Capsule);
  *     go.addComponent(MeshRenderer);
  *     go.addComponent(Health).max = 40;
  *   });

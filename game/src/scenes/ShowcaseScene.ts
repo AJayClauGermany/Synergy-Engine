@@ -41,12 +41,12 @@ export const buildShowcaseScene: SceneBuilder = async () => {
   const lens = camera.addComponent(Camera);
   lens.backgroundColor = Color.fromHex('#1d2733');
   lens.fieldOfView = 45;
-  camera.transform.position = new Vector3(0, 2.4, 7);
+  camera.transform.position = new Vector3(0, 2.4, -7);
   camera.transform.lookAt(new Vector3(0, 0.8, 0));
 
   const sun = new GameObject('Sun').addComponent(Light);
   sun.type = LightType.Directional;
-  sun.direction = new Vector3(-0.4, -1, -0.5);
+  sun.direction = new Vector3(-0.4, -1, 0.5);
 
   // ---- 3D ----
   const ground = GameObject.createPrimitive(PrimitiveType.Plane);
@@ -56,14 +56,14 @@ export const buildShowcaseScene: SceneBuilder = async () => {
 
   const crate = GameObject.createPrimitive(PrimitiveType.Cube);
   crate.name = 'Crate';
-  crate.transform.position = new Vector3(-0.6, 0.5, 1);
-  crate.transform.eulerAngles = new Vector3(0, 30, 0);
+  crate.transform.position = new Vector3(-0.6, 0.5, -1);
+  crate.transform.eulerAngles = new Vector3(0, -30, 0);
   const crateRenderer = crate.getComponent(MeshRenderer);
   if (crateRenderer) crateRenderer.material.color = Color.fromHex('#b07a43');
 
   const ball = GameObject.createPrimitive(PrimitiveType.Sphere);
   ball.name = 'Ball';
-  ball.transform.position = new Vector3(1.8, 0.5, 0.5);
+  ball.transform.position = new Vector3(1.8, 0.5, -0.5);
   const ballRenderer = ball.getComponent(MeshRenderer);
   if (ballRenderer) ballRenderer.material.color = Color.fromHex('#5b8bd6');
 
@@ -108,17 +108,17 @@ export const buildShowcaseScene: SceneBuilder = async () => {
 
   // The left tree is behind the crate: the crate hides part of it through the depth buffer.
   for (const [x, z] of [
-    [-1.1, -0.6],
-    [-2.6, -1.5],
-    [2.9, -1.2],
+    [-1.1, 0.6],
+    [-2.6, 1.5],
+    [2.9, 1.2],
   ] as const) {
     const go = new GameObject('Tree');
     go.addComponent(SpriteRenderer).sprite = tree;
     go.transform.position = new Vector3(x, 0, z);
   }
   for (const [x, y, z] of [
-    [0.6, 1.1, 1.6],
-    [1.3, 0.9, 1.9],
+    [0.6, 1.1, -1.6],
+    [1.3, 0.9, -1.9],
   ] as const) {
     const go = new GameObject('Coin');
     const renderer = go.addComponent(SpriteRenderer);

@@ -44,7 +44,6 @@
     "synergy/no-identity-compare": "error",
     "synergy/no-value-keys": "error",
     "synergy/no-unsent-message": "error",
-    "synergy/no-z-axis-literal": "error",
     "synergy/no-skipped-test": "error",
     "synergy/test-needs-expect": "error",
 
@@ -145,13 +144,6 @@
           { "name": "navigator", "message": "Game rules are pure: nothing that differs from one machine to the next." }
         ],
         "synergy/no-module-state": "error"
-      }
-    },
-    // The engine defines the axes, and its tests assert the raw numbers.
-    {
-      "files": ["packages/engine/**"],
-      "rules": {
-        "synergy/no-z-axis-literal": "off"
       }
     },
     // The packages are where the engine's own members are declared.

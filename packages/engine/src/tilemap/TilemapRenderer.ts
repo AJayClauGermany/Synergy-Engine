@@ -199,9 +199,10 @@ export class TilemapRenderer extends MonoBehaviour {
     const origin = { x: 0, y: 0, z: 0 };
     const anchor = cellToLocal(shape, origin);
     const outline = cellCorners(shape, origin);
-    // Winding must be counter-clockwise seen from the side the normal points to.
+    // Front faces are clockwise seen from the side the normal points to (Unity's rule);
+    // mirroring Z into PlayCanvas's space makes them the counter-clockwise it expects.
     const [first, second, third] = outline;
-    if (first && second && third && second.sub(first).cross(third.sub(first)).dot(normal) < 0) outline.reverse();
+    if (first && second && third && second.sub(first).cross(third.sub(first)).dot(normal) > 0) outline.reverse();
 
     // Texture coordinates come from where each corner sits inside the cell's bounding box,
     // measured in layout axes (x across the map, y up the map) whatever plane the grid is on.
@@ -255,8 +256,9 @@ export class TilemapRenderer extends MonoBehaviour {
       for (let i = 0; i < corners.length; i++) {
         const corner = corners[i] as Vector3;
         const [s, t] = fractions[i] as [number, number];
-        batch.positions.push(at.x + corner.x, at.y + corner.y, at.z + corner.z);
-        batch.normals.push(normal.x, normal.y, normal.z);
+        // Into PlayCanvas's right-handed space: mirror Z.
+        batch.positions.push(at.x + corner.x, at.y + corner.y, -(at.z + corner.z));
+        batch.normals.push(normal.x, normal.y, -normal.z);
         batch.uvs.push(u0 + (u1 - u0) * s, v0 + (v1 - v0) * t);
         batch.colors.push(r, g, b, a);
       }

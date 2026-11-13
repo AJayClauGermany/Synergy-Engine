@@ -1,4 +1,4 @@
-import { Camera, type GameObject, isAlive, Vector3 } from '@synergy/engine';
+import { Camera, type GameObject, isAlive, Screen, Vector3 } from '@synergy/engine';
 import type { ComponentChildren, CSSProperties } from 'preact';
 import { useRef } from 'preact/hooks';
 import { useFrame } from './hooks';
@@ -47,7 +47,9 @@ export function WorldAnchor({ target, offset, camera, className, style, children
       return;
     }
     node.style.visibility = 'visible';
-    node.style.transform = `translate(${screen.x.toFixed(1)}px, ${screen.y.toFixed(1)}px) translate(-50%, -100%)`;
+    // Screen space has its origin at the bottom-left (as in Unity); CSS measures from the top.
+    const top = Screen.height - screen.y;
+    node.style.transform = `translate(${screen.x.toFixed(1)}px, ${top.toFixed(1)}px) translate(-50%, -100%)`;
   });
 
   return (

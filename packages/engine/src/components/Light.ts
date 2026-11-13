@@ -2,6 +2,7 @@ import * as pc from 'playcanvas';
 import { nameType } from '../core/typeNames';
 import { Behaviour } from '../core/Component';
 import { adopters } from '../core/hooks';
+import { currentEngine } from '../core/runtime';
 import { Color } from '../math/Color';
 import { Quaternion } from '../math/Quaternion';
 import { Vector3 } from '../math/Vector3';
@@ -21,12 +22,16 @@ export enum LightShadows {
   Soft = 'soft',
 }
 
+/** PlayCanvas lights shine along their node's -Y; this turns -Y onto the node's forward. */
+const AIM_OFFSET = new pc.Quat().setFromEulerAngles(90, 0, 0);
+const scratchQuat = new pc.Quat();
+
 /**
  * Lights the scene.
  *
- * Directional and spot lights shine along the transform's DOWN direction (-Y), which is
- * PlayCanvas's convention; in Unity it is the transform's forward. An unrotated light
- * therefore points straight down. The simplest way to aim one is `light.direction`.
+ * As in Unity, directional and spot lights shine along `transform.forward` (+Z): an
+ * unrotated light shines along +Z, and `Quaternion.euler(50, -30, 0)` (Unity's default
+ * sun) works unchanged. `light.direction = ...` aims one without working out angles.
  */
 export class Light extends Behaviour {
   static readonly disallowMultiple = true;
@@ -34,6 +39,16 @@ export class Light extends Behaviour {
   private component!: pc.LightComponent;
   private shadowMode = LightShadows.None;
   private shadowsConfigured = false;
+  /** Where PlayCanvas reads the light's position and direction from: the entity, turned to face forward. */
+  private aim: pc.GraphNode | null = null;
+  private aimApp: pc.AppBase | null = null;
+  private readonly syncAim = (): void => {
+    const aim = this.aim;
+    if (!aim || this.gameObject.isDestroyed) return;
+    const entity = this.gameObject.entity;
+    aim.setPosition(entity.getPosition());
+    aim.setRotation(scratchQuat.mul2(entity.getRotation(), AIM_OFFSET));
+  };
 
   /** The PlayCanvas light component, for settings not wrapped here (cookies, cascades, ...). */
   get pcLight(): pc.LightComponent {
@@ -43,6 +58,8 @@ export class Light extends Behaviour {
   override _attach(): void {
     const entity = this.gameObject.entity;
     if (entity.light) {
+      // A light PlayCanvas made (a glTF light, or a clone of one): it is already aimed the
+      // way its file says. A clone of one of ours is re-aimed in _copyFrom.
       this.component = entity.light;
       this.shadowMode = this.component.castShadows ? LightShadows.Soft : LightShadows.None;
       this.shadowsConfigured = true;
@@ -55,7 +72,21 @@ export class Light extends Behaviour {
       intensity: 1,
       range: 10,
       castShadows: false,
+      // Unity's spot cone defaults: spotAngle 30, innerSpotAngle 21.8 (full angles).
+      outerConeAngle: 15,
+      innerConeAngle: 10.9,
     }) as pc.LightComponent;
+    this.aimAlongForward();
+  }
+
+  /** Makes PlayCanvas shine this light along the transform's forward, as Unity does. */
+  private aimAlongForward(): void {
+    if (this.aim) return;
+    this.aim = new pc.GraphNode('LightAim');
+    this.component.light._node = this.aim;
+    this.aimApp = currentEngine().app;
+    this.aimApp.on('prerender', this.syncAim);
+    this.syncAim();
   }
 
   override _enabledChanged(): void {
@@ -63,6 +94,8 @@ export class Light extends Behaviour {
   }
 
   override _destroy(): void {
+    this.aimApp?.off('prerender', this.syncAim);
+    this.aim = null;
     this.gameObject.entity.removeComponent('light');
   }
 
@@ -70,13 +103,17 @@ export class Light extends Behaviour {
     return `${this.type}, intensity ${this.intensity}`;
   }
 
-  /** The world-space direction a directional or spot light shines in. Setting it rotates the transform. */
+  /**
+   * The world-space direction a directional or spot light shines in: `transform.forward`.
+   * Setting it turns the transform to face that way. (Not in Unity, where you set the
+   * rotation.)
+   */
   get direction(): Vector3 {
-    return this.transform.up.neg();
+    return this.transform.forward;
   }
 
   set direction(value: Vector3) {
-    this.transform.rotation = Quaternion.fromToRotation(Vector3.down, value);
+    this.transform.rotation = Quaternion.lookRotation(value);
   }
 
   get type(): LightType {
@@ -182,6 +219,7 @@ export class Light extends Behaviour {
     super._copyFrom(source, (value) => value);
     this.shadowMode = source.shadowMode;
     this.shadowsConfigured = source.shadowsConfigured;
+    if (source.aim) this.aimAlongForward();
   }
 }
 

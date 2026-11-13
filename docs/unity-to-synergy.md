@@ -39,14 +39,14 @@ export class Spinner extends MonoBehaviour {
 | 2 | Generics: `GetComponent<Health>()` | Pass the class: `getComponent(Health)` | Types do not exist at runtime in TypeScript. |
 | 3 | Operators: `a + b`, `v * 2`, `q * v` | Methods: `a.add(b)`, `v.mul(2)`, `q.rotate(v)` | No operator overloading. See the table below. |
 | 4 | `Vector3` is a mutable struct | `Vector3`, `Quaternion`, `Color` are **immutable**; every operation returns a new value | Gives struct-like value semantics. `transform.position.x = 5` is a compile error in both. |
-| 5 | Left-handed, forward is `+Z` | **Right-handed, forward is `-Z`** | Matches PlayCanvas and glTF. Use `Vector3.forward` / `transform.forward`, never literal axes: positions and directions then port unchanged. **Angles do not.** A positive rotation about X or Y turns the other way: `Quaternion.euler(45, 0, 0)` tilts *up* (Unity: down), `transform.rotate(Vector3.up, 90)` turns *left* (Unity: right), and `Vector3.cross` and `Vector3.signedAngle` change sign. Negate a ported pitch and yaw, or better, aim with `transform.lookAt` / `Quaternion.lookRotation`, which need no angles. |
-| 6 | Screen origin bottom-left, Y up | **Screen origin top-left, Y down**, in CSS pixels | Same space as the DOM and the Preact HUD. Affects `Input.mousePosition`, `Camera.worldToScreenPoint`. |
+| 5 | Screen units are device pixels | **CSS pixels** (origin bottom-left, y up, as in Unity) | `Input.mousePosition`, `Camera.worldToScreenPoint` and `Screen.width` share the unit, so fractions of the screen work as in Unity. HTML over the game measures y from the top: `top = Screen.height - y` (`WorldAnchor` does it). |
+| 6 | The scripting API and the renderer share one space | **Unity's space outside, PlayCanvas's inside** | Everything in this API is Unity's: left-handed, `forward` = (0, 0, 1), Euler Z-X-Y, positive yaw turns right. PlayCanvas, underneath, is right-handed with -Z forward; the engine mirrors Z at the boundary. Only the escape hatches (`gameObject.entity`, `engine.app`, `pcCamera`, ...) show PlayCanvas's numbers: there Z is negated and rotations are `(-x, -y, z, w)`. |
 | 7 | `Physics.Raycast(ray, out hit)` returns bool | `Physics.raycast(ray)` returns the hit or `null` | No `out` parameters. |
 | 8 | `if (target != null)` is false for destroyed objects | `if (isAlive(target))` | `==` cannot be overloaded. |
 | 9 | Scenes and prefabs are assets made in the editor | Scenes and prefabs are **functions** (`SceneManager.register`, `new Prefab`) | The editor ([devtools.md](devtools.md)) inspects a running game; it does not author scenes. Code is easy to diff and generate. |
-| 10 | Lights shine along `transform.forward` | Directional and spot lights shine along `-transform.up` | PlayCanvas convention. Set `light.direction` and forget about it. |
-| 11 | Euler order Z, X, Y | Euler order X, Y, Z | PlayCanvas convention. About X and Y the direction is also reversed (row 5). `eulerAngles` read back differently too: yaw comes back within -90 to 90 (135 reads as `(180, 45, 180)`), so `eulerAngles = new Vector3(0, eulerAngles.y + 10, 0)` never completes a turn. Keep the angle in a field of your own (as `CameraRig` does) or use `transform.rotate`. |
-| 12 | Mesh triangles are clockwise | Counter-clockwise | Follows from the right-handed world. |
+| 10 | `Light` has no direction property | `light.direction = v` turns the light to shine along `v` | A convenience; lights shine along `transform.forward` as in Unity. |
+| 11 | glTF importers flip the model into Unity's space | `Assets.loadModel` turns the model's nodes 180 degrees about Y | The model faces `forward` with its handedness intact, as with Unity's importers, but the local rotations of its inner nodes differ. Place and turn the root. |
+| 12 | `meshFilter.mesh` on a model imported without Read/Write throws | Meshes of loaded models are never readable (`mesh.isReadable` is false) | Their data stays on the GPU. Build editable shapes with `new Mesh()`. |
 | 13 | Rigidbody physics, collisions, triggers | **Not available yet.** Colliders exist for raycasts and overlap queries only | Kept out of the core to stay small. |
 | 14 | UI: uGUI / UI Toolkit | In-scene `Canvas` + `Image` for UI images; Preact (`@synergy/ui`) for interactive HUDs | See below. |
 | 15 | `Invoke("Method", 2f)` | `this.invoke(this.method, 2)` | Pass the function, not its name. |
@@ -175,11 +175,12 @@ Iterate children with `for (const child of transform)`.
 | `Time.deltaTime`, `time`, `timeScale`, `fixedDeltaTime`, `unscaledDeltaTime`, `frameCount` | same |
 | `Input.GetKey(KeyCode.W)`, `GetKeyDown`, `GetKeyUp` | `Input.getKey(KeyCode.W)`, ... |
 | `Input.GetMouseButtonDown(0)` (0 left, 1 right, 2 middle) | `Input.getMouseButtonDown(0)`, same numbering |
-| `Input.mousePosition`, `mouseScrollDelta` | same (top-left origin) |
+| `Input.mousePosition`, `mouseScrollDelta` | same: origin bottom-left, y up; units are CSS pixels. Scroll is in notches (fractions from trackpads) |
+| `Input.GetAxis("Mouse X")`, `"Mouse Y"`, `"Mouse ScrollWheel"` | same, with the default Input Manager's 0.1 sensitivity |
 | `Input.GetAxis("Horizontal")`, `GetButtonDown("Jump")` | `Input.getAxis('Horizontal')`, `Input.getButtonDown('Jump')` |
 | Input Manager settings | `Input.defineAxis(...)`, `Input.defineButton(...)` |
 | `Screen.width`, `Screen.height` | same (CSS pixels) |
-| `Debug.Log`, `LogWarning`, `LogError`, `LogException`, `Assert`, `DrawLine`, `DrawRay` | `Debug.log`, `logWarning`, `logError`, `logException`, `assert`, `drawLine`, `drawRay`. Unity's `context` argument goes last: `Debug.log('stuck', this.gameObject)` |
+| `Debug.Log`, `LogWarning`, `LogError`, `LogException`, `Assert`, `DrawLine`, `DrawRay` | `Debug.log`, `logWarning`, `logError`, `logException`, `assert`, `drawLine`, `drawRay`. Unity's `context` argument goes last: `Debug.log('stuck', this.gameObject)`. `drawLine(start, end, color, duration, depthTest)` as in Unity, drawn in development builds only |
 | `Debug.Break()`, `Debug.isDebugBuild` | same in camelCase; `break()` pauses the editor and does nothing without one |
 | `Application.logMessageReceived`, `LogType`, `Application.isEditor` | same |
 | `OnDrawGizmos`, `OnDrawGizmosSelected`, `Gizmos.DrawWireSphere` and the rest | same in camelCase, drawn while the editor is open ([devtools.md](devtools.md)) |
@@ -190,7 +191,7 @@ Iterate children with `for (const child of transform)`.
 | `SceneManager.LoadScene("Main")` | `await SceneManager.loadScene('Main')` after `SceneManager.register('Main', build)`. For scenes that need assets, register `{ preload, build }` |
 | `Random.Range`, `Random.value` | `new Random(seed)` (the seed is required and a whole number): `Random.Range(int, int)` is `rangeInt(min, maxExclusive)`, `Random.Range(float, float)` is `range(min, max)`; also `value`, `pick`, `shuffle`, `state`. `list[random.range(0, list.length)]` is `undefined`: an index needs `rangeInt`, or `random.pick(list)` |
 | `RenderSettings.ambientLight` | same |
-| `Camera.main`, `ScreenPointToRay`, `WorldToScreenPoint`, `ScreenToWorldPoint` | same in camelCase |
+| `Camera.main`, `ScreenPointToRay`, `WorldToScreenPoint`, `ScreenToWorldPoint`, the `Viewport` conversions | same in camelCase, same bottom-left origin |
 | `LayerMask.GetMask("Units")`, `NameToLayer` | `LayerMask.getMask('Units')`, `nameToLayer`; name layers with `LayerMask.define(8, 'Units')` |
 | `UnityEvent`, `event Action` | `UnityEvent<[args]>` with `addListener`, `invoke` |
 
@@ -198,9 +199,9 @@ Iterate children with `for (const child of transform)`.
 
 | Unity | Synergy |
 |-------|---------|
-| `MeshFilter.mesh`, `MeshRenderer.material` / `sharedMaterial` | same. `.material` copies on first access, as in Unity |
+| `MeshFilter.mesh` / `sharedMesh`, `MeshRenderer.material` / `sharedMaterial` | same. `.mesh` and `.material` copy on first access, as in Unity |
 | `new Material(shader)`, `material.color`, `mainTexture` | `new Material()`, `color`, `mainTexture`, `metallic`, `smoothness`, `emissionColor` |
-| `new Mesh { vertices, triangles }`, `RecalculateNormals()` | `new Mesh()`, `vertices`, `triangles`, `recalculateNormals()` |
+| `new Mesh { vertices, triangles, uv }`, `RecalculateNormals()` | `new Mesh()`, `vertices`, `triangles`, `uv`, `recalculateNormals()`: Unity's clockwise winding and bottom-up `v`. The arrays are copies, as in Unity: assign them back |
 | `Light` (type, color, intensity, range, spotAngle, shadows) | same, plus `direction` |
 | `Resources.Load` / Addressables | `await Assets.loadModel(url)`, `Assets.loadTexture(url)`, `Assets.loadSprite(url)` |
 

@@ -1,5 +1,8 @@
 import { Mathf } from './Mathf';
 
+/** Below this, a length or denominator counts as zero (engine tolerance, not `Mathf.epsilon`). */
+const TINY = 1e-6;
+
 /**
  * Immutable 2D vector. Every operation returns a new instance, which gives the same
  * "value type" behaviour as a C# struct: nobody can mutate a vector you are holding.
@@ -25,9 +28,10 @@ export class Vector2 {
     return Math.sqrt(this.sqrMagnitude);
   }
 
+  /** This vector with a length of 1, or `Vector2.zero` when its length is 1e-5 or less (as in Unity). */
   get normalized(): Vector2 {
     const length = this.magnitude;
-    return length > Mathf.epsilon ? new Vector2(this.x / length, this.y / length) : Vector2.zero;
+    return length > 1e-5 ? new Vector2(this.x / length, this.y / length) : Vector2.zero;
   }
 
   /** Unity: `a + b`. */
@@ -72,8 +76,14 @@ export class Vector2 {
     return new Vector2(this.x, y);
   }
 
+  /**
+   * Approximate equality: Unity's `a == b` on vectors (less than `tolerance` apart, 1e-5
+   * by default, as in Unity). `===` compares object identity instead.
+   */
   equals(other: Vector2, tolerance = 1e-5): boolean {
-    return Math.abs(this.x - other.x) <= tolerance && Math.abs(this.y - other.y) <= tolerance;
+    const dx = this.x - other.x;
+    const dy = this.y - other.y;
+    return dx * dx + dy * dy < tolerance * tolerance;
   }
 
   toArray(): [number, number] {
@@ -103,7 +113,7 @@ export class Vector2 {
   static moveTowards(current: Vector2, target: Vector2, maxDistanceDelta: number): Vector2 {
     const delta = target.sub(current);
     const distance = delta.magnitude;
-    if (distance <= maxDistanceDelta || distance < Mathf.epsilon) return target;
+    if (distance <= maxDistanceDelta || distance < TINY) return target;
     return current.add(delta.mul(maxDistanceDelta / distance));
   }
 

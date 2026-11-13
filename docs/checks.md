@@ -78,7 +78,6 @@ TypeScript after translation, passes the type-checker, and then does something e
 | `no-value-keys` | `new Map<Vector3Int, Unit>()`, `Set<Vector2Int>` | `new Map<string, Unit>()` keyed by `cellKey(cell)` |
 | `no-detached-method` | `button.onClick.addListener(this.onClick)` | `addListener(() => this.onClick())`, or declare `onClick = () => { ... }` |
 | `no-unsent-message` | `onStart() {}`, `onTriggerEnter() {}`, `onPointerClick() {}` in a script | `start() {}`; for triggers, `Physics.overlapSphere` in `update()` |
-| `no-z-axis-literal` | `new Vector3(0, 0, 1)`; `new Vector3(h, 0, Input.getAxis('Vertical'))` | `Vector3.back` (or `Vector3.forward`, which is -Z here); `Vector3.right.mul(h).add(Vector3.forward.mul(v))` |
 | `no-discarded-result` | `transform.position.add(step);` `bounds.encapsulate(point);` | `transform.position = transform.position.add(step);` |
 | `no-inline-remove` | `event.removeListener(() => this.onHit())` | Keep what `addListener` returned and call it, or make the handler a field |
 | `no-engine-member` | `_started = false;` `_destroy() {}` in a script | Another name: the engine has members of those names on every script |

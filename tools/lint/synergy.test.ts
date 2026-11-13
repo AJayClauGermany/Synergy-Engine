@@ -190,32 +190,6 @@ const CASES: Record<RuleName, { valid: (string | Snippet)[]; invalid: Snippet[] 
     ],
   },
 
-  'no-z-axis-literal': {
-    valid: [
-      // Negated, or spelled with directions: W goes forward.
-      "new Vector3(Input.getAxis('Horizontal'), 0, -Input.getAxis('Vertical'));",
-      "Vector3.right.mul(Input.getAxis('Horizontal')).add(Vector3.forward.mul(Input.getAxis('Vertical')));",
-      'const d = Vector3.forward;',
-      'const p = new Vector3(0, 0, 10);',
-      'const p = new Vector3(0, 1, 0);',
-      'const p = new Vector3(1, 0, 1);',
-      'const p = new Vector3(0, 0, z);',
-      'const p = new Vector2(0, 1);',
-    ],
-    invalid: [
-      { code: 'const d = new Vector3(0, 0, 1);', errors: ['new Vector3(0, 0, 1) is Vector3.back here'] },
-      {
-        code: 'transform.translate(new Vector3(0, 0, -1).mul(speed));',
-        errors: ['new Vector3(0, 0, -1) is Vector3.forward here'],
-      },
-      // The first script of every Unity tutorial: W walks backward.
-      {
-        code: "const move = new Vector3(Input.getAxis('Horizontal'), 0, Input.getAxisRaw('Vertical'));",
-        errors: ["The 'Vertical' axis is +1 for W"],
-      },
-    ],
-  },
-
   'no-skipped-test': {
     valid: [
       // A name with no body is a test still to be written.

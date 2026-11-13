@@ -42,10 +42,13 @@ export class CameraRig extends MonoBehaviour {
     // Unscaled time: the camera keeps working while the game is paused or sped up.
     const dt = Time.unscaledDeltaTime;
 
-    const turn = (Input.getKey(KeyCode.E) ? 1 : 0) - (Input.getKey(KeyCode.Q) ? 1 : 0);
+    // A positive yaw turns clockwise seen from above (Unity's convention), so Q turns the view
+    // to the right and E to the left.
+    const turn = (Input.getKey(KeyCode.Q) ? 1 : 0) - (Input.getKey(KeyCode.E) ? 1 : 0);
     this.yaw += turn * this.rotateSpeed * dt;
 
-    const pan = new Vector3(Input.getAxis('Horizontal'), 0, -Input.getAxis('Vertical'));
+    // Unity's usual mapping: Horizontal along right, Vertical along forward.
+    const pan = new Vector3(Input.getAxis('Horizontal'), 0, Input.getAxis('Vertical'));
     if (pan.sqrMagnitude > 0) {
       // Faster when zoomed out, so panning feels the same on screen.
       const speed = this.panSpeed * (this.distance / 13);
@@ -85,7 +88,8 @@ export class CameraRig extends MonoBehaviour {
     this.transform.rotation = Quaternion.euler(0, this.yaw, 0);
     if (!this.camera) return;
     const radians = this.pitch * Mathf.deg2Rad;
-    this.camera.localPosition = new Vector3(0, Math.sin(radians) * this.distance, Math.cos(radians) * this.distance);
+    // Raised and pulled back behind the focus point (back is -Z), looking forward and down.
+    this.camera.localPosition = new Vector3(0, Math.sin(radians) * this.distance, -Math.cos(radians) * this.distance);
     this.camera.lookAt(this.transform.position);
   }
 }

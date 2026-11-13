@@ -14,15 +14,28 @@ describe('Vector3', () => {
     expect(a.neg().toArray()).toEqual([-1, -2, -3]);
   });
 
-  test('forward is -Z (right-handed world)', () => {
-    expect(Vector3.forward.toArray()).toEqual([0, 0, -1]);
-    expect(Vector3.right.cross(Vector3.up).equals(Vector3.back)).toBe(true);
+  test("forward is +Z, as in Unity's left-handed world", () => {
+    expect(Vector3.forward.toArray()).toEqual([0, 0, 1]);
+    expect(Vector3.back.toArray()).toEqual([0, 0, -1]);
+    // Unity: Vector3.Cross(Vector3.right, Vector3.up) == Vector3.forward.
+    expect(Vector3.right.cross(Vector3.up).equals(Vector3.forward)).toBe(true);
+  });
+
+  test("equality and normalisation use Unity's 1e-5", () => {
+    expect(new Vector3(1, 2, 3).equals(new Vector3(1, 2, 3 + 9e-6))).toBe(true);
+    // Unity measures the distance, not each axis: 8e-6 on two axes is 1.13e-5 apart.
+    expect(new Vector3(0, 0, 0).equals(new Vector3(8e-6, 8e-6, 0))).toBe(false);
+    expect(new Vector3(5e-6, 0, 0).normalized).toBe(Vector3.zero);
+    expect(new Vector3(2e-5, 0, 0).normalized.equals(Vector3.right)).toBe(true);
   });
 
   test('helpers', () => {
     close(Vector3.distance(Vector3.zero, new Vector3(3, 4, 0)), 5);
     close(Vector3.angle(Vector3.right, Vector3.up), 90);
-    close(Vector3.signedAngle(Vector3.right, Vector3.up, Vector3.back), 90);
+    // Unity: SignedAngle(right, up, forward) is 90.
+    close(Vector3.signedAngle(Vector3.right, Vector3.up, Vector3.forward), 90);
+    // Turning from forward to right about up is a positive (clockwise from above) turn.
+    close(Vector3.signedAngle(Vector3.forward, Vector3.right, Vector3.up), 90);
     expect(Vector3.moveTowards(Vector3.zero, new Vector3(10, 0, 0), 4).equals(new Vector3(4, 0, 0))).toBe(true);
     expect(Vector3.moveTowards(Vector3.zero, Vector3.one, 100)).toBe(Vector3.one);
     expect(Vector3.projectOnPlane(new Vector3(1, 5, 2), Vector3.up).equals(new Vector3(1, 0, 2))).toBe(true);
@@ -38,7 +51,7 @@ describe('Vector2', () => {
   });
 });
 
-describe('Quaternion matches PlayCanvas conventions', () => {
+describe("Quaternion follows Unity's conventions", () => {
   const samples: [number, number, number][] = [
     [0, 0, 0],
     [30, 0, 0],
@@ -49,13 +62,66 @@ describe('Quaternion matches PlayCanvas conventions', () => {
     [89, -40, 170],
   ];
 
-  test('euler -> quaternion -> euler', () => {
+  test('euler applies Z, then X, then Y, giving the numbers Unity gives', () => {
     for (const [x, y, z] of samples) {
-      const expected = new pc.Quat().setFromEulerAngles(x, y, z);
-      const actual = Quaternion.euler(x, y, z);
-      expect(actual.equals(expected)).toBe(true);
-      const expectedAngles = expected.getEulerAngles();
-      expect(actual.eulerAngles.equals(expectedAngles, 1e-3)).toBe(true);
+      const expected = Quaternion.angleAxis(y, Vector3.up)
+        .mul(Quaternion.angleAxis(x, Vector3.right))
+        .mul(Quaternion.angleAxis(z, Vector3.forward));
+      expect(Quaternion.euler(x, y, z).equals(expected)).toBe(true);
+    }
+    // Unity: Quaternion.Euler(10, 20, 30) is (0.12768, 0.14488, 0.23930, 0.95155).
+    const q = Quaternion.euler(10, 20, 30);
+    for (const [actual, expected] of [
+      [q.x, 0.1276794],
+      [q.y, 0.1448781],
+      [q.z, 0.2392983],
+      [q.w, 0.9515485],
+    ] as const) {
+      close(actual, expected, 1e-6);
+    }
+  });
+
+  test('angles turn the way they do in Unity', () => {
+    // Positive yaw turns right, positive pitch looks down, positive roll turns right into up.
+    expect(Quaternion.euler(0, 90, 0).rotate(Vector3.forward).equals(Vector3.right)).toBe(true);
+    expect(Quaternion.euler(90, 0, 0).rotate(Vector3.forward).equals(Vector3.down)).toBe(true);
+    expect(Quaternion.euler(0, 0, 90).rotate(Vector3.right).equals(Vector3.up)).toBe(true);
+  });
+
+  test('eulerAngles reads back in [0, 360), as Unity does', () => {
+    for (const [x, y, z] of samples) {
+      const q = Quaternion.euler(x, y, z);
+      const angles = q.eulerAngles;
+      for (const angle of angles.toArray()) {
+        expect(angle).toBeGreaterThanOrEqual(0);
+        expect(angle).toBeLessThan(360);
+      }
+      expect(Quaternion.angle(Quaternion.euler(angles), q)).toBeLessThan(1e-3);
+    }
+    expect(Quaternion.euler(-30, 0, 0).eulerAngles.equals(new Vector3(330, 0, 0), 1e-4)).toBe(true);
+    expect(Quaternion.euler(0, 270, 0).eulerAngles.equals(new Vector3(0, 270, 0), 1e-4)).toBe(true);
+    // Three quarter turns: no -360 or 360 creeping in.
+    const quarter = Quaternion.angleAxis(90, Vector3.up);
+    expect(
+      quarter
+        .mul(quarter)
+        .mul(quarter)
+        .eulerAngles.equals(new Vector3(0, 270, 0), 1e-4),
+    ).toBe(true);
+    // Straight down (pitch 90) with a yaw.
+    expect(Quaternion.euler(90, 45, 0).eulerAngles.equals(new Vector3(90, 45, 0), 1e-3)).toBe(true);
+  });
+
+  test('a rotation crosses into PlayCanvas as the mirror image, so it renders the same', () => {
+    // Unity space mirrored in Z is PlayCanvas space. Rotating a mirrored vector with the
+    // converted rotation must give the mirror of the Unity result.
+    const mirror = (v: { x: number; y: number; z: number }) => new pc.Vec3(v.x, v.y, -v.z);
+    for (const [x, y, z] of samples) {
+      const q = Quaternion.euler(x, y, z);
+      const converted = new pc.Quat(-q.x, -q.y, q.z, q.w);
+      const v = new Vector3(1, -2, 3);
+      const viaPlayCanvas = converted.transformVector(mirror(v), new pc.Vec3());
+      expect(Vector3.from(viaPlayCanvas).equals(Vector3.from(mirror(q.rotate(v))), 1e-5)).toBe(true);
     }
   });
 
@@ -63,13 +129,24 @@ describe('Quaternion matches PlayCanvas conventions', () => {
     for (const [x, y, z] of samples) {
       const a = Quaternion.euler(x, y, z);
       const b = Quaternion.euler(z, x, y);
-      const pa = new pc.Quat().setFromEulerAngles(x, y, z);
-      const pb = new pc.Quat().setFromEulerAngles(z, x, y);
-      expect(a.mul(b).equals(new pc.Quat().mul2(pa, pb))).toBe(true);
-      const v = new pc.Vec3(1, -2, 3);
-      expect(a.rotate(v).equals(pa.transformVector(v, new pc.Vec3()))).toBe(true);
+      const v = new Vector3(1, -2, 3);
+      // a * b applies b first, then a.
+      expect(
+        a
+          .mul(b)
+          .rotate(v)
+          .equals(a.rotate(b.rotate(v)), 1e-5),
+      ).toBe(true);
       expect(a.mul(a.inverse()).equals(Quaternion.identity)).toBe(true);
     }
+  });
+
+  test("equals is Unity's ==: within about 0.16 degrees, and q is not -q", () => {
+    const q = Quaternion.euler(10, 20, 30);
+    expect(q.equals(Quaternion.euler(10, 20, 30.1))).toBe(true);
+    expect(q.equals(Quaternion.euler(10, 20, 30.4))).toBe(false);
+    expect(q.equals(new Quaternion(-q.x, -q.y, -q.z, -q.w))).toBe(false);
+    expect(Quaternion.angleAxis(45, Vector3.zero)).toBe(Quaternion.identity);
   });
 
   test('angleAxis and slerp', () => {
@@ -83,7 +160,7 @@ describe('Quaternion matches PlayCanvas conventions', () => {
     expect(Quaternion.rotateTowards(a, b, 500).equals(b)).toBe(true);
   });
 
-  test('lookRotation points -Z at the target, like Entity.lookAt', () => {
+  test('lookRotation points forward (+Z) at the target and keeps up up', () => {
     const directions = [
       new Vector3(1, 0, 0),
       new Vector3(0, 0, 1),
@@ -96,9 +173,11 @@ describe('Quaternion matches PlayCanvas conventions', () => {
       const rotation = Quaternion.lookRotation(direction);
       expect(rotation.rotate(Vector3.forward).equals(direction.normalized, 1e-4)).toBe(true);
     }
-    const node = new pc.GraphNode();
-    node.lookAt(new pc.Vec3(1, -1, 1));
-    expect(Quaternion.lookRotation(new Vector3(1, -1, 1)).equals(node.getRotation())).toBe(true);
+    // Unity: LookRotation(right) is a yaw of 90; up stays up.
+    const right = Quaternion.lookRotation(Vector3.right);
+    expect(right.equals(Quaternion.euler(0, 90, 0))).toBe(true);
+    expect(right.rotate(Vector3.up).equals(Vector3.up)).toBe(true);
+    expect(Quaternion.lookRotation(Vector3.zero)).toBe(Quaternion.identity);
   });
 
   test('fromToRotation', () => {

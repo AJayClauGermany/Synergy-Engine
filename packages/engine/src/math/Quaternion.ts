@@ -1,6 +1,9 @@
 import { Mathf } from './Mathf';
 import { Vector3, type Vector3Like } from './Vector3';
 
+/** Below this, a length or denominator counts as zero (engine tolerance, not `Mathf.epsilon`). */
+const TINY = 1e-6;
+
 /** Anything with x/y/z/w, e.g. a PlayCanvas `Quat`. */
 export interface QuaternionLike {
   readonly x: number;
@@ -10,14 +13,16 @@ export interface QuaternionLike {
 }
 
 /**
- * Immutable rotation. C# operators become methods:
+ * Immutable rotation, with Unity's conventions throughout. C# operators become methods:
  *
- *   a * b      -> a.mul(b)      (apply `b` first, then `a`)
+ *   a * b        -> a.mul(b)      (apply `b` first, then `a`)
  *   rotation * v -> rotation.rotate(v)
+ *   a == b       -> a.equals(b)
  *
- * Euler angles are in degrees and use PlayCanvas's convention (rotate about X, then Y,
- * then Z), so values round-trip exactly with `transform.eulerAngles`. Unity applies
- * Z, X, Y instead; single-axis rotations behave the same, combined ones differ.
+ * Same as Unity: angles are in degrees, a positive angle turns clockwise as seen from
+ * the positive end of the axis, e.g. from above for `up` (so `Quaternion.euler(0, 90, 0)` turns `forward` into `right`, and
+ * `euler(30, 0, 0)` tilts it down), and Euler angles apply Z, then X, then Y. Values
+ * copied from Unity's Inspector or code give the same orientation here.
  */
 export class Quaternion implements QuaternionLike {
   constructor(
@@ -33,7 +38,10 @@ export class Quaternion implements QuaternionLike {
     return new Quaternion(value.x, value.y, value.z, value.w);
   }
 
-  /** Rotation from Euler angles in degrees. Unity: `Quaternion.Euler(x, y, z)`. */
+  /**
+   * Rotation from Euler angles in degrees: `z` about forward, then `x` about right, then
+   * `y` about up. Same as Unity's `Quaternion.Euler(x, y, z)`, including the order.
+   */
   static euler(x: number, y: number, z: number): Quaternion;
   static euler(angles: Vector3Like): Quaternion;
   static euler(xOrAngles: number | Vector3Like, y = 0, z = 0): Quaternion {
@@ -52,16 +60,21 @@ export class Quaternion implements QuaternionLike {
     const cy = Math.cos(y * halfToRad);
     const sz = Math.sin(z * halfToRad);
     const cz = Math.cos(z * halfToRad);
+    // Unity's order: rotate about Z, then X, then Y (q = qy * qx * qz).
     return new Quaternion(
-      sx * cy * cz - cx * sy * sz,
-      cx * sy * cz + sx * cy * sz,
-      cx * cy * sz - sx * sy * cz,
-      cx * cy * cz + sx * sy * sz,
+      cy * sx * cz + sy * cx * sz,
+      sy * cx * cz - cy * sx * sz,
+      cy * cx * sz - sy * sx * cz,
+      cy * cx * cz + sy * sx * sz,
     );
   }
 
-  /** Rotation of `angle` degrees around `axis`. */
+  /**
+   * Rotation of `angle` degrees around `axis` (clockwise seen from the axis's tip). Angle
+   * first, as in Unity's `Quaternion.AngleAxis(angle, axis)`. A zero axis gives identity.
+   */
   static angleAxis(angle: number, axis: Vector3): Quaternion {
+    if (axis.sqrMagnitude < 1e-12) return Quaternion.identity;
     const unit = axis.normalized;
     const half = angle * 0.5 * Mathf.deg2Rad;
     const s = Math.sin(half);
@@ -69,21 +82,21 @@ export class Quaternion implements QuaternionLike {
   }
 
   /**
-   * Rotation that points an object's forward (-Z) along `forward`, keeping its up as
-   * close to `up` as possible.
+   * Rotation that points an object's forward (+Z) along `forward`, keeping its up as
+   * close to `up` as possible. Same as Unity's `Quaternion.LookRotation`; a zero
+   * `forward` gives identity.
    */
   static lookRotation(forward: Vector3, up: Vector3 = Vector3.up): Quaternion {
     const f = forward.normalized;
-    if (f.sqrMagnitude < Mathf.epsilon) return Quaternion.identity;
-    const back = f.neg();
-    let right = up.cross(back);
-    if (right.sqrMagnitude < Mathf.epsilon) {
+    if (f.sqrMagnitude < TINY) return Quaternion.identity;
+    let right = up.cross(f);
+    if (right.sqrMagnitude < TINY) {
       // `forward` is parallel to `up`: pick any perpendicular axis.
-      right = (Math.abs(back.y) > 0.999 ? Vector3.right : Vector3.up).cross(back);
+      right = (Math.abs(f.y) > 0.999 ? Vector3.forward : Vector3.up).cross(f);
     }
     right = right.normalized;
-    const newUp = back.cross(right);
-    return Quaternion.fromBasis(right, newUp, back);
+    const newUp = f.cross(right);
+    return Quaternion.fromBasis(right, newUp, f);
   }
 
   /** Shortest rotation that turns `from` into `to`. */
@@ -94,7 +107,7 @@ export class Quaternion implements QuaternionLike {
     if (d >= 1 - 1e-9) return Quaternion.identity;
     if (d <= -1 + 1e-9) {
       let axis = Vector3.right.cross(a);
-      if (axis.sqrMagnitude < Mathf.epsilon) axis = Vector3.up.cross(a);
+      if (axis.sqrMagnitude < TINY) axis = Vector3.up.cross(a);
       return Quaternion.angleAxis(180, axis);
     }
     const c = a.cross(b);
@@ -197,38 +210,45 @@ export class Quaternion implements QuaternionLike {
     return Quaternion.slerpUnclamped(from, to, Math.min(1, maxDegreesDelta / angle));
   }
 
-  /** Euler angles in degrees (see the class comment for the convention). */
+  /**
+   * Euler angles in degrees, each in [0, 360), as Unity returns them: `euler(-30, 0, 0)`
+   * reads back as (330, 0, 0). Several angle sets describe one rotation, so the values
+   * read back can differ from the ones set (pitch beyond 90 comes back as yaw and roll
+   * of 180). To turn by a step, keep the angle in a field of your own or use
+   * `transform.rotate`, rather than adding to what this returns.
+   */
   get eulerAngles(): Vector3 {
     const { x: qx, y: qy, z: qz, w: qw } = this;
-    const a2 = 2 * (qw * qy - qx * qz);
+    // Rotation-matrix terms for q = qy * qx * qz (Unity's Z, X, Y order).
+    const m12 = 2 * (qy * qz - qx * qw);
+    const sinX = Mathf.clamp(-m12, -1, 1);
     let x: number;
     let y: number;
     let z: number;
-    if (a2 <= -0.99999) {
-      x = 2 * Math.atan2(qx, qw);
-      y = -Math.PI / 2;
-      z = 0;
-    } else if (a2 >= 0.99999) {
-      x = 2 * Math.atan2(qx, qw);
-      y = Math.PI / 2;
+    if (Math.abs(sinX) > 0.999999) {
+      // Looking straight up or down: yaw and roll turn about the same axis. Put it all in yaw.
+      x = (Math.sign(sinX) * Math.PI) / 2;
+      const m00 = 1 - 2 * (qy * qy + qz * qz);
+      const m20 = 2 * (qx * qz - qy * qw);
+      y = Math.atan2(-m20, m00);
       z = 0;
     } else {
-      x = Math.atan2(2 * (qw * qx + qy * qz), 1 - 2 * (qx * qx + qy * qy));
-      y = Math.asin(a2);
-      z = Math.atan2(2 * (qw * qz + qx * qy), 1 - 2 * (qy * qy + qz * qz));
+      x = Math.asin(sinX);
+      y = Math.atan2(2 * (qx * qz + qy * qw), 1 - 2 * (qx * qx + qy * qy));
+      z = Math.atan2(2 * (qx * qy + qz * qw), 1 - 2 * (qx * qx + qz * qz));
     }
-    return new Vector3(x * Mathf.rad2Deg, y * Mathf.rad2Deg, z * Mathf.rad2Deg);
+    return new Vector3(wrapDegrees(x * Mathf.rad2Deg), wrapDegrees(y * Mathf.rad2Deg), wrapDegrees(z * Mathf.rad2Deg));
   }
 
   get normalized(): Quaternion {
     const length = Math.sqrt(Quaternion.dot(this, this));
-    if (length < Mathf.epsilon) return Quaternion.identity;
+    if (length < TINY) return Quaternion.identity;
     return new Quaternion(this.x / length, this.y / length, this.z / length, this.w / length);
   }
 
   inverse(): Quaternion {
     const sqrLength = Quaternion.dot(this, this);
-    if (sqrLength < Mathf.epsilon) return Quaternion.identity;
+    if (sqrLength < TINY) return Quaternion.identity;
     return new Quaternion(-this.x / sqrLength, -this.y / sqrLength, -this.z / sqrLength, this.w / sqrLength);
   }
 
@@ -260,9 +280,14 @@ export class Quaternion implements QuaternionLike {
     );
   }
 
-  /** True when both represent the same orientation (q and -q are the same rotation). */
-  equals(other: QuaternionLike, tolerance = 1e-5): boolean {
-    return Math.abs(Quaternion.dot(this, other)) >= 1 - tolerance;
+  /**
+   * Unity's `a == b`: true when `dot(a, b) > 1 - tolerance` (1e-6 by default, as in
+   * Unity, about 0.16 degrees apart). As in Unity, `q` and `-q` (the same orientation
+   * written two ways) are not equal; compare `Quaternion.angle(a, b) < 0.1` when either
+   * form may come up.
+   */
+  equals(other: QuaternionLike, tolerance = 1e-6): boolean {
+    return Quaternion.dot(this, other) > 1 - tolerance;
   }
 
   toArray(): [number, number, number, number] {
@@ -272,4 +297,10 @@ export class Quaternion implements QuaternionLike {
   toString(): string {
     return `(${this.x.toFixed(3)}, ${this.y.toFixed(3)}, ${this.z.toFixed(3)}, ${this.w.toFixed(3)})`;
   }
+}
+
+/** An angle in degrees brought into [0, 360), with values a hair under 360 read as 0. */
+function wrapDegrees(degrees: number): number {
+  const wrapped = ((degrees % 360) + 360) % 360;
+  return wrapped > 360 - 1e-7 ? 0 : wrapped;
 }

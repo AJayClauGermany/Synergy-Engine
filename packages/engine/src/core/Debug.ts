@@ -3,12 +3,40 @@ import { Color } from '../math/Color';
 import type { Vector3 } from '../math/Vector3';
 import { Application, LogType } from './Application';
 import { EngineObject } from './EngineObject';
+import type { Engine } from './Engine';
+import { toPlayCanvasVec3 } from './handedness';
 import { describeHierarchy, type HierarchyOptions } from './hierarchy';
 import { currentEngineOrNull } from './runtime';
 
-const start = new pc.Vec3();
-const end = new pc.Vec3();
-const pcColor = new pc.Color();
+/** A `Debug.drawLine` with a duration, kept until `until` (unscaled seconds). */
+interface TimedLine {
+  start: pc.Vec3;
+  end: pc.Vec3;
+  color: pc.Color;
+  depthTest: boolean;
+  until: number;
+}
+
+/** The timed lines of one engine, redrawn before every render until they expire. */
+function timedLines(engine: Engine): TimedLine[] {
+  let lines = engine.cache.get('debug:lines') as TimedLine[] | undefined;
+  if (!lines) {
+    const list: TimedLine[] = [];
+    lines = list;
+    engine.cache.set('debug:lines', list);
+    engine.app.on('prerender', () => {
+      const now = engine.time.unscaledTime;
+      let kept = 0;
+      for (const line of list) {
+        if (line.until < now) continue;
+        engine.app.drawLine(line.start, line.end, line.color, line.depthTest);
+        list[kept++] = line;
+      }
+      list.length = kept;
+    });
+  }
+  return lines;
+}
 
 /** One argument of a log call as text, for `Application.logMessageReceived`. */
 function describe(value: unknown): string {
@@ -121,18 +149,33 @@ export class Debug {
     return describeHierarchy(options);
   }
 
-  /** Draws a line for the current frame. Call it every frame to keep it visible. */
-  static drawLine(from: Vector3, to: Vector3, color: Color = Color.white, depthTest = true): void {
+  /**
+   * Draws a line in the world, for this frame or for `duration` seconds (real time).
+   * Same arguments as Unity's `Debug.DrawLine(start, end, color, duration, depthTest)`.
+   * As in Unity it is a development aid: it draws in development builds only (not in
+   * what `bun run build` ships) and does nothing in a headless engine. For lines that
+   * show a script's thinking only while selected, prefer `Gizmos` in
+   * `onDrawGizmosSelected()`.
+   */
+  static drawLine(start: Vector3, end: Vector3, color: Color = Color.white, duration = 0, depthTest = true): void {
     const engine = currentEngineOrNull();
-    if (!engine || engine.isHeadless) return;
-    start.set(from.x, from.y, from.z);
-    end.set(to.x, to.y, to.z);
-    pcColor.set(color.r, color.g, color.b, color.a);
-    engine.app.drawLine(start, end, pcColor, depthTest);
+    if (!engine || engine.isHeadless || !Debug.isDebugBuild) return;
+    const line: TimedLine = {
+      start: toPlayCanvasVec3(start),
+      end: toPlayCanvasVec3(end),
+      color: new pc.Color(color.r, color.g, color.b, color.a),
+      depthTest,
+      until: engine.time.unscaledTime + Math.max(0, duration),
+    };
+    if (duration > 0) timedLines(engine).push(line);
+    else engine.app.drawLine(line.start, line.end, line.color, depthTest);
   }
 
-  /** Draws a line from `origin` to `origin + direction` for the current frame. */
-  static drawRay(origin: Vector3, direction: Vector3, color: Color = Color.white, depthTest = true): void {
-    Debug.drawLine(origin, origin.add(direction), color, depthTest);
+  /**
+   * Draws a line from `start` to `start + dir`. Same as Unity's
+   * `Debug.DrawRay(start, dir, color, duration, depthTest)`; see `drawLine`.
+   */
+  static drawRay(start: Vector3, dir: Vector3, color: Color = Color.white, duration = 0, depthTest = true): void {
+    Debug.drawLine(start, start.add(dir), color, duration, depthTest);
   }
 }

@@ -92,7 +92,12 @@ export class Physics {
   /** Every layer except "Ignore Raycast" (layer 2). The default for queries. */
   static readonly defaultRaycastLayers = ~(1 << 2);
 
-  /** The closest collider hit by the ray, or `null`. */
+  /**
+   * The closest collider hit by the ray, or `null` (Unity returns a bool and fills an
+   * `out` hit). Same arguments and defaults as Unity: `maxDistance` Infinity, `layerMask`
+   * every layer except "Ignore Raycast". As in Unity, colliders that contain the ray's
+   * origin are not hit, and trigger colliders are (there is no QueryTriggerInteraction).
+   */
   static raycast(ray: Ray, maxDistance?: number, layerMask?: number): RaycastHit | null;
   static raycast(origin: Vector3, direction: Vector3, maxDistance?: number, layerMask?: number): RaycastHit | null;
   static raycast(a: Ray | Vector3, b?: Vector3 | number, c?: number, d?: number): RaycastHit | null {
@@ -106,7 +111,7 @@ export class Physics {
     return closest;
   }
 
-  /** Every collider hit by the ray, nearest first. */
+  /** Every collider hit by the ray, nearest first (Unity's order is unspecified). Colliders containing the origin are skipped. */
   static raycastAll(ray: Ray, maxDistance?: number, layerMask?: number): RaycastHit[];
   static raycastAll(origin: Vector3, direction: Vector3, maxDistance?: number, layerMask?: number): RaycastHit[];
   static raycastAll(a: Ray | Vector3, b?: Vector3 | number, c?: number, d?: number): RaycastHit[] {
@@ -121,20 +126,22 @@ export class Physics {
   }
 
   /**
-   * Colliders whose bounds touch a sphere. Useful for "everything within range".
-   * It tests bounding boxes, so it can include near misses at the corners of rotated shapes.
+   * Colliders that touch or are inside a sphere: "everything within range". Tests each
+   * collider's real shape (via `closestPoint`), as Unity does. Default mask: every layer,
+   * as in Unity.
    */
   static overlapSphere(position: Vector3, radius: number, layerMask = Physics.allLayers): Collider[] {
     const found: Collider[] = [];
     for (const collider of currentEngine().colliders) {
       if (!matches(collider, layerMask)) continue;
-      const closest = collider.bounds.closestPoint(position);
+      const closest = collider.closestPoint(position);
       if (Vector3.distance(closest, position) <= radius) found.push(collider);
     }
     return found;
   }
 
-  static checkSphere(position: Vector3, radius: number, layerMask = Physics.allLayers): boolean {
+  /** True if any collider touches the sphere. Default mask: every layer except "Ignore Raycast", as in Unity. */
+  static checkSphere(position: Vector3, radius: number, layerMask = Physics.defaultRaycastLayers): boolean {
     return Physics.overlapSphere(position, radius, layerMask).length > 0;
   }
 }

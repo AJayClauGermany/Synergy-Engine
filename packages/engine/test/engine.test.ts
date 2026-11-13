@@ -359,12 +359,31 @@ describe('Transform', () => {
     t.position = new Vector3(1, 2, 3);
     expect(t.position.equals(new Vector3(1, 2, 3))).toBe(true);
     expect(t.forward.equals(Vector3.forward)).toBe(true);
+    // As in Unity, a positive yaw turns right.
     t.eulerAngles = new Vector3(0, 90, 0);
-    expect(t.forward.equals(Vector3.left, 1e-4)).toBe(true);
+    expect(t.forward.equals(Vector3.right, 1e-4)).toBe(true);
     t.translate(Vector3.forward.mul(2));
-    expect(t.position.equals(new Vector3(-1, 2, 3), 1e-4)).toBe(true);
+    expect(t.position.equals(new Vector3(3, 2, 3), 1e-4)).toBe(true);
     t.translate(Vector3.up, Space.World);
     expect(t.position.y).toBeCloseTo(3);
+    t.translate(0, 0, 1);
+    expect(t.position.equals(new Vector3(4, 3, 3), 1e-4)).toBe(true);
+    t.translate(0, 0, 1, Space.World);
+    expect(t.position.equals(new Vector3(4, 3, 4), 1e-4)).toBe(true);
+  });
+
+  test('Unity-space values reach PlayCanvas mirrored in Z', () => {
+    const t = new GameObject('A').transform;
+    t.position = new Vector3(1, 2, 3);
+    t.rotation = Quaternion.euler(0, 90, 0);
+    const entity = t.gameObject.entity;
+    expect(entity.getPosition().z).toBeCloseTo(-3);
+    // PlayCanvas looks along its -Z; mirrored, that is the Unity forward we set (+X).
+    const pcForward = entity.forward;
+    expect(Vector3.from(pcForward).equals(new Vector3(1, 0, 0), 1e-4)).toBe(true);
+    expect(t.localEulerAngles.equals(new Vector3(0, 90, 0), 1e-3)).toBe(true);
+    t.localEulerAngles = new Vector3(-30, 0, 0);
+    expect(t.localEulerAngles.equals(new Vector3(330, 0, 0), 1e-3)).toBe(true);
   });
 
   test('rotate overloads: eulers vs axis-angle', () => {
@@ -376,6 +395,13 @@ describe('Transform', () => {
     expect(t.eulerAngles.y).toBeCloseTo(90, 3);
     t.rotate(new Vector3(0, 90, 0), Space.World);
     expect(t.forward.equals(Vector3.back, 1e-4)).toBe(true);
+    t.rotation = Quaternion.identity;
+    t.rotate(0, 90, 0);
+    expect(t.forward.equals(Vector3.right, 1e-4)).toBe(true);
+    t.rotate(90, 0, 0, Space.World);
+    expect(t.forward.equals(Vector3.right, 1e-4)).toBe(true);
+    // Pitching 90 about world X tips up onto forward (and forward onto down).
+    expect(t.up.equals(Vector3.forward, 1e-4)).toBe(true);
   });
 
   test('parenting keeps world position by default', () => {
@@ -538,7 +564,7 @@ describe('instantiate and prefabs', () => {
     const copy = instantiate(cube);
     const renderer = copy.getComponent(MeshRenderer) as MeshRenderer;
     expect(copy.getComponents(MeshRenderer).length).toBe(1);
-    expect(copy.getComponent(MeshFilter)?.mesh).toBe(Mesh.primitive(PrimitiveType.Cube));
+    expect(copy.getComponent(MeshFilter)?.sharedMesh).toBe(Mesh.primitive(PrimitiveType.Cube));
     expect(copy.getComponent(BoxCollider)).not.toBeNull();
     expect(renderer.sharedMaterial).toBe(red);
     // Asking for `.material` gives the clone its own copy.
@@ -685,7 +711,11 @@ describe('Input', () => {
     expect(Input.mousePosition.equals(new Vector3(110, 70, 0))).toBe(true);
     expect(Input.mousePositionDelta.x).toBe(10);
     expect(Input.mouseScrollDelta.y).toBe(1);
-    expect(Input.getAxis('Mouse ScrollWheel')).toBe(1);
+    // Unity's default Input Manager: 0.1 per notch, and 0.1 per pixel for the mouse axes.
+    expect(Input.getAxis('Mouse ScrollWheel')).toBeCloseTo(0.1);
+    expect(Input.getAxis('Mouse X')).toBeCloseTo(1);
+    // The pointer moved from y 50 to y 70: up, in Unity's bottom-left screen space.
+    expect(Input.getAxis('Mouse Y')).toBeCloseTo(2);
     expect(() => Input.getAxis('Nope')).toThrow(/defineAxis/);
   });
 });
@@ -694,7 +724,8 @@ describe('Camera', () => {
   function makeCamera(): Camera {
     const go = new GameObject('Main Camera', Camera);
     go.tag = 'MainCamera';
-    go.transform.position = new Vector3(0, 0, 10);
+    // Where Unity's default scene puts it: behind the origin, looking along +Z.
+    go.transform.position = new Vector3(0, 0, -10);
     return go.getComponent(Camera) as Camera;
   }
 
@@ -707,24 +738,30 @@ describe('Camera', () => {
     expect(Camera.main).toBeNull();
   });
 
-  test('screen <-> world conversions agree (top-left origin)', () => {
+  test("screen <-> world conversions agree (Unity's bottom-left origin)", () => {
     const camera = makeCamera();
     const center = camera.worldToScreenPoint(Vector3.zero);
     expect(center.x).toBeCloseTo(640);
     expect(center.y).toBeCloseTo(360);
     expect(center.z).toBeCloseTo(10);
-    // A point up and to the right appears right of and ABOVE centre (smaller y).
+    // A point up and to the right appears right of and above centre (larger y, as in Unity).
     const upRight = camera.worldToScreenPoint(new Vector3(2, 1, 0));
     expect(upRight.x).toBeGreaterThan(640);
-    expect(upRight.y).toBeLessThan(360);
+    expect(upRight.y).toBeGreaterThan(360);
     expect(camera.screenToWorldPoint(upRight).equals(new Vector3(2, 1, 0), 1e-3)).toBe(true);
     // Points behind the camera report negative depth.
-    expect(camera.worldToScreenPoint(new Vector3(0, 0, 20)).z).toBeLessThan(0);
+    expect(camera.worldToScreenPoint(new Vector3(0, 0, -20)).z).toBeLessThan(0);
+    // Viewport space runs from (0, 0) bottom-left to (1, 1) top-right.
+    const viewport = camera.worldToViewportPoint(new Vector3(2, 1, 0));
+    expect(viewport.x).toBeCloseTo(upRight.x / 1280);
+    expect(viewport.y).toBeCloseTo(upRight.y / 720);
+    expect(camera.viewportToWorldPoint(viewport).equals(new Vector3(2, 1, 0), 1e-3)).toBe(true);
+    expect(camera.viewportToScreenPoint(new Vector3(1, 1, 0)).equals(new Vector3(1280, 720, 0))).toBe(true);
   });
 
   test('screenPointToRay goes through the matching world point', () => {
     const camera = makeCamera();
-    const target = new Vector3(3, -2, -4);
+    const target = new Vector3(3, -2, 4);
     const ray = camera.screenPointToRay(camera.worldToScreenPoint(target));
     const along = target.sub(ray.origin);
     expect(along.normalized.equals(ray.direction, 1e-3)).toBe(true);
@@ -732,7 +769,8 @@ describe('Camera', () => {
     camera.orthographicSize = 5;
     const orthoRay = camera.screenPointToRay({ x: 640, y: 0 });
     expect(orthoRay.direction.equals(Vector3.forward, 1e-4)).toBe(true);
-    expect(orthoRay.origin.y).toBeCloseTo(5, 2);
+    // y 0 is the bottom edge of the screen.
+    expect(orthoRay.origin.y).toBeCloseTo(-5, 2);
   });
 
   test('aspect follows a non-16:9 headless view', () => {
@@ -751,14 +789,14 @@ describe('Physics queries', () => {
   test('raycast returns the nearest hit with point and normal', () => {
     const near = GameObject.createPrimitive(PrimitiveType.Cube);
     near.name = 'Near';
-    near.transform.position = new Vector3(0, 0, -5);
+    near.transform.position = new Vector3(0, 0, 5);
     const far = GameObject.createPrimitive(PrimitiveType.Sphere);
-    far.transform.position = new Vector3(0, 0, -10);
+    far.transform.position = new Vector3(0, 0, 10);
 
     const hit = Physics.raycast(Vector3.zero, Vector3.forward);
     expect(hit?.gameObject).toBe(near);
     expect(hit?.distance).toBeCloseTo(4.5);
-    expect(hit?.point.equals(new Vector3(0, 0, -4.5), 1e-4)).toBe(true);
+    expect(hit?.point.equals(new Vector3(0, 0, 4.5), 1e-4)).toBe(true);
     expect(hit?.normal.equals(Vector3.back, 1e-4)).toBe(true);
 
     const all = Physics.raycastAll(new Ray(Vector3.zero, Vector3.forward));
@@ -766,6 +804,9 @@ describe('Physics queries', () => {
     expect(all[1]?.distance).toBeCloseTo(9.5);
     expect(Physics.raycast(Vector3.zero, Vector3.forward, 3)).toBeNull();
     expect(Physics.raycast(Vector3.zero, Vector3.back)).toBeNull();
+    // As in Unity, a ray starting inside a collider does not hit it.
+    expect(Physics.raycast(new Vector3(0, 0, 5), Vector3.forward)?.gameObject).toBe(far);
+    expect(near.getComponent(BoxCollider)?.raycast(new Ray(new Vector3(0, 0, 5), Vector3.forward))).toBeNull();
   });
 
   test('rotated and scaled boxes, capsules, layers and disabled colliders', () => {
@@ -779,9 +820,9 @@ describe('Physics queries', () => {
     expect(hit?.normal.equals(Vector3.left, 1e-4)).toBe(true);
 
     const capsule = GameObject.createPrimitive(PrimitiveType.Capsule);
-    capsule.transform.position = new Vector3(0, 0, 5);
+    capsule.transform.position = new Vector3(0, 0, -5);
     expect(Physics.raycast(Vector3.zero, Vector3.back)?.distance).toBeCloseTo(4.5);
-    expect(Physics.raycast(new Vector3(0, 5, 5), Vector3.down)?.distance).toBeCloseTo(4);
+    expect(Physics.raycast(new Vector3(0, 5, -5), Vector3.down)?.distance).toBeCloseTo(4);
     expect(Physics.raycast(new Vector3(0, 1.2, 0), Vector3.back)).toBeNull();
 
     LayerMask.define(8, 'Units');
@@ -826,7 +867,7 @@ describe('Physics queries', () => {
     }
     const camera = new GameObject('Main Camera', Camera);
     camera.tag = 'MainCamera';
-    camera.transform.position = new Vector3(0, 0, 10);
+    camera.transform.position = new Vector3(0, 0, -10);
     const cube = GameObject.createPrimitive(PrimitiveType.Cube);
     cube.addComponent(Clickable);
 

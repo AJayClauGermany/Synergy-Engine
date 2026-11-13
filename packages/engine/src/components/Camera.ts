@@ -17,15 +17,19 @@ export enum CameraClearFlags {
   Nothing = 'nothing',
 }
 
-/**
- * Renders the scene from its GameObject's point of view. It looks along the transform's
- * forward direction (-Z).
- *
- * Screen points are CSS pixels with the origin at the TOP-left of the game view, the
- * same space as `Input.mousePosition` and the Preact HUD.
- */
 const warnedNoMain = new WeakSet<object>();
 
+/**
+ * Renders the scene from its GameObject's point of view, looking along `transform.forward`
+ * (+Z) with `transform.up` at the top of the screen, as in Unity.
+ *
+ * Screen space is Unity's: (0, 0) is the BOTTOM-left of the game view and y grows
+ * upward, the same space as `Input.mousePosition`. One difference: units are CSS pixels,
+ * not device pixels (`Screen.width` is in CSS pixels too, so `Screen.width / 2` is still
+ * the centre). Viewport space runs from (0, 0) bottom-left to (1, 1) top-right.
+ * HTML drawn over the game measures y from the top: `top = Screen.height - y`
+ * (`WorldAnchor` in `@synergy/ui` does this for you).
+ */
 export class Camera extends Behaviour {
   static readonly disallowMultiple = true;
 
@@ -196,72 +200,94 @@ export class Camera extends Behaviour {
     return this.component.horizontalFov ? { x: tangent, y: tangent / aspect } : { x: tangent * aspect, y: tangent };
   }
 
-  /** Screen pixels -> normalised device coordinates: x right, y up, both in [-1, 1]. */
+  /** Screen pixels (origin bottom-left) -> normalised device coordinates: x right, y up, both in [-1, 1]. */
   private toNdc(position: { x: number; y: number }): { x: number; y: number } {
     const { width, height } = currentEngine().canvasSize;
     return {
       x: width > 0 ? (position.x / width) * 2 - 1 : 0,
-      y: height > 0 ? 1 - (position.y / height) * 2 : 0,
+      y: height > 0 ? (position.y / height) * 2 - 1 : 0,
     };
   }
 
-  /** Camera space (x right, y up, looking down -z) -> world space, ignoring any scale on the camera. */
+  /** Camera space (x right, y up, looking along +z) -> world space, ignoring any scale on the camera. */
   private fromCameraSpace(point: Vector3): Vector3 {
     return this.transform.position.add(this.transform.rotation.rotate(point));
   }
 
   /**
-   * A ray from the camera through a screen point. The classic way to find what the
-   * mouse is over: `Physics.raycast(camera.screenPointToRay(Input.mousePosition))`.
+   * A ray from the camera through a screen point (pixels from the bottom-left, as in
+   * Unity). The classic way to find what the mouse is over:
+   * `Physics.raycast(camera.screenPointToRay(Input.mousePosition))`. The ray starts on
+   * the near clip plane, as in Unity.
    */
   screenPointToRay(position: { x: number; y: number }): Ray {
     const ndc = this.toNdc(position);
     const half = this.halfExtents();
     const near = this.nearClipPlane;
     if (this.orthographic) {
-      return new Ray(this.fromCameraSpace(new Vector3(ndc.x * half.x, ndc.y * half.y, -near)), this.transform.forward);
+      return new Ray(this.fromCameraSpace(new Vector3(ndc.x * half.x, ndc.y * half.y, near)), this.transform.forward);
     }
     // Start on the near plane, as Unity does.
-    const onNearPlane = new Vector3(ndc.x * half.x * near, ndc.y * half.y * near, -near);
+    const onNearPlane = new Vector3(ndc.x * half.x * near, ndc.y * half.y * near, near);
     const origin = this.fromCameraSpace(onNearPlane);
     return new Ray(origin, origin.sub(this.transform.position));
   }
 
-  /** Screen point -> world point. `position.z` is the distance in front of the camera. */
+  /**
+   * Screen point -> world point. `position.z` is the distance in front of the camera, as
+   * in Unity: with z = 0 every screen point maps to the camera's own position, so pass a
+   * depth (or use `screenPointToRay` and a plane).
+   */
   screenToWorldPoint(position: Vector3Like): Vector3 {
     const ndc = this.toNdc(position);
     const half = this.halfExtents();
     const depth = position.z;
     const spread = this.orthographic ? 1 : depth;
-    return this.fromCameraSpace(new Vector3(ndc.x * half.x * spread, ndc.y * half.y * spread, -depth));
+    return this.fromCameraSpace(new Vector3(ndc.x * half.x * spread, ndc.y * half.y * spread, depth));
   }
 
   /**
-   * World point -> screen point. `z` is the distance in front of the camera, and is
-   * negative when the point is behind it (check this before drawing a HUD marker).
+   * World point -> screen point in pixels from the bottom-left, as in Unity. `z` is the
+   * distance in front of the camera, negative when the point is behind it (check this
+   * before drawing a marker).
    */
   worldToScreenPoint(position: Vector3Like): Vector3 {
     const { width, height } = currentEngine().canvasSize;
     const local = this.transform.rotation.inverse().rotate(Vector3.from(position).sub(this.transform.position));
-    const depth = -local.z;
+    const depth = local.z;
     const half = this.halfExtents();
     // Avoid dividing by zero for a point exactly on the camera plane.
     const spread = this.orthographic ? 1 : Math.abs(depth) < 1e-9 ? 1e-9 : depth;
     const ndcX = local.x / (half.x * spread);
     const ndcY = local.y / (half.y * spread);
-    return new Vector3((ndcX * 0.5 + 0.5) * width, (1 - (ndcY * 0.5 + 0.5)) * height, depth);
+    return new Vector3((ndcX * 0.5 + 0.5) * width, (ndcY * 0.5 + 0.5) * height, depth);
   }
 
-  /** World point -> viewport point, where (0, 0) is top-left and (1, 1) is bottom-right. */
+  /** World point -> viewport point: (0, 0) bottom-left to (1, 1) top-right, `z` the distance in front. Same as Unity. */
   worldToViewportPoint(position: Vector3Like): Vector3 {
-    const { width, height } = currentEngine().canvasSize;
-    const screen = this.worldToScreenPoint(position);
-    return new Vector3(width > 0 ? screen.x / width : 0, height > 0 ? screen.y / height : 0, screen.z);
+    return this.screenToViewportPoint(this.worldToScreenPoint(position));
   }
 
+  /** Viewport point (0..1, origin bottom-left) -> world point, `z` the distance in front. Same as Unity. */
+  viewportToWorldPoint(position: Vector3Like): Vector3 {
+    return this.screenToWorldPoint(this.viewportToScreenPoint(position));
+  }
+
+  /** A ray through a viewport point (0..1, origin bottom-left). Same as Unity. */
   viewportPointToRay(position: { x: number; y: number }): Ray {
+    return this.screenPointToRay(this.viewportToScreenPoint({ x: position.x, y: position.y, z: 0 }));
+  }
+
+  /** Screen pixels -> viewport (0..1), both measured from the bottom-left. `z` is kept. */
+  screenToViewportPoint(position: Vector3Like): Vector3 {
     const { width, height } = currentEngine().canvasSize;
-    return this.screenPointToRay({ x: position.x * width, y: position.y * height });
+    return new Vector3(width > 0 ? position.x / width : 0, height > 0 ? position.y / height : 0, position.z);
+  }
+
+  /** Viewport (0..1) -> screen pixels, both measured from the bottom-left. `z` is kept. */
+  viewportToScreenPoint(position: Vector3Like): Vector3 {
+    const { width, height } = currentEngine().canvasSize;
+    return new Vector3(position.x * width, position.y * height, position.z);
   }
 
   override _copyFrom(source: this): void {

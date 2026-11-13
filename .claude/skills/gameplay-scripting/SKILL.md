@@ -58,7 +58,7 @@ export class Turret extends MonoBehaviour {
 }
 ```
 
-Mouse picking (top-left screen coordinates, hit or `null`):
+Mouse picking (Unity's bottom-left screen coordinates, hit or `null`):
 
 ```ts
 const camera = Camera.main;
@@ -131,12 +131,12 @@ whose message says what to write. They are here so the message makes sense when 
   `this.startCoroutine(this.run())`, calling the generator (passing `this.run` throws).
 - **A line that does nothing.** `this.transform.position.add(step);` computes a new
   vector and drops it. Assign it: `transform.position = transform.position.add(step)`.
-- **W walks backward.** `new Vector3(h, 0, v)` from the input axes: forward is -Z. Write
-  `Vector3.right.mul(h).add(Vector3.forward.mul(v))`. Never hard-code an axis.
-- **It turns or tilts the wrong way.** A positive angle about X or Y is the reverse of
-  Unity's: `Quaternion.euler(45, 0, 0)` looks up. Aim with `transform.lookAt` or
-  `Quaternion.lookRotation`; keep a turning angle in a field of your own rather than
-  reading `eulerAngles` back.
+- **A turn that jumps.** Axes and angles are Unity's (`Quaternion.euler(45, 0, 0)` looks
+  down, a positive yaw turns right), and so is `eulerAngles` reading back in [0, 360):
+  keep a turning angle in a field of your own rather than reading `eulerAngles` back and
+  adding to it. Aim with `transform.lookAt` or `Quaternion.lookRotation` where you can.
+- **Numbers read from `gameObject.entity`** (PlayCanvas) are in its right-handed space:
+  Z is negated. Use `transform` instead.
 - **A field that looks up a component** (`private body = this.getComponent(MeshRenderer)`)
   throws: fields are set before the other components exist. Do it in `awake`.
 - **Clicks do nothing.** The object needs a Collider to be hit by `Physics.raycast` or to
@@ -156,7 +156,7 @@ whose message says what to write. They are here so the message makes sense when 
   deactivated, and are not resumed when it comes back. Restart them in `onEnable`.
 - **`Tween.to(...)` after its object is gone.** `Tween.move/scale/rotate` end with their
   object; a bare `Tween.to` does not: add `.setTarget(this.gameObject)`.
-- Lights aim along -Y; set `light.direction` rather than rotating the light.
+- Lights shine along `transform.forward`, as in Unity; `light.direction = ...` aims one directly.
 - `GameObject.find` and `findObjectOfType` walk the scene: call them in `start`, cache
   the result.
 - `transform.translate(v)` moves along the object's own axes; `translate(v, Space.World)`

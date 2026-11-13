@@ -78,7 +78,8 @@ docs/                    setup.md (accounts, secrets, first deploy), unity-to-sy
 
 Read `docs/unity-to-synergy.md` for the full map. The ones that cause bugs are below.
 `bun run check` catches many of them and says what to write instead (`docs/checks.md`),
-but not all: it cannot know which way you meant a vector to point.
+but not all. Each public API's doc comment also says where it differs from Unity: read the
+hover text of a member before assuming Unity's behaviour.
 
 1. **camelCase** methods and messages: `update()`, `getComponent(Health)`, `Input.getKeyDown(KeyCode.Space)`.
    Unity's spelling (`Update()`, `OnEnable()`) is a type error and an error when the script
@@ -86,13 +87,15 @@ but not all: it cannot know which way you meant a vector to point.
 2. **Vectors are immutable and have no operators**: `a.add(b)`, `v.mul(2)`, `q.rotate(v)`.
    `transform.position = transform.position.add(delta)`. A result that is not assigned is
    lost: `transform.position.add(delta);` on its own line does nothing.
-3. **Right-handed world, forward is -Z.** Always write `Vector3.forward` / `transform.forward`,
-   never `new Vector3(0, 0, 1)`; `new Vector3(h, 0, v)` from the input axes walks backward.
-   **Angles turn the other way about X and Y**: `Quaternion.euler(45, 0, 0)` tilts up, and
-   `rotate(Vector3.up, 90)` turns left. Negate a ported pitch and yaw, or aim with `lookAt`
-   / `Quaternion.lookRotation`, which need no angles.
-4. **Screen space is top-left origin, Y down, CSS pixels** (`Input.mousePosition`,
-   `camera.worldToScreenPoint`). A larger `y` is lower on screen.
+3. **Unity's axes and angles, unchanged.** Left-handed, Y up, `Vector3.forward` is (0, 0, 1),
+   Euler angles apply Z, X, then Y and read back in [0, 360), a positive yaw turns right,
+   lights shine along `transform.forward`, meshes wind clockwise with v = 0 at the bottom.
+   Numbers from a Unity scene or script mean the same here. PlayCanvas underneath is
+   right-handed with -Z forward; the engine mirrors Z at that boundary, so only code that
+   reaches past the API (`gameObject.entity`, `engine.app`, `pcCamera`...) sees its convention.
+4. **Screen space is Unity's (origin bottom-left, y up), in CSS pixels** (`Input.mousePosition`,
+   `camera.worldToScreenPoint`, `Screen.width`). HTML measures from the top:
+   `top = Screen.height - y` (`WorldAnchor` does it for you).
 5. **No `out` params, no `== null` for destroyed objects**: `const hit = Physics.raycast(ray); if (hit) ...`
    and `if (isAlive(target))`.
 6. **Never `new` a component.** `gameObject.addComponent(Type)`. Set up in `awake`/`start`, not a
@@ -101,7 +104,8 @@ but not all: it cannot know which way you meant a vector to point.
 7. **Coroutines are generators**: `*run(): IEnumerator { yield new WaitForSeconds(1); }`, started
    with `this.startCoroutine(this.run())` (call it). `*start()` runs as a coroutine, as in
    Unity; `*update()` and `async update()` are type errors.
-8. **Lights aim along -Y.** Use `light.direction = ...`.
+8. **The escape hatches are PlayCanvas's space**, not Unity's: `gameObject.entity.getPosition()`
+   has Z negated and rotations mirrored. Stay on the Unity-style API, or convert both ways.
 9. **C# habits that change meaning.** `a / b` never truncates (`Math.trunc(a / b)` for
    integer division; a `Vector3Int` or a cell refuses a fraction); objects used as
    `Map`/`Set` keys match by identity, not value (`cellKey(cell)` for cells); `array.sort()`

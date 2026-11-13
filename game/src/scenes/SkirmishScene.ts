@@ -28,8 +28,9 @@ export const buildSkirmishScene: SceneBuilder = () => {
   RenderSettings.ambientLight = new Color(0.42, 0.45, 0.5);
 
   const rig = new GameObject('Camera Rig').addComponent(CameraRig);
-  // Look at a point slightly in front of the board's centre, leaving room for the HUD at the bottom.
-  rig.transform.position = new Vector3(0, 0, 0.8);
+  // Look at a point slightly in front of the board's centre (toward the camera, which sits
+  // on the -Z side as in Unity), leaving room for the HUD at the bottom.
+  rig.transform.position = new Vector3(0, 0, -0.8);
   rig.distance = 15;
   const camera = new GameObject('Main Camera');
   camera.tag = 'MainCamera';
@@ -44,7 +45,7 @@ export const buildSkirmishScene: SceneBuilder = () => {
   sun.intensity = 1.1;
   sun.shadows = LightShadows.Soft;
   sun.shadowDistance = 40;
-  sun.direction = new Vector3(-0.45, -1, -0.6);
+  sun.direction = new Vector3(-0.45, -1, 0.6);
 
   const board = new GameObject('Board').addComponent(BoardView);
 
