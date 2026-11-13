@@ -20,7 +20,9 @@ Cloudflare Workers (preview deploys) · Electrobun (desktop).
 | `bun run lint` / `typecheck` / `docs:check` / `lint:project` / `format` | One check by itself. `bun run lint path/to/File.ts` lints one file. `bun run check lint types` runs the ones named and ends with `OK so far`, not `PASSED` |
 | `bun run coverage` | Tests with coverage: per file, the lines no test reached |
 | `bun run build` | Production build into `dist/` |
-| `bun run screenshot` | Build, open in headless Chromium, save `.screenshots/game.png`; fails on page errors. `--hierarchy` prints the scene as text; `--renderer webgl2` forces WebGL2 (the game prefers WebGPU) |
+| `bun run screenshot` | Build, open in headless Chromium, save `.screenshots/game.png` and the page's log beside it (`game.log`); fails on page errors. `--hierarchy` prints the scene as text, `--logs` the log so far; `--devtools` shows the editor; `--renderer webgl2` forces WebGL2 (the game prefers WebGPU) |
+| `bun run logs` | Print `.logs/game.log`: what the game open under `bun run dev` logged (`--errors`, `--tail 50`) |
+| `bun run report` | Ask the game open under `bun run dev` for a report (screenshot, log, hierarchy, HUD text) and print its summary |
 | `bun run backend` | Convex dev deployment (interactive login the first time); writes its URL to `.env.local` |
 | `bun run env` | Check environment variables against `.env.schema` (secrets masked) |
 | `bun run preview:local` / `preview:deploy` / `deploy` | Cloudflare: local gate, branch preview, main deployment. The deploys move hashed assets to R2 and set up Cloudflare Access (`docs/deploying.md`) |
@@ -55,15 +57,18 @@ packages/engine/         Unity-style runtime on PlayCanvas   (@synergy/engine)
 packages/ui/             Preact helpers: mountUI, useObservable, WorldAnchor   (@synergy/ui)
 packages/net/            command sessions, transports, Convex lobby   (@synergy/net)
 packages/netcode/        Netcode for GameObjects on those transports  (@synergy/netcode)
+packages/devtools/       the editor (Hierarchy, Inspector, Console), log capture, reports;
+                         development builds only, like UnityEditor   (@synergy/devtools)
 convex/                  backend functions; _generated/ is generated, never edit it
 cloudflare/worker.ts     gate in front of the static build (Cloudflare Access or a password); serves assets from R2
 desktop/                 Electrobun shell
-scripts/                 dev server, build, deploy, rename, screenshot tool, the check runner,
-                         the check that holds the guides to the code (docs.ts)
+scripts/                 dev server (and its devtools side, devserver.ts), build, deploy, rename,
+                         screenshot, logs and report tools, the check runner, the check that
+                         holds the guides to the code (docs.ts)
 tools/unity/             editor script that exports Unity tiles, tilemaps and ScriptableObjects
 tools/lint/              lint rules for the mistakes a Unity port makes (loaded by oxlint)
 .env.schema              every environment variable: type, comment, secret or not (varlock)
-docs/                    setup.md (accounts, secrets, first deploy), unity-to-synergy.md,
+docs/                    setup.md (accounts, secrets, first deploy), unity-to-synergy.md, devtools.md,
                          porting-from-unity.md, checks.md, content.md, tilemaps.md,
                          architecture.md, multiplayer.md, netcode.md, environment.md,
                          deploying.md, desktop.md
@@ -240,6 +245,14 @@ explains each check and every message of the project's own lint rules.
 4. To see what is in the scene without an image, print `Debug.hierarchy()` in a test, or
    run `bun run screenshot --hierarchy`: every GameObject with its components, position
    and the values of its scripts' fields. Check it before guessing why something is missing.
+5. When a person is running the game (`bun run dev`), read what they see instead of asking:
+   `bun run logs --errors`, or `bun run report` for a screenshot, the log and the
+   hierarchy of their page right now. When they say they saved a report (F8), read
+   `.reports/latest/summary.md` first. `docs/devtools.md` has the rest.
+
+Log what a mechanic decides with `Debug.log(message, this.gameObject)`: it lands in the
+log file and the editor's Console, with the frame it happened on, and an agent reading
+the log later can follow it. Draw what a script is aiming at in `onDrawGizmosSelected()`.
 
 A passing type-check does not mean a script runs. Unity-cased messages (`Update`) are
 caught, but a method the engine has no reason to call (`onUpdate`, `tick`) only draws a
@@ -252,7 +265,9 @@ warning or nothing at all. Test or screenshot behaviour changes.
 - Formatting belongs to `bun fmt` (`bun run fix`). Do not format by hand or argue with it.
 - Engine code in `packages/`, game code in `game/`. `packages/engine` may import only
   `playcanvas`; `packages/net` imports nothing from the engine; `packages/netcode` imports
-  only the engine and `packages/net`; `packages/engine/src/math` imports nothing at all,
+  only the engine and `packages/net`; `packages/devtools` imports only the engine, and only
+  the game's boot imports it, behind the development-build check in `game/src/main.tsx`;
+  `packages/engine/src/math` imports nothing at all,
   and `src/grid` and `src/data` only `src/math`. Game rules import only those three pure
   entry points. (`.fallowrc.jsonc` holds this as zones.)
 - No import cycles: two files that import each other. Use `import type` when only the

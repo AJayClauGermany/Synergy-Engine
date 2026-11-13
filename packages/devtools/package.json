@@ -1,0 +1,19 @@
+{
+  "name": "@synergy/devtools",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Development tools for Synergy Engine: a Unity-style editor overlay (Hierarchy, Inspector, Console, play controls), log capture to a file, and one-key bug reports. Loaded only by development builds.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@synergy/engine": "workspace:*"
+  },
+  "peerDependencies": {
+    "preact": "^11.2.0"
+  },
+  "devDependencies": {
+    "preact": "^11.2.0"
+  }
+}

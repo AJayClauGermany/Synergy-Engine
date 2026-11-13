@@ -27,6 +27,8 @@
     "hooks": "git config core.hooksPath .githooks",
     "rename": "bun scripts/rename.ts",
     "screenshot": "varlock run -- bun run scripts/screenshot.ts",
+    "report": "bun scripts/report.ts",
+    "logs": "bun scripts/logs.ts",
     "backend": "convex dev",
     "preview:local": "bun run build && varlock run -- wrangler dev",
     "preview:deploy": "varlock run -- bun scripts/deploy.ts preview",

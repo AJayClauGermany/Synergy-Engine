@@ -1,10 +1,12 @@
 import * as pc from 'playcanvas';
 import type { Camera } from '../components/Camera';
 import type { Collider } from '../physics/Collider';
+import { type EditorHooks, LogType } from './Application';
 import { dispatchMouseMessages } from '../physics/Physics';
 import { CoroutineScheduler } from './Coroutine';
 import { InputState } from './Input';
 import { Lifecycle } from './Lifecycle';
+import { announceLog } from './Debug';
 import { currentEngineOrNull, setCurrentEngine } from './runtime';
 import { SceneState } from './SceneManager';
 import { TimeState } from './Time';
@@ -121,6 +123,12 @@ export class Engine {
   readonly cameras: Camera[] = [];
   /** @internal Per-engine caches (primitive meshes, default material, ...). */
   readonly cache = new Map<string, unknown>();
+
+  /**
+   * @internal The editor, when `@synergy/devtools` has attached one (development builds
+   * only). `Debug.break()`, `Application.isEditor` and `ScreenCapture` ask it.
+   */
+  editor: EditorHooks | null = null;
 
   /** @internal True while a frame's updates are running. */
   inFrame = false;
@@ -311,6 +319,8 @@ export class Engine {
       throw error;
     }
     console.error(`Exception in ${context}:`, error);
+    const stack = error instanceof Error ? (error.stack ?? '').split('\n').slice(1).join('\n').trim() : '';
+    announceLog(LogType.Exception, [`Exception in ${context}:`, error], stack);
   }
 
   // ---- Frame phases -------------------------------------------------------------------
@@ -371,10 +381,11 @@ export class Engine {
     // The canvas is sized by CSS; the drawing buffer follows it.
     app.setCanvasFillMode(pc.FILLMODE_NONE);
     app.setCanvasResolution(pc.RESOLUTION_AUTO);
+    // Only the drawing buffer follows. `app.resizeCanvas()` would also write the size onto
+    // the canvas's style in pixels, after which it no longer follows its container: the
+    // game would keep its first size when the window (or the editor's Game panel) changes.
     const resize = () => {
-      const width = canvas.clientWidth;
-      const height = canvas.clientHeight;
-      if (width > 0 && height > 0) app.resizeCanvas(width, height);
+      if (canvas.clientWidth > 0 && canvas.clientHeight > 0) app.updateCanvasSize();
     };
     if (typeof ResizeObserver !== 'undefined') {
       this.resizeObserver = new ResizeObserver(resize);

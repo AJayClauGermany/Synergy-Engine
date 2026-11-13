@@ -39,7 +39,7 @@ has the full map and the handful of deliberate differences.
 | **Previews** (`cloudflare/`) | A private preview per pull request on Cloudflare: sign-in by email, assets in R2. |
 | **Desktop** (`desktop/`) | Package with Electrobun; runs offline. |
 | **Sample games** (`game/`) | *Skirmish*: a turn-based hex game on command sessions. *Frontier* (`?scene=Frontier`): a real-time, host-authoritative match on netcode, with a map from data and fog of war. Start from the one that matches your game. |
-| **Agent support** | `AGENTS.md`, task skills, a headless test mode, a screenshot tool, and one `bun run check` whose lint rules know the mistakes a Unity port makes, so AI agents can build and verify changes on their own. |
+| **Agent support** | `AGENTS.md`, task skills, a headless test mode, a screenshot tool, a log file and one-key reports from a running game, a Unity-style editor in development builds, and one `bun run check` whose lint rules know the mistakes a Unity port makes, so AI agents can build and verify changes on their own. |
 
 It is aimed at strategy games (turn-based and real-time), but the engine is generic.
 
@@ -97,7 +97,9 @@ Coming from an existing Unity project? Start at
 | `bun test` | Tests only |
 | `bun run build` | Production build into `dist/` |
 | `bun run start` | Serve `dist/` locally |
-| `bun run screenshot` | Capture the game in headless Chromium |
+| `bun run screenshot` | Capture the game (and its log) in headless Chromium |
+| `bun run logs` | Print what the game open under `bun run dev` logged |
+| `bun run report` | Save a report (screenshot, log, scene) from the game open under `bun run dev` |
 | `bun run backend` | Start a Convex dev deployment (writes its URL to `.env.local`) |
 | `bun run env` | Check the environment variables against `.env.schema` |
 | `bun run preview:local` | Try the password gate locally |
@@ -109,6 +111,7 @@ Coming from an existing Unity project? Start at
 
 - [Setting up](docs/setup.md): every piece around the game, once, start to finish; moving from a test game to the real one
 - [Unity to Synergy](docs/unity-to-synergy.md): the API map and the differences
+- [Devtools](docs/devtools.md): the editor (Hierarchy, Inspector, Console), the log file, one-key reports
 - [Architecture](docs/architecture.md): how it sits on PlayCanvas, the frame loop, headless mode
 - [Porting from Unity](docs/porting-from-unity.md): the order to bring an existing project across
 - [Checks](docs/checks.md): what `bun run check` runs, the lint rules for Unity habits, the layering

@@ -35,8 +35,6 @@ export const NOT_SENT: Readonly<Record<string, string>> = {
     'uGUI pointer events are not sent; use onMouseEnter() with a Collider, or CSS :hover in the Preact HUD',
   onpointerexit: 'uGUI pointer events are not sent; use onMouseExit() with a Collider, or CSS :hover in the Preact HUD',
   onvalidate: 'there is no editor, so editor messages are never sent; check the values in awake()',
-  ondrawgizmos: 'there is no editor, so editor messages are never sent; draw with Debug.drawLine() in update()',
-  ondrawgizmosselected: 'there is no editor, so editor messages are never sent; draw with Debug.drawLine() in update()',
   onownershipchanged: 'use onGainedOwnership() and onLostOwnership(), or networkObject.onOwnershipChanged',
   onnetworkprespawn: 'use onNetworkSpawn()',
   onnetworkpostspawn: 'use onNetworkSpawn()',
@@ -65,6 +63,8 @@ const NEVER_COROUTINES = new Set([
   'lateUpdate',
   'fixedUpdate',
   'onMouseOver',
+  'onDrawGizmos',
+  'onDrawGizmosSelected',
 ]);
 
 const GENERATOR = Object.getPrototypeOf(function* () {}) as object;

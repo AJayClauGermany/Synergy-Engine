@@ -40,6 +40,8 @@ export abstract class MonoBehaviour extends Behaviour {
     'onMouseEnter',
     'onMouseOver',
     'onMouseExit',
+    'onDrawGizmos',
+    'onDrawGizmosSelected',
   ];
 
   /** @internal */
@@ -87,6 +89,15 @@ export abstract class MonoBehaviour extends Behaviour {
   /** Mouse moved off this object's Collider. May be a coroutine. */
   protected onMouseExit?(): void | IEnumerator;
 
+  /**
+   * Draw with `Gizmos` here: ranges, paths, targets. Called every frame while the editor
+   * (`@synergy/devtools`, development builds only) is open with Gizmos on, and never in a
+   * release build, as in Unity.
+   */
+  protected onDrawGizmos?(): void | undefined;
+  /** As `onDrawGizmos`, only while this object or one of its parents is selected in the Hierarchy. */
+  protected onDrawGizmosSelected?(): void | undefined;
+
   // ---- Unity's spellings --------------------------------------------------------------
   // A method named `Update` would compile and never be called. These declarations turn
   // that into a type error on the offending line; they produce no code. A check at
@@ -118,6 +129,10 @@ export abstract class MonoBehaviour extends Behaviour {
   declare protected OnMouseOver?: UseCamelCase<'onMouseOver'>;
   /** @deprecated Write `onMouseExit()`. */
   declare protected OnMouseExit?: UseCamelCase<'onMouseExit'>;
+  /** @deprecated Write `onDrawGizmos()`. */
+  declare protected OnDrawGizmos?: UseCamelCase<'onDrawGizmos'>;
+  /** @deprecated Write `onDrawGizmosSelected()`. */
+  declare protected OnDrawGizmosSelected?: UseCamelCase<'onDrawGizmosSelected'>;
 
   constructor() {
     super();
@@ -318,4 +333,6 @@ export type MessageName =
   | 'onMouseUp'
   | 'onMouseEnter'
   | 'onMouseOver'
-  | 'onMouseExit';
+  | 'onMouseExit'
+  | 'onDrawGizmos'
+  | 'onDrawGizmosSelected';

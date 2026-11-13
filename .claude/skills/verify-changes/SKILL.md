@@ -95,8 +95,11 @@ bun run screenshot
 ```
 
 Builds, serves `dist/`, opens headless Chromium with software WebGL, waits for the scene,
-saves `.screenshots/game.png`, and exits 1 if the page logged an error. Then **look at the
-image** with the Read tool.
+saves `.screenshots/game.png` with the page's log beside it (`.screenshots/game.log`),
+and exits 1 if the page logged an error. Then **look at the image** with the Read tool,
+and read the log when something did not happen: a `Debug.log` you expected is missing,
+or a warning says why. `--devtools` takes the picture with the editor open (Hierarchy,
+Inspector, Console), which shows the scene and the log in one image.
 
 Drive the game first, in order:
 

@@ -9,7 +9,7 @@
   "supportEntry": ["tools/lint/synergy.ts"],
   // The engine packages are libraries: their exports are the API a game uses, whether or
   // not the sample game happens to. Only game code is checked for unused exports.
-  "publicPackages": ["@synergy/engine", "@synergy/net", "@synergy/netcode", "@synergy/ui"],
+  "publicPackages": ["@synergy/engine", "@synergy/net", "@synergy/netcode", "@synergy/ui", "@synergy/devtools"],
   // An export its own file uses is not dead; one nothing uses at all still is.
   "ignoreExportsUsedInFile": true,
   // scripts/screenshot.ts drives the browser a cloud session already has (AGENTS.md), and
@@ -55,6 +55,7 @@
       { "name": "net", "patterns": ["packages/net/src/**"] },
       { "name": "netcode", "patterns": ["packages/netcode/src/**"] },
       { "name": "ui", "patterns": ["packages/ui/src/**"] },
+      { "name": "devtools", "patterns": ["packages/devtools/src/**"] },
       {
         "name": "game-rules",
         "patterns": ["game/src/rules/**", "game/src/**/rules.ts", "game/src/**/rules/**"]
@@ -72,6 +73,8 @@
       { "from": "net", "allow": [] },
       { "from": "netcode", "allow": ["engine", "engine-math", "engine-grid", "engine-data", "net"] },
       { "from": "ui", "allow": ["engine", "engine-math", "engine-grid", "engine-data"] },
+      // The editor (development builds only) reads the engine; nothing imports it but the game.
+      { "from": "devtools", "allow": ["engine", "engine-math", "engine-grid", "engine-data"] },
       // Rules are pure and run without a scene: maths, grids, data and other rules only.
       { "from": "game-rules", "allow": ["engine-math", "engine-grid", "engine-data"] }
       // "game" has no entry: game code may import anything. No package imports the game,

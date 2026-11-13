@@ -1,4 +1,4 @@
-import { Camera, destroy, Input, instantiate, KeyCode, MonoBehaviour, Physics } from '@synergy/engine';
+import { Camera, Debug, destroy, Input, instantiate, KeyCode, MonoBehaviour, Physics } from '@synergy/engine';
 import { type CommandEntry, CommandSession, type Session } from '@synergy/net';
 import { hud, network, unitMarkers } from '../hud';
 import {
@@ -124,6 +124,9 @@ export class GameController extends MonoBehaviour {
     const before = this.state;
     const command = entry.command;
     this.state = apply(before, command);
+    // One line per applied command in the log (.logs/game.log, the editor's Console), so
+    // a report shows what led up to a problem. Clicking it in the Console selects this object.
+    Debug.log(`Applied ${JSON.stringify(command)} from ${entry.playerId}`, this.gameObject);
     // Animate from what the state was: the route walked, the blow struck.
     if (command.type === 'move') {
       const unit = unitById(before, command.unit);
@@ -149,8 +152,10 @@ export class GameController extends MonoBehaviour {
 
   submit(command: Command) {
     const reason = this.judge(this.session.localId, command);
-    if (reason) this.say(reason);
-    else this.session.submit(command);
+    if (reason) {
+      Debug.log(`Refused ${JSON.stringify(command)}: ${reason}`, this.gameObject);
+      this.say(reason);
+    } else this.session.submit(command);
   }
 
   endTurn() {
