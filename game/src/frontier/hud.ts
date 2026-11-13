@@ -23,6 +23,8 @@ export interface FrontierOnlineState {
   mode: 'offline' | 'connecting' | 'hosting' | 'joined';
   /** The code other players type to join. */
   code: string | null;
+  /** True for a room between windows of this browser (testing, `localPlay.ts`). */
+  local: boolean;
   isHost: boolean;
   error: string | null;
 }
@@ -42,6 +44,7 @@ export const frontierHud = new Observable<FrontierHudState>({
 export const frontierOnline = new Observable<FrontierOnlineState>({
   mode: 'offline',
   code: null,
+  local: false,
   isHost: true,
   error: null,
 });

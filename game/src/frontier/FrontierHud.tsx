@@ -1,9 +1,17 @@
+import { Debug } from '@synergy/engine';
 import type { NetworkManager } from '@synergy/netcode';
 import { useObservable } from '@synergy/ui';
 import { useState } from 'preact/hooks';
 import { frontierHud, frontierOnline } from './hud';
 import { TEAM_NAMES } from './rules';
-import { hostOnline, joinOnline, playOffline, rematch } from './session';
+import {
+  addFrontierPlayerWindow,
+  hostOnline,
+  joinOnline,
+  playOffline,
+  rematch,
+  testFrontierInWindows,
+} from './session';
 
 /** Frontier's heads-up display. It reads the observables in hud.ts; its buttons call session.ts. */
 export function FrontierHud({ manager }: { manager: NetworkManager }) {
@@ -93,11 +101,20 @@ function OnlinePanel({ manager }: { manager: NetworkManager }) {
     return (
       <div className="panel network" data-interactive>
         <div className="row">
-          <span className="muted">{state.mode === 'hosting' ? 'Hosting · share the code' : 'Joined'}</span>
+          <span className="muted">
+            {state.mode === 'hosting' ? 'Hosting · share the code' : 'Joined'}
+            {state.local ? ' (test windows)' : ''}
+          </span>
           <code>{state.code}</code>
         </div>
         <div className="row">
-          <span />
+          {Debug.isDebugBuild && state.mode === 'hosting' ? (
+            <button type="button" onClick={addFrontierPlayerWindow} title="Open another player's window (development)">
+              + Window
+            </button>
+          ) : (
+            <span />
+          )}
           <button type="button" onClick={() => void playOffline(manager)}>
             Leave
           </button>
@@ -113,6 +130,18 @@ function OnlinePanel({ manager }: { manager: NetworkManager }) {
           Host online
         </button>
       </div>
+      {Debug.isDebugBuild && (
+        <div className="row">
+          <span className="muted">Development</span>
+          <button
+            type="button"
+            onClick={() => void testFrontierInWindows(manager)}
+            title="Host a match between windows of this browser and open a second player"
+          >
+            Test in windows
+          </button>
+        </div>
+      )}
       {state.error && <p className="error">{state.error}</p>}
       <form
         className="row"

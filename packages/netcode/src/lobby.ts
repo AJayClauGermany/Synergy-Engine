@@ -1,4 +1,5 @@
 import type { ConvexLobby, RoomInfo } from '@synergy/net/convex';
+import type { Transport } from '@synergy/net';
 import type { PeerJsOptions } from '@synergy/net/peerjs';
 import type { NetworkManager } from './NetworkManager';
 
@@ -12,6 +13,30 @@ import type { NetworkManager } from './NetworkManager';
 //
 // These helpers import PeerJS and Convex on demand, so a game that never goes online does
 // not download them. They are not covered by automated tests (they need live services).
+//
+// With `local: true` the game travels over a BroadcastChannel between windows of this
+// browser instead of PeerJS: no internet, for testing several players on one machine
+// (Unity's Multiplayer Play Mode). Everything else, the Convex lobby included, is the same.
+
+/** The connection itself: PeerJS across the internet, or a BroadcastChannel between local windows. */
+async function openTransport(
+  role: 'host' | 'join',
+  code: string | undefined,
+  options: PeerJsOptions & { local?: boolean; id?: string },
+): Promise<Transport & { roomCode: string; hostId: string }> {
+  const { local, id, ...peerOptions } = options;
+  if (local) {
+    const { BroadcastChannelTransport } = await import('@synergy/net');
+    const localOptions = { prefix: peerOptions.prefix, timeoutMs: peerOptions.timeoutMs };
+    return role === 'host'
+      ? BroadcastChannelTransport.host({ ...localOptions, roomCode: code })
+      : BroadcastChannelTransport.join(code ?? '', { ...localOptions, id });
+  }
+  const { PeerJsTransport } = await import('@synergy/net/peerjs');
+  return role === 'host'
+    ? PeerJsTransport.host({ ...peerOptions, roomCode: code })
+    : PeerJsTransport.join(code ?? '', peerOptions);
+}
 
 /** Rooms with no heartbeat for two minutes are closed by a Convex cron job, so keep beating. Returns the stop function. */
 function keepAlive(lobby: ConvexLobby, code: string): () => void {
@@ -20,6 +45,10 @@ function keepAlive(lobby: ConvexLobby, code: string): () => void {
 }
 
 export interface HostGameOptions extends PeerJsOptions {
+  /** Connect windows of this browser instead of going through PeerJS (see the top of this file). */
+  local?: boolean;
+  /** The code to open, instead of a made-up one. Useful for local test windows that agree on a code. */
+  roomCode?: string;
   /**
    * Publish the game to this Convex lobby so others can browse or join it by lobby code.
    * Leave out to share the PeerJS code directly.
@@ -39,6 +68,10 @@ export interface HostedGame {
 }
 
 export interface JoinGameOptions extends PeerJsOptions {
+  /** Join a room hosted by another window of this browser (see the top of this file). */
+  local?: boolean;
+  /** Local rooms only: this player's id in the session, e.g. `player-2`. Made up when left out. */
+  id?: string;
   /** Look the game up in this Convex lobby. `code` is then the lobby code, not the PeerJS code. */
   lobby?: ConvexLobby;
 }
@@ -48,9 +81,8 @@ export interface JoinGameOptions extends PeerJsOptions {
  * lobby entry is removed when the manager shuts down.
  */
 export async function hostGame(manager: NetworkManager, options: HostGameOptions = {}): Promise<HostedGame> {
-  const { PeerJsTransport } = await import('@synergy/net/peerjs');
-  const { lobby, ...peerOptions } = options;
-  const transport = await PeerJsTransport.host(peerOptions);
+  const { lobby, roomCode, ...transportOptions } = options;
+  const transport = await openTransport('host', roomCode, transportOptions);
   manager.startHost(transport);
 
   let room: RoomInfo | null = null;
@@ -92,8 +124,7 @@ export async function hostGame(manager: NetworkManager, options: HostGameOptions
  * (`manager.onClientConnectedCallback`).
  */
 export async function joinGame(manager: NetworkManager, code: string, options: JoinGameOptions = {}): Promise<void> {
-  const { PeerJsTransport } = await import('@synergy/net/peerjs');
-  const { lobby, ...peerOptions } = options;
+  const { lobby, ...transportOptions } = options;
 
   let peerCode = code;
   let lobbyCode: string | null = null;
@@ -108,7 +139,7 @@ export async function joinGame(manager: NetworkManager, code: string, options: J
   }
 
   try {
-    const transport = await PeerJsTransport.join(peerCode, peerOptions);
+    const transport = await openTransport('join', peerCode, transportOptions);
     manager.startClient(transport, transport.hostId);
   } catch (error) {
     if (lobby && lobbyCode) await lobby.leaveRoom(lobbyCode).catch(() => {});

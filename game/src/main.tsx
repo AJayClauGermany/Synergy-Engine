@@ -2,14 +2,16 @@ import * as synergy from '@synergy/engine';
 import { Engine, SceneManager } from '@synergy/engine';
 import { mountUI } from '@synergy/ui';
 import { buildId } from './env';
-import { FrontierHud } from './frontier/FrontierHud';
-import { FRONTIER_SCENE } from './frontier/scene';
-import { createFrontierManager, playOffline } from './frontier/session';
+import { isScreen, openScreen, watchNetworkStatus } from './flow';
+import { launch } from './localPlay';
+import { buildMenuScene } from './scenes/MenuScene';
 import { buildShowcaseScene } from './scenes/ShowcaseScene';
 import { buildSkirmishScene } from './scenes/SkirmishScene';
-import { Hud } from './ui/Hud';
+import { App } from './ui/App';
 
-// Scenes are registered by name, like Unity's "Scenes in Build" list.
+// Scenes are registered by name, like Unity's "Scenes in Build" list. Frontier's scene is
+// registered by its network manager (frontier/session.ts), which loads it on every machine.
+SceneManager.register('Menu', buildMenuScene);
 SceneManager.register('Skirmish', buildSkirmishScene);
 SceneManager.register('Showcase', buildShowcaseScene);
 
@@ -34,21 +36,20 @@ async function main() {
   const editor = devtools?.attachEditor(engine, { header: `build ${buildId}` });
   Object.assign(globalThis, { synergy: { ...synergy, engine, editor } });
 
-  // `?scene=Name` opens a different registered scene, handy while building new ones.
-  const requested = params.get('scene');
-  if (requested === FRONTIER_SCENE) {
-    // The netcode sample (game/src/frontier). Its scene is loaded through the network
-    // manager, so that a second player who joins is taken to the same place.
-    const manager = createFrontierManager();
-    mountUI(<FrontierHud manager={manager} />, { engine });
-    await playOffline(manager);
+  // One HUD root for the whole page; it follows the screen in `flow` (ui/App.tsx).
+  mountUI(<App />, { engine });
+  watchNetworkStatus();
+
+  // `?scene=Name` opens another screen or any registered scene, handy while building new
+  // ones. Without it the game opens on Skirmish; use 'Menu' to start on the title screen.
+  // `?host=` / `?join=` connect as soon as it is up (localPlay.ts: testing several players).
+  const requested = params.get('scene') ?? 'Skirmish';
+  if (isScreen(requested)) {
+    await openScreen(requested, { host: launch.host, join: launch.join });
   } else {
     // A name nobody registered fails here, with the list of names that exist. Opening the
     // default instead would show a working game and hide the typo.
-    const scene = requested ?? 'Skirmish';
-    // The Preact HUD belongs to the Skirmish game; other scenes bring their own UI.
-    if (scene === 'Skirmish') mountUI(<Hud />, { engine });
-    await SceneManager.loadScene(scene);
+    await SceneManager.loadScene(requested);
   }
   document.documentElement.dataset.ready = 'true';
 }

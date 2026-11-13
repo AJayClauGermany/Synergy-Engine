@@ -2,6 +2,8 @@ import { dontDestroyOnLoad, GameObject, instantiate, SceneManager } from '@syner
 import { LoopbackHub } from '@synergy/net';
 import { NetworkManager, NetworkObject } from '@synergy/netcode';
 import { buildId } from '../env';
+import { launch, localPlayerId, openPlayerWindow } from '../localPlay';
+import { makeRoomCode } from '@synergy/net';
 import { frontierOnline } from './hud';
 import { Match, MatchPrefab } from './Match';
 import { ARMY, START_CELLS, unitTypes } from './rules';
@@ -139,7 +141,7 @@ async function start(manager: NetworkManager, current: () => boolean): Promise<v
 export async function playOffline(manager: NetworkManager): Promise<void> {
   const current = begin(manager);
   manager.startHost(new LoopbackHub().connect('host'));
-  frontierOnline.value = { mode: 'offline', code: null, isHost: true, error: null };
+  frontierOnline.value = { mode: 'offline', code: null, local: false, isHost: true, error: null };
   await start(manager, current);
 }
 
@@ -150,16 +152,24 @@ export async function rematch(manager: NetworkManager): Promise<void> {
   await start(manager, () => mine === request);
 }
 
+export interface RoomOptions {
+  /** A room between windows of this browser instead of PeerJS (testing). Defaults to `?net=local`. */
+  local?: boolean;
+  /** Host with this code rather than a made-up one. */
+  roomCode?: string;
+}
+
 /** Hosts a match others can join with the code shown in the HUD. */
-export async function hostOnline(manager: NetworkManager): Promise<void> {
+export async function hostOnline(manager: NetworkManager, options: RoomOptions = {}): Promise<void> {
+  const local = options.local ?? launch.net === 'local';
   const current = begin(manager);
-  frontierOnline.value = { mode: 'connecting', code: null, isHost: true, error: null };
+  frontierOnline.value = { mode: 'connecting', code: null, local, isHost: true, error: null };
   try {
     const { hostGame } = await import('@synergy/netcode/lobby');
     if (!current()) return;
-    const game = await hostGame(manager, { prefix: PEER_PREFIX });
+    const game = await hostGame(manager, { prefix: PEER_PREFIX, local, roomCode: options.roomCode });
     if (!current()) return;
-    frontierOnline.value = { mode: 'hosting', code: game.code, isHost: true, error: null };
+    frontierOnline.value = { mode: 'hosting', code: game.code, local, isHost: true, error: null };
     await start(manager, current);
   } catch (error) {
     if (current()) await fallBack(manager, error);
@@ -167,15 +177,16 @@ export async function hostOnline(manager: NetworkManager): Promise<void> {
 }
 
 /** Joins a hosted match. The host sends the scene and every object this player may see. */
-export async function joinOnline(manager: NetworkManager, code: string): Promise<void> {
+export async function joinOnline(manager: NetworkManager, code: string, options: RoomOptions = {}): Promise<void> {
+  const local = options.local ?? launch.net === 'local';
   const current = begin(manager);
-  frontierOnline.value = { mode: 'connecting', code, isHost: false, error: null };
+  frontierOnline.value = { mode: 'connecting', code, local, isHost: false, error: null };
   try {
     const { joinGame } = await import('@synergy/netcode/lobby');
     if (!current()) return;
-    await joinGame(manager, code.trim(), { prefix: PEER_PREFIX });
+    await joinGame(manager, code.trim(), { prefix: PEER_PREFIX, local, id: localPlayerId() ?? undefined });
     if (!current()) return;
-    frontierOnline.value = { mode: 'joined', code, isHost: false, error: null };
+    frontierOnline.value = { mode: 'joined', code, local, isHost: false, error: null };
     // If the host leaves or refuses us (manager.disconnectReason says which), play alone again.
     const off = manager.onClientStopped.add(() => {
       off();
@@ -185,6 +196,23 @@ export async function joinOnline(manager: NetworkManager, code: string): Promise
   } catch (error) {
     if (current()) await fallBack(manager, error);
   }
+}
+
+/**
+ * Development: hosts a match between windows of this browser and opens a second
+ * player's window joined to it. Call it from a click (browsers block windows otherwise).
+ */
+export function testFrontierInWindows(manager: NetworkManager): Promise<void> {
+  // Open the window while the click still counts; it keeps looking until the room exists.
+  const roomCode = makeRoomCode();
+  openPlayerWindow(roomCode, true);
+  return hostOnline(manager, { local: true, roomCode });
+}
+
+/** Development: one more player's window, joined to the match this window hosts. */
+export function addFrontierPlayerWindow(): void {
+  const { mode, code, local } = frontierOnline.value;
+  if (mode === 'hosting' && code) openPlayerWindow(code, local);
 }
 
 async function fallBack(manager: NetworkManager, error: unknown): Promise<void> {

@@ -1,10 +1,27 @@
-import { Vector3 } from '@synergy/engine';
+import { Debug, Vector3 } from '@synergy/engine';
 import { useObservable, WorldAnchor } from '@synergy/ui';
 import { useState } from 'preact/hooks';
 import { GameController } from '../behaviours/GameController';
-import { hud, network, unitMarkers } from '../hud';
-import { convexUrl, hostConvexGame, hostPeerGame, joinConvexGame, joinPeerGame, leaveOnlineGame } from '../online';
+import { hud, type NetworkState, network, unitMarkers } from '../hud';
+import {
+  addPlayerWindow,
+  convexUrl,
+  hostConvexGame,
+  hostPeerGame,
+  joinConvexGame,
+  joinPeerGame,
+  leaveOnlineGame,
+  testInWindows,
+} from '../online';
 import { MAX_HP, TEAM_NAMES } from '../rules/skirmish';
+
+const ROOM_KINDS: Record<NetworkState['mode'], string> = {
+  local: 'Local',
+  connecting: 'Connecting',
+  p2p: 'Peer-to-peer',
+  windows: 'Test windows',
+  convex: 'Convex',
+};
 
 const HEAD_HEIGHT = new Vector3(0, 1.55, 0);
 
@@ -104,7 +121,7 @@ function NetworkPanel() {
     return (
       <div className="panel network" data-interactive>
         <div className="row">
-          <span className="muted">{state.mode === 'p2p' ? 'Peer-to-peer' : 'Convex'} room</span>
+          <span className="muted">{ROOM_KINDS[state.mode]} room</span>
           <code>{state.roomCode}</code>
         </div>
         <div className="row">
@@ -112,6 +129,11 @@ function NetworkPanel() {
             {state.players} player{state.players === 1 ? '' : 's'}
             {state.players === 1 ? ' · share the code' : ''}
           </span>
+          {Debug.isDebugBuild && state.isHost && (state.mode === 'windows' || state.mode === 'p2p') && (
+            <button type="button" onClick={addPlayerWindow} title="Open another player's window (development)">
+              + Window
+            </button>
+          )}
           <button type="button" onClick={leaveOnlineGame}>
             Leave
           </button>
@@ -131,9 +153,18 @@ function NetworkPanel() {
       {open && (
         <>
           <div className="row">
-            <button type="button" onClick={hostPeerGame}>
+            <button type="button" onClick={() => void hostPeerGame()}>
               Host
             </button>
+            {Debug.isDebugBuild && (
+              <button
+                type="button"
+                onClick={() => void testInWindows()}
+                title="Host a room between windows of this browser and open a second player (development)"
+              >
+                Test in windows
+              </button>
+            )}
             {convexUrl && (
               <button type="button" onClick={hostConvexGame} title="Stored on the server: survives reloads">
                 Host (persistent)

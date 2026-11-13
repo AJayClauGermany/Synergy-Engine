@@ -43,12 +43,18 @@ const HEARTBEAT_MS = 25_000;
 /** Re-subscribe with a later cursor after this many commands, so updates stay small. */
 const CURSOR_STEP = 200;
 
-function persistentPlayerId(): string {
+/**
+ * The player id this browser remembers, in localStorage. Every tab and window of one
+ * browser shares it, so windows testing several players on one machine pass a `slot`
+ * ("2", "3", ...) to get one id each, kept as separately as the default.
+ */
+export function persistentPlayerId(slot?: string): string {
+  const key = slot ? `${PLAYER_ID_KEY}.${slot}` : PLAYER_ID_KEY;
   try {
-    const stored = globalThis.localStorage?.getItem(PLAYER_ID_KEY);
+    const stored = globalThis.localStorage?.getItem(key);
     if (stored) return stored;
     const created = crypto.randomUUID();
-    globalThis.localStorage?.setItem(PLAYER_ID_KEY, created);
+    globalThis.localStorage?.setItem(key, created);
     return created;
   } catch {
     return crypto.randomUUID();
@@ -56,7 +62,11 @@ function persistentPlayerId(): string {
 }
 
 export interface ConvexLobbyOptions {
-  /** Defaults to an id remembered in localStorage, so a player keeps their seat after a reload. */
+  /**
+   * Defaults to an id remembered in localStorage, so a player keeps their seat after a
+   * reload. Every window of the browser shares that one: give test windows their own with
+   * `persistentPlayerId(slot)`.
+   */
   playerId?: string;
   playerName?: string;
 }
