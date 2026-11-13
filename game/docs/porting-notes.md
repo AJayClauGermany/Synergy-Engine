@@ -158,14 +158,90 @@ in the game state so every player rolls the same numbers.
    a dedicated server is needed.
 5. Rebuild presentation: sprites, shaders, camera, audio, HUD.
 
+## Scenes, models and local testing: decisions and open work
+
+Notes from a review of how the original's scenes and assets land here (November 2026).
+Nothing in this section is built yet unless it says so.
+
+### Scene structure
+
+The original has a main menu with a lobby, a game scene, and a metagame lobby holding a
+live map that several people play on. Planned shape, all in the one page:
+
+- **Three registered scenes.** A main menu scene that is empty (or a camera and a
+  backdrop), the game scene, and the metagame scene. Loading the menu scene is what
+  clears the game's objects when a player quits to the menu.
+- **One HUD root, mounted once at boot**, showing the menu, lobby, game or metagame
+  screen from an `Observable`. Today `game/src/main.tsx` picks a HUD once from the
+  starting scene; that has to change before scenes switch at run time.
+- **The connection lives outside the scenes**, created at boot, as
+  `game/src/frontier/session.ts` does. The host moves everyone between scenes through
+  the network manager.
+- **The metagame map fits netcode**: many players, one map, people joining late.
+- **Open question: who hosts the metagame map?** Netcode is hosted by a player's
+  machine, so the map ends when that player leaves. If it must stay up with nobody
+  online, its state belongs in Convex instead. Decide this before building it.
+- **No loading screen exists.** A scene's assets load when the scene does (register it
+  with `preload` and `build`), and the canvas is empty meanwhile. Show a HUD overlay
+  around `SceneManager.loadScene`.
+
+### 3D models
+
+The original's models are FBX. The engine loads glTF only (`Assets.loadModel`, `.glb`).
+
+- **Convert once, offline, and commit the `.glb` files**: Blender, or a glTF exporter
+  inside Unity when the Unity materials matter. `tools/unity` does not export models.
+- **Check after converting**: size (FBX often carries a factor of 100 that Unity hides),
+  materials (custom shaders do not come across), and that moving parts are still
+  separate, named nodes with their pivots at the centre.
+- **Vehicle wheels, turrets, rotors: no animation clips.** Find the part with
+  `transform.find` and turn it in `update()` from the vehicle's speed. This works today.
+  Drop the animation tracks from those files when exporting.
+- **Walkers (two-legged and four-legged mechs) need skeletal clips, and the engine
+  cannot play them yet.** See "Engine work this implies", item 1. When exporting them:
+  put every clip in the one `.glb` under a clear name; rebuild Animator Controller
+  logic in code (states and transitions are Unity assets); bake clips shared through
+  Unity's Humanoid retargeting onto each skeleton; expect no IK and no root motion, so
+  use clips that walk in place and match their speed to the unit's.
+- **Check whether the mechs are skinned at all.** If they are rigid parts on animated
+  nodes, the clips are still needed but skinned rendering, which nothing here has
+  exercised, is not.
+
+### Several players on one machine (Unity's Multiplayer Play Mode)
+
+Unity's virtual players open up to four windows of the game for testing. Here:
+
+- **In a browser this works now**: each tab or window of `bun run dev` is its own
+  player. They find each other through PeerJS, so it needs a connection.
+- **They share one stored player id.** `ConvexLobby` remembers the id in localStorage,
+  which every tab of the same origin shares, so two tabs join a lobby as the same
+  player unless each is given its own id. Private windows or separate browser profiles
+  are the workaround.
+- **The desktop app opens one window** (`desktop/src/bun/index.ts`). Electrobun can open
+  more; nothing here does.
+- **To build**: a development option that opens up to four windows, each with its own
+  player id (for example from the URL), and a transport between windows of the same
+  machine so that it works offline. `LoopbackTransport` only reaches inside one page;
+  the browser's BroadcastChannel is the likely base, written against the `Transport`
+  interface in `packages/net`. Whether windows of the packaged desktop app share an
+  origin for that has not been checked.
+- Match logic does not need any of this: `TestNetwork` runs a host and clients as
+  simulated machines in one test (`game/test/frontier.test.ts`).
+
 ## Engine work this implies
 
 In rough priority order for this game:
 
-1. Sprite animation, if units are animated sheets (`SpriteRenderer` itself is built)
-2. `AudioSource` / `AudioClip`
-3. Camera helper in the engine (focus, follow, confine)
-4. Outline and other per-object effects; post-processing wrappers
-5. Isometric layout, animated tiles, elevation (large maps are handled: tilemaps draw in blocks)
-6. Gamepad and touch gestures; input rebinding
-7. Rigidbody physics and animation, if a future game needs them
+1. Skeletal animation for the walkers: switch on PlayCanvas's anim component system and
+   its resource handlers in `Engine.create`, let a loaded `Model` hand out its clips by
+   name (it keeps them private today), and add an Animator component in Unity's shape
+   (play, cross-fade, speed). Test with a real walker `.glb`, including a screenshot of
+   a skinned mesh.
+2. Several windows on one machine for testing multiplayer (above)
+3. Sprite animation, if units are animated sheets (`SpriteRenderer` itself is built)
+4. `AudioSource` / `AudioClip`
+5. Camera helper in the engine (focus, follow, confine)
+6. Outline and other per-object effects; post-processing wrappers
+7. Isometric layout, animated tiles, elevation (large maps are handled: tilemaps draw in blocks)
+8. Gamepad and touch gestures; input rebinding
+9. Rigidbody physics, if a future game needs it
