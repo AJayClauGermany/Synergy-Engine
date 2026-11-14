@@ -85,7 +85,9 @@ starting on your game, so nothing is left to set up later.
    [docs/architecture.md](docs/architecture.md) explains both.
 
 Coming from an existing Unity project? Start at
-[docs/porting-from-unity.md](docs/porting-from-unity.md).
+[docs/porting-from-unity.md](docs/porting-from-unity.md). To keep the web port in the Unity
+project's repository, sharing its art and audio, see
+[docs/inside-a-unity-project.md](docs/inside-a-unity-project.md).
 
 ## Commands
 
@@ -114,6 +116,7 @@ Coming from an existing Unity project? Start at
 - [Devtools](docs/devtools.md): the editor (Hierarchy, Inspector, Console), the log file, one-key reports
 - [Architecture](docs/architecture.md): how it sits on PlayCanvas, the frame loop, headless mode
 - [Porting from Unity](docs/porting-from-unity.md): the order to bring an existing project across
+- [Inside a Unity project](docs/inside-a-unity-project.md): this template in a folder of the Unity repository, sharing its art and audio
 - [Checks](docs/checks.md): what `bun run check` runs, the lint rules for Unity habits, the layering
 - [Tile maps](docs/tilemaps.md): grids, hex maps, layers, picking, pathfinding
 - [Content as data](docs/content.md): tile palettes, maps and definitions from JSON; exporting from Unity

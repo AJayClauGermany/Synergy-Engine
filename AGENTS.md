@@ -73,7 +73,8 @@ tools/lint/              lint rules for the mistakes a Unity port makes (loaded 
 docs/                    setup.md (accounts, secrets, first deploy), unity-to-synergy.md, devtools.md,
                          porting-from-unity.md, checks.md, content.md, tilemaps.md,
                          architecture.md, multiplayer.md, netcode.md, environment.md,
-                         deploying.md, desktop.md
+                         deploying.md, desktop.md, inside-a-unity-project.md (this template in a
+                         folder of a Unity project's repository, sharing its art and audio)
 ```
 
 ## Unity knowledge transfers, with these differences
