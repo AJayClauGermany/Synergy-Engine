@@ -3,7 +3,9 @@
 How to bring an existing Unity game across, in an order that keeps something running at
 every step. [unity-to-synergy.md](unity-to-synergy.md) is the reference for individual
 APIs; this page is the plan around it. It applies to any Unity project. Notes about one
-particular game belong with that game (`game/docs/`).
+particular game belong with that game (`game/docs/`). To keep the port in the Unity
+project's own repository and share its art and audio,
+[inside-a-unity-project.md](inside-a-unity-project.md) has the set-up.
 
 ## 1. Take stock
 
