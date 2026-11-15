@@ -115,6 +115,7 @@ describe('what is type-checked', () => {
     const covered = [
       ...rootConfig.include.map((entry) => new Bun.Glob(entry.includes('*') ? entry : `${entry}/**`)),
       new Bun.Glob('convex/**'), // convex/tsconfig.json
+      new Bun.Glob('.archgate/**'), // .archgate/tsconfig.json
       ...cloudflareConfig.include.map((entry) => new Bun.Glob(`cloudflare/${entry}`)),
     ];
     const unchecked = files.filter((file) => !covered.some((glob) => glob.match(file)));

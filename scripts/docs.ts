@@ -605,6 +605,7 @@ const REPOSITORY_FOLDERS = [
   '.claude',
   '.github',
   '.githooks',
+  '.archgate',
 ];
 
 /**

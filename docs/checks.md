@@ -277,9 +277,29 @@ ones that read types.
   The checks read the files on disk, so the hook first refuses a commit that leaves
   changes unstaged: it would be checking something other than what is committed.
 - CI (`.github/workflows/ci.yml`) runs the same `bun run check`, then the build.
-- Every TypeScript file must belong to one of the three `tsconfig.json` files
+- `bun run adrs` checks the decision records in `.archgate/adrs/` with
+  [archgate](https://archgate.dev). It is optional and not part of `bun run check`; see
+  "Decision records" below.
+- Every TypeScript file must belong to one of the four `tsconfig.json` files
   (`scripts/check.test.ts` holds that): a file in a folder none of them includes would be
   linted and tested but never type-checked.
+
+## Decision records
+
+`.archgate/adrs/` holds the project's conventions as archgate ADRs: a decision to read,
+and a rules file that checks it (`bun run adrs`). They take what the checks above cannot:
+facts that span files and fail only at run time. A scene loaded by a name nobody
+registered, a tag looked up that nothing sets, `process.env.SECRET` in game code, a
+`Vector3` in a command type, a map with no content test. Several of the run-time guards
+listed under "Rules for Unity habits" are among them: a `getComponent` in a field
+initialiser, a prefab written as a factory, a division inside an integer vector, a value
+JSON would change.
+
+The layer is optional: archgate is fetched on first use, and nothing else depends on it.
+A rule that one file's text can decide belongs in `tools/lint/synergy.ts` instead, where
+every `bun run check` runs it. The rules have tests of their own in `bun test`
+(`tools/archgate/adrs.test.ts`), and their types are checked with the rest. The list, how
+to run them and how to add one are in `.archgate/README.md`.
 
 ## When a check itself is wrong
 

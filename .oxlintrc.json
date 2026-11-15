@@ -146,6 +146,14 @@
         "synergy/no-module-state": "error"
       }
     },
+    // archgate loads a rules file only if it pulls in its types this way (it has no imports
+    // to use instead), so the stock advice does not apply there (.archgate/README.md).
+    {
+      "files": [".archgate/adrs/*.rules.ts"],
+      "rules": {
+        "typescript/triple-slash-reference": "off"
+      }
+    },
     // The packages are where the engine's own members are declared.
     {
       "files": ["packages/**"],
@@ -154,5 +162,5 @@
       }
     }
   ],
-  "ignorePatterns": ["convex/_generated/**", "dist/**", "desktop/**", ".claude/worktrees/**"]
+  "ignorePatterns": [".archgate/rules.d.ts", "convex/_generated/**", "dist/**", "desktop/**", ".claude/worktrees/**"]
 }
