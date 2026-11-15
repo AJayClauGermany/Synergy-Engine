@@ -1,0 +1,20 @@
+// Types for the ADR rules (`bun run typecheck`). archgate runs them in a sandbox that offers
+// only `ctx`, so they get no Bun, Node or DOM types: naming `Bun` or `process` is a type
+// error here, as it is an error when archgate loads the file. rules.d.ts is written by
+// archgate (`archgate check` rewrites it when its version changes); it must stay a script,
+// not a module, for its declarations to be global, hence no `moduleDetection: force`.
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "Preserve",
+    "moduleResolution": "bundler",
+    "lib": ["ESNext"],
+    "types": [],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["rules.d.ts", "adrs/*.rules.ts"]
+}

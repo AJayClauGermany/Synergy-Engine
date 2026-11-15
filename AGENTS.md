@@ -19,6 +19,7 @@ Cloudflare Workers (preview deploys) · Electrobun (desktop).
 | `bun test` | Tests only (headless, about two seconds). `bun test game` runs one folder, `-t "name"` one test |
 | `bun run lint` / `typecheck` / `docs:check` / `lint:project` / `format` | One check by itself. `bun run lint path/to/File.ts` lints one file. `bun run check lint types` runs the ones named and ends with `OK so far`, not `PASSED` |
 | `bun run coverage` | Tests with coverage: per file, the lines no test reached |
+| `bun run adrs` | Optional, not part of `bun run check`: the decisions in `.archgate/adrs/`, checked by archgate. Catches names that only meet at run time (a scene, layer, tag or environment variable) and engine guards that otherwise throw only when the code runs (`.archgate/README.md`) |
 | `bun run build` | Production build into `dist/` |
 | `bun run screenshot` | Build, open in headless Chromium, save `.screenshots/game.png` and the page's log beside it (`game.log`); fails on page errors. `--hierarchy` prints the scene as text, `--logs` the log so far; `--devtools` shows the editor; `--renderer webgl2` forces WebGL2 (the game prefers WebGPU); `--players 2` opens two players in a local room and saves an image per player (`--on 2` drives player 2) |
 | `bun run logs` | Print `.logs/game.log`: what the game open under `bun run dev` logged (`--errors`, `--tail 50`) |
@@ -69,6 +70,9 @@ scripts/                 dev server (and its devtools side, devserver.ts), build
                          holds the guides to the code (docs.ts)
 tools/unity/             editor script that exports Unity tiles, tilemaps and ScriptableObjects
 tools/lint/              lint rules for the mistakes a Unity port makes (loaded by oxlint)
+tools/archgate/          tests for the decision records' rules, run without archgate
+.archgate/               architecture decisions (archgate, optional): ADRs to read before
+                         working in an area, each with the rules that check it (README.md)
 .env.schema              every environment variable: type, comment, secret or not (varlock)
 docs/                    setup.md (accounts, secrets, first deploy), unity-to-synergy.md, devtools.md,
                          porting-from-unity.md, checks.md, content.md, tilemaps.md,
@@ -257,6 +261,9 @@ explains each check and every message of the project's own lint rules.
    `bun run logs --errors`, or `bun run report` for a screenshot, the log and the
    hierarchy of their page right now. When they say they saved a report (F8), read
    `.reports/latest/summary.md` first. `docs/devtools.md` has the rest.
+6. Optional: `bun run adrs` holds the change to the decisions in `.archgate/adrs/`. Read the
+   ADR for the area you are working in before you start (`.archgate/README.md` lists them);
+   its Decision and Do's and Don'ts are short on purpose.
 
 Log what a mechanic decides with `Debug.log(message, this.gameObject)`: it lands in the
 log file and the editor's Console, with the frame it happened on, and an agent reading
