@@ -66,8 +66,8 @@ packages/devtools/       the editor (Hierarchy, Inspector, Console), log capture
 convex/                  backend functions; _generated/ is generated, never edit it
 cloudflare/worker.ts     gate in front of the static build (Cloudflare Access or a password); serves assets from R2
 desktop/                 Electrobun shell
-scripts/                 dev server (and its devtools side, devserver.ts; jsxSource.ts writes each
-                         JSX element's file and line into it), build, deploy, rename,
+scripts/                 dev server (and its devtools side, devserver.ts; jsxSource.ts records the
+                         file and line of each JSX element and GameObject), build, deploy, rename,
                          screenshot, logs and report tools, the check runner, the check that
                          holds the guides to the code (docs.ts)
 tools/unity/             editor script that exports Unity tiles, tilemaps and ScriptableObjects

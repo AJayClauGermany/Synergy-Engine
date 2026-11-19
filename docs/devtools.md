@@ -64,7 +64,7 @@ What a note captures depends on what was clicked:
 | Clicked | The note says |
 |---------|---------------|
 | A HUD element (HTML over the canvas) | The file, line and column of its JSX; its text; the components that drew it and where each is used; its box; its colours and font; how its parent lays it out and the space to each edge; the CSS rules that apply to it |
-| A GameObject | Its path in the scene, its components, its scripts (each is a class in a file of that name), its position, the map cell it stands on, and its script fields as the Inspector shows them |
+| A GameObject | Its path in the scene, the file and line of the game's code that made it, its components, its scripts (each is a class in a file of that name), its position, the map cell it stands on, and its script fields as the Inspector shows them |
 | A `Canvas` image | The same, with its `RectTransform` (anchors, pivot, anchored position, size) |
 | A map cell | The grid, the cell, and the tile on each layer with its data |
 | Nothing | The point, which is enough for "I expected a button here" |
@@ -102,6 +102,12 @@ by URL are left out.
 JSX element (`scripts/jsxSource.ts`, a bundler plugin loaded by `bunfig.toml` for
 `bun run dev` and by a `--devtools` build). A release build has none of it. HTML that is
 not written as JSX has no source; the note then says so and gives the selector.
+
+GameObjects get theirs the same way: in the game's own code (`game/`), each
+`new GameObject(...)`, `instantiate(...)` and `GameObject.createPrimitive(...)` remembers
+where it was written for the object it made. For a prefab instance that is the line that
+spawned it, not the prefab's definition; an object made inside the engine on the game's
+behalf (a tile's spawned object) has none, and the note names its nearest parent's instead.
 
 **From the console or a script**, the same thing without the picker (positions are points
 of the page):

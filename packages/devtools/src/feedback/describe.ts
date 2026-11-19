@@ -161,6 +161,23 @@ function scriptHint(name: string): string {
     : `${code(`class ${written}`)} (a file named ${written}.ts; shown as ${name} in this build)`;
 }
 
+/**
+ * Where the game's code made a GameObject (`file:line:column`), when a development build
+ * recorded it (`scripts/jsxSource.ts`). An object the engine made on the game's behalf (a
+ * prefab's children, a tilemap's tiles) has no place of its own; its nearest parent's is given.
+ */
+function madeAt(gameObject: GameObject): string | null {
+  const sources = (globalThis as { __synergySources?: WeakMap<object, string> }).__synergySources;
+  if (!sources) return null;
+  const own = sources.get(gameObject);
+  if (own) return code(own);
+  for (let at = gameObject.transform.parent; at; at = at.parent) {
+    const source = sources.get(at.gameObject);
+    if (source) return `not recorded for it; its parent "${at.gameObject.name}" was made at ${code(source)}`;
+  }
+  return null;
+}
+
 function pathOf(gameObject: GameObject): string {
   const names: string[] = [];
   for (let at: Transform | null = gameObject.transform; at; at = at.parent) names.unshift(at.gameObject.name);
@@ -229,6 +246,8 @@ export function describeWorld(engine: Engine, pick: WorldPick): TargetDescriptio
         level: 'brief',
       },
     ];
+    const made = madeAt(gameObject);
+    if (made) facts.push({ label: 'Made at', value: made, level: 'brief' });
     if (scripts.length > 0) {
       facts.push({
         label: 'Scripts',
