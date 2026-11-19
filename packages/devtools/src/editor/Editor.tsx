@@ -15,6 +15,8 @@ export interface EditorActions {
   /** Saves a screenshot of the game view. */
   screenshot(): Promise<void>;
   close(): void;
+  /** Opens or closes the feedback picker. */
+  feedback(): void;
   /** The empty Game panel the canvas is laid over, or `null` when it goes away. */
   gameView(element: HTMLElement | null): void;
 }
@@ -91,6 +93,13 @@ function Toolbar({ engine, actions }: { engine: Engine; actions: EditorActions }
           onClick={() => void actions.report(note).then(() => setNote(''))}
         >
           Report
+        </button>
+        <button
+          type="button"
+          title="Click things in the game, comment on them, copy the prompt for an agent (F7)"
+          onClick={actions.feedback}
+        >
+          Feedback
         </button>
         <button
           type="button"

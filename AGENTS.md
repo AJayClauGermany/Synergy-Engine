@@ -60,12 +60,14 @@ packages/engine/         Unity-style runtime on PlayCanvas   (@synergy/engine)
 packages/ui/             Preact helpers: mountUI, useObservable, WorldAnchor   (@synergy/ui)
 packages/net/            command sessions, transports, Convex lobby   (@synergy/net)
 packages/netcode/        Netcode for GameObjects on those transports  (@synergy/netcode)
-packages/devtools/       the editor (Hierarchy, Inspector, Console), log capture, reports;
-                         development builds only, like UnityEditor   (@synergy/devtools)
+packages/devtools/       the editor (Hierarchy, Inspector, Console), log capture, reports,
+                         feedback (click a thing, comment, copy a prompt); development
+                         builds only, like UnityEditor   (@synergy/devtools)
 convex/                  backend functions; _generated/ is generated, never edit it
 cloudflare/worker.ts     gate in front of the static build (Cloudflare Access or a password); serves assets from R2
 desktop/                 Electrobun shell
-scripts/                 dev server (and its devtools side, devserver.ts), build, deploy, rename,
+scripts/                 dev server (and its devtools side, devserver.ts; jsxSource.ts records the
+                         file and line of each JSX element and GameObject), build, deploy, rename,
                          screenshot, logs and report tools, the check runner, the check that
                          holds the guides to the code (docs.ts)
 tools/unity/             editor script that exports Unity tiles, tilemaps and ScriptableObjects
@@ -260,7 +262,9 @@ explains each check and every message of the project's own lint rules.
 5. When a person is running the game (`bun run dev`), read what they see instead of asking:
    `bun run logs --errors`, or `bun run report` for a screenshot, the log and the
    hierarchy of their page right now. When they say they saved a report (F8), read
-   `.reports/latest/summary.md` first. `docs/devtools.md` has the rest.
+   `.reports/latest/summary.md` first. When they paste feedback (F7: notes made by clicking
+   things in the game), each note names the file and line or the GameObject it is about:
+   start there, and look at the `feedback.png` it names. `docs/devtools.md` has the rest.
 6. Optional: `bun run adrs` holds the change to the decisions in `.archgate/adrs/`. Read the
    ADR for the area you are working in before you start (`.archgate/README.md` lists them);
    its Decision and Do's and Don'ts are short on purpose.

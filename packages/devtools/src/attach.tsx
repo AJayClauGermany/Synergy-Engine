@@ -4,9 +4,12 @@ import { EditorApplication } from './EditorApplication';
 import { EditorPrefs } from './EditorPrefs';
 import { Editor, type EditorActions } from './editor/Editor';
 import { EDITOR_STYLE } from './editor/styles';
+import { Feedback } from './feedback/Feedback';
+import { FeedbackOverlay } from './feedback/FeedbackOverlay';
+import { watchPreactTree } from './feedback/hud';
 import { DevServerLink } from './link';
 import { LogCapture } from './logs';
-import { buildReport } from './report';
+import { buildReport, type ReportExtra } from './report';
 import { Selection } from './Selection';
 
 export interface AttachEditorOptions {
@@ -16,6 +19,13 @@ export interface AttachEditorOptions {
   open?: boolean;
   /** Written at the top of `.logs/game.log`, e.g. the build id. */
   header?: string;
+  /**
+   * What feedback (F7) says about where the game was, besides the scene and the frame:
+   * the screen it is on, whose turn it is. Read when the prompt is made.
+   *
+   *   attachEditor(engine, { feedbackContext: () => ({ Screen: flow.value.screen }) });
+   */
+  feedbackContext?: () => Readonly<Record<string, unknown>>;
 }
 
 /** What `attachEditor` returns, also reachable from the browser console as `synergy.editor`. */
@@ -27,6 +37,16 @@ export interface EditorHandle {
   toggle(): void;
   /** Saves a report (`.reports/<time>/` and `.reports/latest/`) and resolves to its folder. */
   report(note?: string): Promise<string | null>;
+  /**
+   * Notes made by clicking things in the game, and the prompt they become (F7 opens the
+   * picker). From the console: `synergy.editor.feedback.note(x, y, 'comment')`, then
+   * `await synergy.editor.feedback.save()`.
+   */
+  readonly feedback: Feedback;
+  /** Whether the feedback picker is open. */
+  readonly isPicking: boolean;
+  /** Opens or closes the feedback picker. The notes are kept either way. */
+  pick(open?: boolean): void;
   /** Saves the game view to `.screenshots/` and resolves to its path. */
   screenshot(name?: string): Promise<string | null>;
   /** Takes the editor away and gives the page back as it was. */
@@ -56,6 +76,7 @@ const editable = (target: EventTarget | null) =>
  * development builds. Nothing shows until it is opened, so the game looks as it ships.
  *
  *   `            open or close the editor (Hierarchy, Inspector, Console, Game)
+ *   F7           feedback: click anything in the game, comment, copy the prompt for an agent
  *   F8           save a report: screenshot, log, hierarchy, HUD text, your note
  *   F9           save a screenshot
  *   Ctrl+P       play / pause          Ctrl+Shift+P  pause          Ctrl+Alt+P  step
@@ -66,6 +87,8 @@ const editable = (target: EventTarget | null) =>
  */
 export function attachEditor(engine: Engine, options: AttachEditorOptions = {}): EditorHandle {
   const logs = options.logs ?? startLogCapture();
+  // Before the HUD first renders, so the picker knows which component drew each element.
+  watchPreactTree();
   const style = document.createElement('style');
   style.textContent = EDITOR_STYLE;
   document.head.append(style);
@@ -76,6 +99,7 @@ export function attachEditor(engine: Engine, options: AttachEditorOptions = {}):
   const container = engine.canvas.parentElement;
   const originalStyle = container?.getAttribute('style') ?? null;
   let isOpen = false;
+  let isPicking = false;
   let viewObserver: ResizeObserver | null = null;
   let toast: { text: string; timer: ReturnType<typeof setTimeout> } | null = null;
 
@@ -86,8 +110,36 @@ export function attachEditor(engine: Engine, options: AttachEditorOptions = {}):
   };
   const copy = (text: string) => void navigator.clipboard?.writeText(text).catch(() => {});
 
+  const saveReport = async (note: string, extra: ReportExtra = {}) => {
+    const report = await buildReport(engine, logs, note, extra);
+    return { report, folder: await link.saveReport(report) };
+  };
+  const feedback = new Feedback(engine, {
+    saveReport: async (note, extra) => (await saveReport(note, extra)).folder,
+    context: options.feedbackContext,
+  });
+  const copyFeedback = async () => {
+    const { prompt, folder } = await feedback.save();
+    copy(prompt);
+    say(
+      folder
+        ? `The prompt is on the clipboard: paste it to your agent. Saved with pictures to ${folder}.`
+        : 'The prompt is on the clipboard: paste it to your agent. (No dev server, so no pictures were saved.)',
+    );
+  };
+  const setPicking = (value: boolean) => {
+    if (isPicking === value) return;
+    isPicking = value;
+    draw();
+  };
+
   const handle: EditorHandle = {
     logs,
+    feedback,
+    get isPicking() {
+      return isPicking;
+    },
+    pick: (open) => setPicking(open ?? !isPicking),
     get isOpen() {
       return isOpen;
     },
@@ -95,8 +147,7 @@ export function attachEditor(engine: Engine, options: AttachEditorOptions = {}):
     close: () => setOpen(false),
     toggle: () => setOpen(!isOpen),
     async report(note = '') {
-      const report = await buildReport(engine, logs, note);
-      const folder = await link.saveReport(report);
+      const { report, folder } = await saveReport(note);
       if (folder) {
         copy(folder);
         say(`Report saved to ${folder} (also .reports/latest). Its path is on the clipboard.`);
@@ -113,6 +164,7 @@ export function attachEditor(engine: Engine, options: AttachEditorOptions = {}):
     },
     detach() {
       setOpen(false);
+      setPicking(false);
       stopLink();
       engine.editor = null;
       removeEventListener('keydown', onKey, true);
@@ -166,6 +218,7 @@ export function attachEditor(engine: Engine, options: AttachEditorOptions = {}):
       await handle.screenshot();
     },
     close: () => setOpen(false),
+    feedback: () => setPicking(!isPicking),
     gameView(element) {
       viewObserver?.disconnect();
       viewObserver = null;
@@ -193,6 +246,9 @@ export function attachEditor(engine: Engine, options: AttachEditorOptions = {}):
     render(
       <>
         {isOpen && <Editor engine={engine} logs={logs} actions={actions} />}
+        {isPicking && (
+          <FeedbackOverlay feedback={feedback} actions={{ copy: copyFeedback, close: () => setPicking(false) }} />
+        )}
         {!isOpen && errors > 0 && (
           <button
             type="button"
@@ -231,7 +287,9 @@ export function attachEditor(engine: Engine, options: AttachEditorOptions = {}):
     const typing = editable(event.target);
     const ctrl = event.ctrlKey || event.metaKey;
     let handled = true;
-    if (event.code === 'F8') void handle.report();
+    if (event.code === 'F7') setPicking(!isPicking);
+    else if (event.code === 'Escape' && isPicking && !typing) setPicking(false);
+    else if (event.code === 'F8') void handle.report();
     else if (event.code === 'F9') void handle.screenshot();
     else if (typing) handled = false;
     else if (event.code === 'Backquote' && !ctrl) handle.toggle();

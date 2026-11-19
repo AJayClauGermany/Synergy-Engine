@@ -10,17 +10,20 @@ back around it, and writes what happens to files a person or an agent can read:
   time of each, in `.logs/game.log`.
 - **Reports**: one key saves the game view, the log, the scene as text, the HUD's text and
   a note, in one folder an agent can be pointed at.
+- **Feedback**: click the thing you mean, say what should change, and paste the result to
+  an agent. The click supplies what words leave out: which element, in which file.
 
 It is the counterpart of Unity's `UnityEditor` namespace: only development builds load
 it, and a release build (`bun run build`, every deploy) leaves the whole package out.
 
-## For a person: the three keys
+## For a person: the keys
 
 Run `bun run dev` and open http://localhost:3000. The game looks as it ships. Then:
 
 | Key | What it does |
 |-----|--------------|
 | <kbd>`</kbd> (backquote) | Open or close the editor. It remembers which, between reloads |
+| <kbd>F7</kbd> | **Feedback**: click things in the game and comment on them; copy the prompt for an agent |
 | <kbd>F8</kbd> | Save a **report** to `.reports/<time>/` and `.reports/latest/`. Its path goes on the clipboard |
 | <kbd>F9</kbd> | Save a **screenshot** of the game view to `.screenshots/` |
 | <kbd>Ctrl</kbd>+<kbd>P</kbd> | Pause or resume (Unity's Play; <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> too) |
@@ -34,6 +37,94 @@ counts it; click it to open the Console.
 To hand a problem to an agent: press F8 (or type a note and press Enter), then say
 "look at `.reports/latest`". That is the whole hand-over.
 
+## Feedback: point at it, say it, paste it
+
+"Make the title a different colour" leaves an agent to find out which title, on which
+screen, in which file. Press <kbd>F7</kbd> (or **Feedback** in the editor's toolbar) and
+click the title instead:
+
+1. **Hover.** What a click would pick is outlined and named: a HUD element with the file
+   and line that draw it, a GameObject, or a map cell.
+2. **Click and type** what should change. Enter keeps the note. A click somewhere else
+   while the box is open picks again and keeps what you typed.
+3. **Expected here…** (optional): then click where it should be instead. The prompt gives
+   the distance from where it is now, and the picture shows an arrow.
+4. **↑ Parent** (optional): pick what holds it, when you meant the whole panel or the whole unit.
+5. Make as many notes as you like, on as many things. **Copy prompt** puts all of them on
+   the clipboard as one prompt, and saves them with pictures to `.reports/`. Paste it to
+   your agent.
+
+While the picker is open every click is a note, not a move, so the game cannot be played
+through it. Press F7 again (or **Done**) to play on; the notes are kept until **Clear**,
+so a review can go screen by screen and end in one prompt. Pause first
+(<kbd>Ctrl</kbd>+<kbd>P</kbd>) to point at something that will not hold still.
+
+What a note captures depends on what was clicked:
+
+| Clicked | The note says |
+|---------|---------------|
+| A HUD element (HTML over the canvas) | The file, line and column of its JSX; its text; the components that drew it and where each is used; its box; its colours and font; how its parent lays it out and the space to each edge; the CSS rules that apply to it |
+| A GameObject | Its path in the scene, the file and line of the game's code that made it, its components, its scripts (each is a class in a file of that name), its position, the map cell it stands on, and its script fields as the Inspector shows them |
+| A `Canvas` image | The same, with its `RectTransform` (anchors, pivot, anchored position, size) |
+| A map cell | The grid, the cell, and the tile on each layer with its data |
+| Nothing | The point, which is enough for "I expected a button here" |
+
+Every prompt also says which page, scene and frame the game was on, and whatever the game
+adds through `feedbackContext` (the sample adds the screen: the menu's title is not the
+match's).
+
+**How much goes in the prompt** is the **Context** choice in the bar, remembered between
+loads:
+
+| Context | In the prompt |
+|---------|---------------|
+| `brief` | What was clicked, where its code is, your comment |
+| `standard` (default) | Plus layout, styles, CSS rules, components, script fields |
+| `full` | Plus the element's HTML, its siblings and ancestors, a GameObject's whole subtree |
+
+Everything is captured whichever you choose: the report always has it all.
+
+**The pictures.** With the dev server running, **Copy prompt** also saves a report, and
+the prompt names its folder:
+
+| File | What is in it |
+|------|---------------|
+| `feedback.md` | The notes at full detail |
+| `feedback.json` | The same as data |
+| `feedback.png` | The game view **with the HUD**, each note's target outlined and numbered, an arrow to each expected spot |
+| `note-1.png`, ... | A close-up of each note |
+
+plus the files of any report (below). The HUD in these pictures is redrawn from the page,
+which is close but not exact: web fonts fall back to the system's, and images the HUD loads
+by URL are left out.
+
+**Where the file and line come from.** A development build writes `data-source` on every
+JSX element (`scripts/jsxSource.ts`, a bundler plugin loaded by `bunfig.toml` for
+`bun run dev` and by a `--devtools` build). A release build has none of it. HTML that is
+not written as JSX has no source; the note then says so and gives the selector.
+
+GameObjects get theirs the same way: in the game's own code (`game/`), each
+`new GameObject(...)`, `instantiate(...)` and `GameObject.createPrimitive(...)` remembers
+where it was written for the object it made. For a prefab instance that is the line that
+spawned it, not the prefab's definition; an object made inside the engine on the game's
+behalf (a tile's spawned object) has none, and the note names its nearest parent's instead.
+
+**From the console or a script**, the same thing without the picker (positions are points
+of the page):
+
+```ts
+import type { EditorHandle } from '@synergy/devtools';
+
+async function review(editor: EditorHandle) {
+  editor.feedback.note(640, 120, 'Make the title gold', { x: 640, y: 160 });
+  const { prompt, folder } = await editor.feedback.save();
+  return { prompt, folder };
+}
+```
+
+In the page `editor` is `synergy.editor`, so `bun run screenshot --devtools --eval` can
+make a note and save it.
+
 ## For an agent: the files and commands
 
 | You want | Run or read |
@@ -41,6 +132,7 @@ To hand a problem to an agent: press F8 (or type a note and press Enter), then s
 | What the person's game logged | `bun run logs` (`--errors`, `--warnings`, `--tail 50`, `--previous`), or read `.logs/game.log` |
 | What the person is looking at, now | `bun run report` (`--note "..."`): asks the open page for a report and prints its summary |
 | The report the person saved | `.reports/latest/summary.md` first; it lists the other files |
+| The feedback the person gave (F7) | The prompt they pasted has it all. Its pictures: `feedback.png` and `note-N.png` in the folder it names |
 | The game without a person | `bun run screenshot`: its own headless browser; saves the image and, beside it, the page's log (`.screenshots/game.log`) |
 | The editor in a screenshot | `bun run screenshot --devtools` (a build with the editor, opened) |
 | A report from a screenshot run | `bun run screenshot --devtools --eval "synergy.editor.report('what I tested')"` |
@@ -100,7 +192,7 @@ Debug.log('No path to target', this.gameObject);
 renderer, the frame rate and frame number, and the **Gizmos** toggle.
 
 **Toolbar.** Play, Pause and Step; `Time.timeScale`; the note box with **Report**;
-**Screenshot**; and ✕ to close.
+**Feedback**; **Screenshot**; and ✕ to close.
 
 ## Unity's editor APIs
 

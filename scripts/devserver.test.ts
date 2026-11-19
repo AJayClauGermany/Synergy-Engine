@@ -48,6 +48,23 @@ describe('the log file', () => {
 });
 
 describe('reports and screenshots', () => {
+  test('a report with feedback keeps its notes and pictures; a picture by another name is ignored', async () => {
+    const response = await post(DEV_ENDPOINTS.report, {
+      screenshot: null,
+      files: { 'summary.md': '# hi', 'feedback.md': '# notes', 'feedback.json': '{}' },
+      images: { 'feedback.png': PNG, 'note-1.png': PNG, '../note-2.png': PNG, 'other.png': PNG, 'note-3.png': 'no' },
+    });
+    const { path: folder } = (await response.json()) as { path: string };
+    expect((await readdir(path.join(root, folder))).toSorted()).toEqual([
+      'feedback.json',
+      'feedback.md',
+      'feedback.png',
+      'note-1.png',
+      'summary.md',
+    ]);
+    expect(await read('.reports/latest/feedback.md')).toBe('# notes');
+  });
+
   test('a report is written to its own folder and copied to latest; unknown file names are ignored', async () => {
     const response = await post(DEV_ENDPOINTS.report, {
       screenshot: PNG,

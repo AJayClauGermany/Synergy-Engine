@@ -14,4 +14,12 @@ export {
   type LogLevel,
   type LogCaptureOptions,
 } from './logs';
-export { buildReport, type Report } from './report';
+export { buildReport, type Report, type ReportExtra } from './report';
+export { Feedback, type FeedbackOptions, type LiveTarget, type SavedFeedback } from './feedback/Feedback';
+export {
+  formatFeedback,
+  type FeedbackContext,
+  type FeedbackDetail,
+  type FeedbackNote,
+  type TargetDescription,
+} from './feedback/format';

@@ -10,8 +10,16 @@ import { formatEntry, type LogCapture } from './logs';
 export interface Report {
   /** The game view as a PNG data URL, or `null` when it could not be read. */
   readonly screenshot: string | null;
-  /** Text files by name: `summary.md`, `log.txt`, `hierarchy.txt`, `hud.txt`. */
+  /** Text files by name: `summary.md`, `log.txt`, `hierarchy.txt`, `hud.txt`; with feedback, `feedback.md` and `feedback.json`. */
   readonly files: Readonly<Record<string, string>>;
+  /** More pictures as PNG data URLs by name: `feedback.png`, `note-1.png` (see `Feedback.save`). */
+  readonly images?: Readonly<Record<string, string>>;
+}
+
+/** Files a report carries besides its own: what the feedback tool adds. */
+export interface ReportExtra {
+  readonly files?: Readonly<Record<string, string>>;
+  readonly images?: Readonly<Record<string, string>>;
 }
 
 /** The visible text of the HUD overlays, one block per overlay, for `hud.txt`. */
@@ -28,7 +36,13 @@ function deviceType(engine: Engine): string {
 }
 
 /** Builds a report from the running game. `note` is what the person saw, in their words. */
-export async function buildReport(engine: Engine, logs: LogCapture, note = ''): Promise<Report> {
+export async function buildReport(
+  engine: Engine,
+  logs: LogCapture,
+  note = '',
+  extra: ReportExtra = {},
+): Promise<Report> {
+  const feedback = extra.files?.['feedback.md'] !== undefined;
   const screenshot = await engine.run(() => ScreenCapture.captureScreenshotAsDataUrl());
   const hierarchy = engine.run(() => Debug.hierarchy());
   const hud = hudText();
@@ -57,6 +71,13 @@ export async function buildReport(engine: Engine, logs: LogCapture, note = ''): 
     '',
     '## Files',
     '',
+    ...(feedback
+      ? [
+          '- **`feedback.md`: read this first.** Notes a person made by clicking things in the game, each with where its code is',
+          "- `feedback.png`, `note-N.png`: the view with each note's target outlined, and a close-up of each",
+          '- `feedback.json`: the same notes as data',
+        ]
+      : []),
     `- \`screenshot.png\`: the game view${screenshot ? '' : ' (could not be read this time)'}; the HUD is not in it`,
     '- `log.txt`: every console message and uncaught error since the page loaded',
     '- `hierarchy.txt`: every GameObject with its components, position and script fields',
@@ -74,6 +95,8 @@ export async function buildReport(engine: Engine, logs: LogCapture, note = ''): 
       'log.txt': logs.text(),
       'hierarchy.txt': hierarchy,
       'hud.txt': hud,
+      ...extra.files,
     },
+    images: extra.images,
   };
 }

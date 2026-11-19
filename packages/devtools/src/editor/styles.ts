@@ -1,4 +1,4 @@
-/** The editor's stylesheet: Unity's dark theme, scoped under `.synergy-editor`. */
+/** The editor's stylesheet: Unity's dark theme, scoped under `.synergy-editor`; the feedback picker's under `.synergy-feedback`. */
 export const EDITOR_STYLE = `
 .synergy-editor {
   --ed-bg: #191919; --ed-panel: #282828; --ed-header: #3c3c3c; --ed-tab: #383838;
@@ -98,4 +98,34 @@ export const EDITOR_STYLE = `
   font: 12px system-ui, sans-serif; color: #eee; background: rgba(30, 30, 30, 0.95); border: 1px solid #555;
   border-radius: 4px; padding: 6px 12px; max-width: 80vw;
 }
+
+.synergy-feedback { font: 12px/1.35 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; color: #e6e6e6; }
+.synergy-feedback * { box-sizing: border-box; }
+.synergy-feedback .fb-shield { position: fixed; inset: 0; z-index: 2147482990; cursor: crosshair; }
+.synergy-feedback .fb-shield.fb-pointing { cursor: cell; }
+.synergy-feedback .fb-outline, .synergy-feedback .fb-mark, .synergy-feedback .fb-expected, .synergy-feedback .fb-chip { position: fixed; z-index: 2147482995; pointer-events: none; }
+.synergy-feedback .fb-outline { outline: 2px solid #ff7a1a; outline-offset: 2px; background: rgba(255, 122, 26, 0.12); }
+.synergy-feedback .fb-mark { outline: 2px dashed #ff7a1a; outline-offset: 2px; }
+.synergy-feedback .fb-mark.fb-dot { width: 18px; height: 18px; border-radius: 50%; }
+.synergy-feedback .fb-mark span { position: absolute; left: -4px; top: -22px; background: #ff7a1a; color: #111; font-weight: 700; padding: 0 6px; border-radius: 3px; }
+.synergy-feedback .fb-expected { width: 18px; height: 18px; margin: -9px 0 0 -9px; border: 2px solid #2ee6a6; border-radius: 50%; background: radial-gradient(#2ee6a6 2px, transparent 3px); }
+.synergy-feedback .fb-chip { background: rgba(20, 20, 20, 0.92); border: 1px solid #ff7a1a; border-radius: 3px; padding: 1px 6px; white-space: nowrap; max-width: 90vw; overflow: hidden; text-overflow: ellipsis; }
+.synergy-feedback .fb-chip.fb-hint { left: 50%; top: 44px; transform: translateX(-50%); border-color: #2ee6a6; }
+.synergy-feedback .fb-box, .synergy-feedback .fb-bar { position: fixed; z-index: 2147483002; background: #262626; border: 1px solid #555; border-radius: 6px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5); }
+.synergy-feedback .fb-box { width: 340px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.synergy-feedback .fb-target { color: #ffb37a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.synergy-feedback .fb-row { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.synergy-feedback .fb-spacer { flex: 1; }
+.synergy-feedback .fb-bar { left: 50%; bottom: 12px; transform: translateX(-50%); display: flex; gap: 10px; align-items: center; padding: 6px 10px; white-space: nowrap; }
+.synergy-feedback .fb-bar.fb-top { bottom: auto; top: 12px; }
+.synergy-feedback .fb-dim { color: #9a9a9a; }
+.synergy-feedback textarea { width: 100%; resize: vertical; }
+.synergy-feedback button, .synergy-feedback select, .synergy-feedback textarea {
+  font: inherit; color: #e6e6e6; background: #1c1c1c; border: 1px solid #555; border-radius: 3px; padding: 2px 8px; margin: 0;
+}
+.synergy-feedback button { background: #4a4a4a; cursor: pointer; }
+.synergy-feedback button:hover:not(:disabled) { background: #5a5a5a; }
+.synergy-feedback button:disabled { opacity: 0.45; cursor: default; }
+.synergy-feedback button.fb-primary { background: #b9540c; border-color: #ff7a1a; }
+.synergy-feedback textarea:focus { outline: 1px solid #ff7a1a; }
 `;
