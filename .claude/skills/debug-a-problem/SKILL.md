@@ -23,8 +23,10 @@ guess takes to type.
    the warnings in the test output. An error thrown by the engine says what to write
    instead; a warning is the engine saying "this is probably the bug". Do that first.
    When a person is running the game, read their log too: `bun run logs --errors`, or
-   `.reports/latest/summary.md` if they saved a report (F8). `bun run report` takes one
-   from their open page without asking them (`docs/devtools.md`).
+   `.reports/latest/summary.md` if they saved a report (F8). Feedback they pasted (F7)
+   names the file and line or the GameObject each note is about: start there.
+   `bun run report` takes a report from their open page without asking them
+   (`docs/devtools.md`).
 2. **Print the scene.** `bun run screenshot --hierarchy` (the running game), or
    `console.log(Debug.hierarchy())` in a test. It lists every GameObject with its
    components, position, active state and the values of its scripts' fields. Most

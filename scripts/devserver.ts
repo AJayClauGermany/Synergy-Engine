@@ -4,7 +4,8 @@
  *
  *   .logs/game.log            everything the page logged since it was last loaded
  *   .logs/game.previous.log   the load before that
- *   .reports/<time>/          summary.md, screenshot.png, log.txt, hierarchy.txt, hud.txt
+ *   .reports/<time>/          summary.md, screenshot.png, log.txt, hierarchy.txt, hud.txt;
+ *                             with feedback (F7): feedback.md, feedback.json, feedback.png, note-N.png
  *   .reports/latest/          a copy of the newest report
  *   .screenshots/dev-<time>.png
  *
@@ -26,7 +27,9 @@ import {
 /** Reports hold a PNG; a log batch is text. Anything larger is a mistake, not a report. */
 const MAX_BODY = 40 * 1024 * 1024;
 /** Report files the page may write. A name from the page never becomes a path by itself. */
-const REPORT_FILES = new Set(['summary.md', 'log.txt', 'hierarchy.txt', 'hud.txt']);
+const REPORT_FILES = new Set(['summary.md', 'log.txt', 'hierarchy.txt', 'hud.txt', 'feedback.md', 'feedback.json']);
+/** The pictures the feedback tool adds: the marked-up view and a close-up per note. */
+const REPORT_IMAGE = /^(feedback|note-\d{1,3})\.png$/;
 const REPORT_TIMEOUT = 15_000;
 
 /** `2026-11-13_10-22-01-123`: sorts by time and is a valid file name everywhere. */
@@ -106,6 +109,10 @@ export function createDevToolsServer(root: string, options: DevToolsServerOption
     }
     const image = upload.screenshot ? png(upload.screenshot) : null;
     if (image) await writeFile(path.join(folder, 'screenshot.png'), image);
+    for (const [name, dataUrl] of Object.entries(upload.images ?? {})) {
+      const picture = REPORT_IMAGE.test(name) && typeof dataUrl === 'string' ? png(dataUrl) : null;
+      if (picture) await writeFile(path.join(folder, name), picture);
+    }
     const latest = path.join(reports, 'latest');
     await rm(latest, { recursive: true, force: true });
     await cp(folder, latest, { recursive: true });

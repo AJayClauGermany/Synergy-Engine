@@ -49,6 +49,7 @@
     "@varlock/bitwarden-plugin": "^2.0.2",
     "electrobun": "2.0.6",
     "fallow": "^3.42.0",
+    "oxc-parser": "^0.159.0",
     "oxlint": "^1.93.0",
     "oxlint-tsgolint": "^7.0.2006",
     "typescript": "^7.0.2",

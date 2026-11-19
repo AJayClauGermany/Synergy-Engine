@@ -15,6 +15,7 @@ import { cp, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
+import jsxSource from './jsxSource';
 
 const root = path.resolve(import.meta.dir, '..');
 const { values } = parseArgs({
@@ -49,6 +50,9 @@ const buildId = process.env.PUBLIC_BUILD_ID;
 
 const started = performance.now();
 const result = await Bun.build({
+  // A build with the devtools gets what `bun run dev` gets: each JSX element's file and
+  // line written into it, for the feedback tool. A release build has neither.
+  plugins: values.devtools ? [jsxSource] : [],
   entrypoints: [path.join(root, 'game/index.html')],
   outdir,
   target: 'browser',

@@ -27,6 +27,8 @@ export interface ReportUpload {
   /** PNG data URL, or null. */
   readonly screenshot: string | null;
   readonly files: Readonly<Record<string, string>>;
+  /** More PNG data URLs by file name: `feedback.png`, `note-1.png`. */
+  readonly images?: Readonly<Record<string, string>>;
 }
 
 export interface ScreenshotUpload {

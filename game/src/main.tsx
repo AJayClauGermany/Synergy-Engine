@@ -2,7 +2,7 @@ import * as synergy from '@synergy/engine';
 import { Engine, SceneManager } from '@synergy/engine';
 import { mountUI } from '@synergy/ui';
 import { buildId } from './env';
-import { isScreen, openScreen, watchNetworkStatus } from './flow';
+import { flow, isScreen, openScreen, watchNetworkStatus } from './flow';
 import { launch } from './localPlay';
 import { buildMenuScene } from './scenes/MenuScene';
 import { buildShowcaseScene } from './scenes/ShowcaseScene';
@@ -33,7 +33,11 @@ async function main() {
   // For the browser console and automated tools (see scripts/screenshot.ts):
   //   synergy.GameObject.find('Board'), synergy.engine.stop(), synergy.engine.step(), ...
   //   synergy.editor.report('note'), synergy.editor.logs.text() in a development build.
-  const editor = devtools?.attachEditor(engine, { header: `build ${buildId}` });
+  const editor = devtools?.attachEditor(engine, {
+    header: `build ${buildId}`,
+    // Feedback (F7) says which screen a note was made on: the menu's title is not the match's.
+    feedbackContext: () => ({ Screen: flow.value.screen ?? '(none)' }),
+  });
   Object.assign(globalThis, { synergy: { ...synergy, engine, editor } });
 
   // One HUD root for the whole page; it follows the screen in `flow` (ui/App.tsx).
